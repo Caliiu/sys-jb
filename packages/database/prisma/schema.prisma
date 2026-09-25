@@ -1,0 +1,76 @@
+// Constraints adicionais (CHECK, FKs compostas, sequence) e RLS ficam em migrations SQL.
+// Ver prisma/migrations/*_security.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "js"
+  runtime                = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  slug           String   @unique
+  domain         String   @unique
+  logoUrl        String?  @map("logo_url")
+  primaryColor   String   @map("primary_color")
+  secondaryColor String   @map("secondary_color")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users   User[]
+  wallets Wallet[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  email     String?
+  phone     String
+  document  String
+  avatar    String?
+  displayId Int      @unique @default(autoincrement()) @map("display_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  wallet Wallet?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, phone])
+  @@unique([tenantId, document])
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+// Valores em centavos (bigint). CHECKs garantem >= 0 e somas dentro de Number.MAX_SAFE_INTEGER.
+model Wallet {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  balanceJb    BigInt   @default(0) @map("balance_jb")
+  bonusJb      BigInt   @default(0) @map("bonus_jb")
+  prizesJb     BigInt   @default(0) @map("prizes_jb")
+  balanceGames BigInt   @default(0) @map("balance_games")
+  bonusGames   BigInt   @default(0) @map("bonus_games")
+  prizesGames  BigInt   @default(0) @map("prizes_games")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // FK composta: a carteira só pode apontar para um usuário da MESMA banca.
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, userId])
+  @@map("wallets")
+}

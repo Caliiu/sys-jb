@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-brand: var(--brand-primary);
+  --color-brand-soft: var(--brand-secondary);
+}
+
+:root {
+  --brand-primary: #334155;
+  --brand-secondary: #f1f5f9;
+}
