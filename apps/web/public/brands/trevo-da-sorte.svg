@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="112" height="130" viewBox="70 15 112 130" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Trevo da Sorte</title>
+  <desc id="desc">Símbolo vetorial de um trevo de quatro folhas em tons de verde com detalhe dourado.</desc>
+
+  <defs>
+    <linearGradient id="leaf" x1="101" y1="25" x2="146" y2="79" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#43DC78"/>
+      <stop offset="0.52" stop-color="#079D4B"/>
+      <stop offset="1" stop-color="#036B37"/>
+    </linearGradient>
+    <linearGradient id="stem" x1="126" y1="79" x2="174" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0FA95A"/>
+      <stop offset="1" stop-color="#045A32"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="113" y1="65" x2="137" y2="89" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF0A3"/>
+      <stop offset="0.45" stop-color="#F6C445"/>
+      <stop offset="1" stop-color="#C7820A"/>
+    </linearGradient>
+    <filter id="shadow" x="70" y="15" width="112" height="130" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#003C20" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <path d="M127 76C137 90 149 108 175 124C164 124 153 121 142 115C135 110 129 102 124 93Z" fill="url(#stem)"/>
+
+    <g stroke="#02713A" stroke-width="2" stroke-linejoin="round">
+      <path d="M125 79C115 69 99 59 100 42C101 29 116 22 125 36C134 22 149 29 150 42C151 59 135 69 125 79Z" fill="url(#leaf)"/>
+      <path d="M125 79C115 69 99 59 100 42C101 29 116 22 125 36C134 22 149 29 150 42C151 59 135 69 125 79Z" transform="rotate(90 125 79)" fill="url(#leaf)"/>
+      <path d="M125 79C115 69 99 59 100 42C101 29 116 22 125 36C134 22 149 29 150 42C151 59 135 69 125 79Z" transform="rotate(180 125 79)" fill="url(#leaf)"/>
+      <path d="M125 79C115 69 99 59 100 42C101 29 116 22 125 36C134 22 149 29 150 42C151 59 135 69 125 79Z" transform="rotate(270 125 79)" fill="url(#leaf)"/>
+    </g>
+
+    <g opacity="0.5" stroke="#B9FFD1" stroke-width="2" stroke-linecap="round">
+      <path d="M125 72V43"/>
+      <path d="M132 79H161"/>
+      <path d="M125 86V109"/>
+      <path d="M118 79H89"/>
+    </g>
+
+    <circle cx="125" cy="79" r="10.5" fill="url(#gold)" stroke="#FFF2A8" stroke-width="1.5"/>
+    <path d="M125 72.5L127 76.5L131.5 77.2L128.2 80.3L129 84.8L125 82.7L121 84.8L121.8 80.3L118.5 77.2L123 76.5Z" fill="#FFF8D0"/>
+  </g>
+</svg>

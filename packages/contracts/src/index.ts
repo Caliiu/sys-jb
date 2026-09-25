@@ -39,7 +39,7 @@ export interface PublicUser extends PublicPromoterFields {
   email: string | null;
   /** Somente dígitos, 10 ou 11 (formato nacional). String para preservar zeros. */
   phone: string;
-  /** Somente dígitos, 11. Validação apenas de formato, não de identidade ou validade fiscal. */
+  /** CPF, somente dígitos (11). Validados formato e dígitos verificadores; não é verificação de identidade. */
   document: string;
   avatar: string | null;
   displayId: number;
@@ -52,7 +52,12 @@ export type UserWritableField = (typeof USER_WRITABLE_FIELDS)[number];
 export interface CreateUserRequest {
   name: string;
   phone: string;
+  /** CPF (aceita pontuação). */
   document: string;
+  /** Data de nascimento no formato YYYY-MM-DD. Exige 18 anos completos. */
+  birthDate: string;
+  /** 8 a 128 caracteres. Nunca é devolvida pela API. */
+  password: string;
   email?: string | null;
   avatar?: string | null;
 }
@@ -64,6 +69,23 @@ export interface UpdateUserRequest {
   document?: string;
   email?: string | null;
   avatar?: string | null;
+}
+
+export interface LoginRequest {
+  /** CPF (aceita pontuação). */
+  document: string;
+  password: string;
+}
+
+/**
+ * Resposta do login. O token é opaco e deve ficar só no servidor do web (cookie HttpOnly);
+ * nunca deve ser exposto a JavaScript do navegador.
+ */
+export interface LoginResponse {
+  token: string;
+  /** ISO 8601. */
+  expiresAt: string;
+  user: PublicUser;
 }
 
 export interface PublicTenant {
@@ -81,6 +103,9 @@ export type ApiErrorCode =
   | 'TENANT_NOT_FOUND'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'INVALID_CREDENTIALS'
+  | 'SESSION_INVALID'
+  | 'TOO_MANY_ATTEMPTS'
   | 'PAYLOAD_TOO_LARGE'
   | 'INTERNAL_ERROR';
 
@@ -91,3 +116,5 @@ export interface ApiError {
   /** Detalhes seguros (nomes de campos), nunca valores enviados. */
   details?: Array<{ field: string; message: string }>;
 }
+
+export * from './validation.js';

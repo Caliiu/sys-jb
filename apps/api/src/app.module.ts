@@ -1,5 +1,8 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { AuthController } from './auth/auth.controller.js';
+import { AuthService } from './auth/auth.service.js';
+import { PasswordService } from './auth/password.service.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { DatabaseService } from './database/database.service.js';
@@ -17,7 +20,7 @@ export class AppModule {
   static forRoot(config: AppConfig): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, TenantController, UsersController],
+      controllers: [HealthController, TenantController, UsersController, AuthController],
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
@@ -27,6 +30,8 @@ export class AppModule {
         UsersRepository,
         WalletsRepository,
         UsersService,
+        PasswordService,
+        AuthService,
       ],
     };
   }

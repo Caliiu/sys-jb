@@ -35,8 +35,13 @@ export function promoterFields(): PublicPromoterFields {
   return { promoter: null, promoterName: null, promoterPhone: null };
 }
 
-/** Mapeamento explícito entidade -> contrato público. Nunca expõe tenantId nem timestamps. */
-export function toPublicUser(user: User, wallet: Wallet): PublicUser {
+type PublicUserSource = Pick<User, 'id' | 'name' | 'email' | 'phone' | 'document' | 'avatar' | 'displayId'>;
+
+/**
+ * Mapeamento explícito entidade -> contrato público. Nunca expõe tenantId, timestamps,
+ * data de nascimento nem hash de senha.
+ */
+export function toPublicUser(user: PublicUserSource, wallet: Wallet): PublicUser {
   return {
     id: user.id,
     name: user.name,

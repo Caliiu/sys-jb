@@ -17,6 +17,8 @@ export interface AppConfig {
   databaseUrl: string;
   dbPoolMax: number;
   serviceKeys: ServiceKeyEntry[];
+  /** Chave HMAC para pseudonimizar o CPF no controle de tentativas de login. */
+  authSecret: string;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -31,7 +33,10 @@ export function parseServiceKeys(raw: string): ServiceKeyEntry[] {
   const seenSlugs = new Set<string>();
   const seenKeys = new Set<string>();
 
-  for (const part of raw.split(',').map((p) => p.trim()).filter(Boolean)) {
+  for (const part of raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)) {
     const eq = part.indexOf('=');
     const slug = eq > 0 ? part.slice(0, eq).trim() : '';
     const key = eq > 0 ? part.slice(eq + 1).trim() : '';
@@ -69,6 +74,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   TENANT_SERVICE_KEYS: z.string().min(1),
+  AUTH_SECRET: z.string().min(MIN_SERVICE_KEY_LENGTH),
 });
 
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
@@ -85,5 +91,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     databaseUrl: e.DATABASE_URL,
     dbPoolMax: e.DB_POOL_MAX,
     serviceKeys: parseServiceKeys(e.TENANT_SERVICE_KEYS),
+    authSecret: e.AUTH_SECRET,
   };
 }

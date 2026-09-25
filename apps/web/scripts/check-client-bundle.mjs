@@ -33,7 +33,7 @@ for (const name of ['WEB_SERVICE_KEYS', 'TENANT_SERVICE_KEYS']) {
     if (value.length >= 16) secrets.add(value);
   }
 }
-for (const name of ['SYSJB_APP_PASSWORD', 'SYSJB_MIGRATOR_PASSWORD', 'POSTGRES_SUPERUSER_PASSWORD']) {
+for (const name of ['SYSJB_APP_PASSWORD', 'SYSJB_MIGRATOR_PASSWORD', 'POSTGRES_SUPERUSER_PASSWORD', 'AUTH_SECRET']) {
   if ((process.env[name] ?? '').length >= 16) secrets.add(process.env[name]);
 }
 const forbiddenNames = ['WEB_SERVICE_KEYS', 'TENANT_SERVICE_KEYS', 'DATABASE_URL', 'Bearer '];
@@ -53,7 +53,8 @@ for (const file of files(staticDir)) {
   const content = readFileSync(file, 'utf8');
   scanned += 1;
   for (const s of secrets) if (content.includes(s)) leaks.push(`${path.relative(webDir, file)}: segredo`);
-  for (const n of forbiddenNames) if (content.includes(n)) leaks.push(`${path.relative(webDir, file)}: referência a ${n}`);
+  for (const n of forbiddenNames)
+    if (content.includes(n)) leaks.push(`${path.relative(webDir, file)}: referência a ${n}`);
 }
 
 if (scanned === 0) {

@@ -13,7 +13,13 @@ const TIMEOUT_MS = 5_000;
  * navegador acessou; a API resolve a banca por ele e confere a credencial.
  * Usa node:http porque o fetch não permite definir o header Host.
  */
-export function apiRequest<T>(hostname: string, method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown) {
+export function apiRequest<T>(
+  hostname: string,
+  method: 'GET' | 'POST' | 'PATCH',
+  path: string,
+  body?: unknown,
+  options: { sessionToken?: string } = {},
+) {
   const key = serviceKeyFor(hostname);
   if (!key) {
     return Promise.resolve<ApiResult<T>>({
@@ -36,6 +42,7 @@ export function apiRequest<T>(hostname: string, method: 'GET' | 'POST' | 'PATCH'
           Host: hostname,
           Authorization: `Bearer ${key}`,
           Accept: 'application/json',
+          ...(options.sessionToken ? { 'X-Session-Token': options.sessionToken } : {}),
           ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
       },
@@ -50,7 +57,7 @@ export function apiRequest<T>(hostname: string, method: 'GET' | 'POST' | 'PATCH'
           } catch {
             parsed = undefined;
           }
-          if (status >= 200 && status < 300) resolve({ ok: true, status, data: parsed as T });
+          if (status >= 200 && status < 300) resolve({ ok: true, status, data: (parsed ?? null) as T });
           else resolve({ ok: false, status, error: (parsed as ApiError) ?? unavailable(status) });
         });
       },

@@ -2,11 +2,11 @@
 // Ver prisma/migrations/*_security.
 
 generator client {
-  provider               = "prisma-client"
-  output                 = "../src/generated/prisma"
-  moduleFormat           = "esm"
-  importFileExtension    = "js"
-  runtime                = "nodejs"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+  runtime             = "nodejs"
 }
 
 datasource db {
@@ -25,26 +25,32 @@ model Tenant {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  users   User[]
-  wallets Wallet[]
+  users         User[]
+  wallets       Wallet[]
+  sessions      Session[]
+  loginFailures LoginFailure[]
 
   @@map("tenants")
 }
 
 model User {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  name      String
-  email     String?
-  phone     String
-  document  String
-  avatar    String?
-  displayId Int      @unique @default(autoincrement()) @map("display_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  name         String
+  email        String?
+  phone        String
+  document     String
+  avatar       String?
+  birthDate    DateTime @map("birth_date") @db.Date
+  // Hash argon2id (formato PHC). Nunca sai da API.
+  passwordHash String   @map("password_hash")
+  displayId    Int      @unique @default(autoincrement()) @map("display_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  wallet Wallet?
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  wallet   Wallet?
+  sessions Session[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -73,4 +79,34 @@ model Wallet {
 
   @@unique([tenantId, userId])
   @@map("wallets")
+}
+
+// Sessão de cliente: token opaco; só o SHA-256 do token é persistido.
+model Session {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, userId])
+  @@map("sessions")
+}
+
+// Falhas de login recentes, para bloqueio temporário por CPF. Guarda só o hash do CPF.
+model LoginFailure {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  identifierHash String   @map("identifier_hash")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, identifierHash, createdAt])
+  @@map("login_failures")
 }

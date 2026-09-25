@@ -7,6 +7,8 @@ export class AppError extends Error {
     readonly code: ApiErrorCode,
     message: string,
     readonly details?: ApiError['details'],
+    /** Headers extras da resposta (ex.: Retry-After). */
+    readonly headers?: Record<string, string>,
   ) {
     super(message);
     this.name = 'AppError';
@@ -24,5 +26,11 @@ export const Errors = {
   forbidden: () => new AppError(403, 'FORBIDDEN', 'Credencial não autorizada para esta banca.'),
   tenantNotFound: () => new AppError(404, 'TENANT_NOT_FOUND', 'Banca não encontrada para este hostname.'),
   userNotFound: () => new AppError(404, 'NOT_FOUND', 'Usuário não encontrado.'),
+  invalidCredentials: () => new AppError(401, 'INVALID_CREDENTIALS', 'CPF ou senha inválidos.'),
+  sessionInvalid: () => new AppError(401, 'SESSION_INVALID', 'Sessão ausente, expirada ou encerrada.'),
+  tooManyAttempts: (retryAfterSeconds: number) =>
+    new AppError(429, 'TOO_MANY_ATTEMPTS', 'Muitas tentativas. Tente novamente mais tarde.', undefined, {
+      'Retry-After': String(retryAfterSeconds),
+    }),
   internal: () => new AppError(500, 'INTERNAL_ERROR', 'Erro interno.'),
 };

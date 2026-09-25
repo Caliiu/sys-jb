@@ -14,7 +14,11 @@ function ensureEnv(): void {
 
 export function hostnameOnly(host: string | null): string | null {
   if (!host) return null;
-  const name = host.trim().toLowerCase().replace(/:\d{1,5}$/, '').replace(/\.$/, '');
+  const name = host
+    .trim()
+    .toLowerCase()
+    .replace(/:\d{1,5}$/, '')
+    .replace(/\.$/, '');
   return /^[a-z0-9.-]{1,253}$/.test(name) ? name : null;
 }
 

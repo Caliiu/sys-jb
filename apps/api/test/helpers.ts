@@ -24,7 +24,12 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     trustProxy: false,
     databaseUrl: TEST_APP_URL,
     dbPoolMax: 5,
-    serviceKeys: parseServiceKeys(Object.entries(KEYS).map(([slug, key]) => `${slug}=${key}`).join(',')),
+    serviceKeys: parseServiceKeys(
+      Object.entries(KEYS)
+        .map(([slug, key]) => `${slug}=${key}`)
+        .join(','),
+    ),
+    authSecret: randomBytes(24).toString('hex'),
     ...overrides,
   };
 }
@@ -42,12 +47,35 @@ export function api(app: INestApplication, tenant: TenantSlug, key: string = KEY
   const host = TEST_TENANTS[tenant].domain;
   const auth = { Host: host, Authorization: `Bearer ${key}` };
   return {
-    post: (path: string, body: unknown) => request(server).post(path).set(auth).send(body as object),
+    post: (path: string, body: unknown) =>
+      request(server)
+        .post(path)
+        .set(auth)
+        .send(body as object),
     get: (path: string) => request(server).get(path).set(auth),
-    patch: (path: string, body: unknown) => request(server).patch(path).set(auth).send(body as object),
+    patch: (path: string, body: unknown) =>
+      request(server)
+        .patch(path)
+        .set(auth)
+        .send(body as object),
     raw: () => request(server),
   };
 }
+
+/** Completa 9 dígitos-base com os dígitos verificadores do CPF (dados sintéticos). */
+export function cpfFrom(base9: string): string {
+  const d = base9.split('').map(Number);
+  for (const length of [9, 10]) {
+    let sum = 0;
+    for (let i = 0; i < length; i += 1) sum += d[i]! * (length + 1 - i);
+    d.push(((sum * 10) % 11) % 10);
+  }
+  return d.join('');
+}
+
+export const formatCpf = (cpf: string) => `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
+
+export const SYNTHETIC_PASSWORD = 'correct horse battery staple';
 
 const runBase = String(10_000 + Math.floor(Math.random() * 90_000));
 let seq = 0;
@@ -57,7 +85,9 @@ export function syntheticUser(extra: Record<string, unknown> = {}) {
   return {
     name: `Pessoa Sintética ${seq}`,
     phone: `119${runBase}${String(seq).padStart(3, '0')}`,
-    document: `8${runBase}${String(seq).padStart(5, '0')}`,
+    document: cpfFrom(`8${runBase}${String(seq).padStart(3, '0')}`),
+    birthDate: '1990-05-17',
+    password: SYNTHETIC_PASSWORD,
     ...extra,
   };
 }
@@ -73,7 +103,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
 
 /** TRUNCATE não é afetado por RLS; a role de migração é dona das tabelas. */
 export async function resetUsers(): Promise<void> {
-  await migratorPool.query('TRUNCATE wallets, users');
+  await migratorPool.query('TRUNCATE sessions, login_failures, wallets, users');
 }
 
 /** Consulta como dona das tabelas, mas com contexto de banca (FORCE RLS também se aplica a ela). */

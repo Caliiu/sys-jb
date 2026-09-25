@@ -1,11 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import {
-  type CanActivate,
-  createParamDecorator,
-  type ExecutionContext,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
+import { type CanActivate, createParamDecorator, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { Errors } from '../common/app-error.js';
 import { APP_CONFIG, type AppConfig, digestKey } from '../config/config.js';
 import { normalizeHost } from './host.js';

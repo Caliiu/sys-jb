@@ -27,7 +27,9 @@ describe('3. unicidade por banca', () => {
   });
 
   it('email é comparado após normalização', async () => {
-    await api(app, 'aurora').post('/v1/users', syntheticUser({ email: 'caixa@exemplo.test' })).expect(201);
+    await api(app, 'aurora')
+      .post('/v1/users', syntheticUser({ email: 'caixa@exemplo.test' }))
+      .expect(201);
     const res = await api(app, 'aurora').post('/v1/users', syntheticUser({ email: '  CAIXA@Exemplo.Test ' }));
     expect(res.status).toBe(409);
   });

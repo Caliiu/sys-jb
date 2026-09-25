@@ -1,11 +1,57 @@
 @import 'tailwindcss';
 
+/*
+ * Tema do app original (trv-clone/frontend: tailwind.config.js e src/index.css).
+ * Única diferença, por ser white label: brand-primary e suas variações vêm da banca atual
+ * (/v1/tenant). Sem banca definida, vale o vermelho original.
+ */
 @theme inline {
+  --font-display: var(--font-archivo-black), 'Arial Black', sans-serif;
+  --font-body: var(--font-inter), 'Helvetica Neue', Arial, sans-serif;
+
+  --color-brand-orange: #f5a623;
+  --color-brand-orangeDark: #e08e0b;
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primaryDark: var(--brand-primary-dark);
+  --color-brand-primaryLight: var(--brand-primary-light);
+  --color-brand-green: #5fb92c;
+  --color-brand-greenDark: #3d7d1b;
+  --color-brand-purple: #8b3fa8;
+  --color-brand-purpleDark: #5b2470;
+  --color-brand-teal: #159e88;
+  --color-brand-tealDark: #0d7a69;
+  --color-brand-gold: #f2c230;
+  --color-brand-cream: #f4f1ea;
+
+  /* Aliases usados pela home/ferramentas de desenvolvimento. */
   --color-brand: var(--brand-primary);
   --color-brand-soft: var(--brand-secondary);
+
+  --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.15);
+  --radius-xl2: 14px;
 }
 
 :root {
-  --brand-primary: #334155;
-  --brand-secondary: #f1f5f9;
+  --brand-primary: #df2120;
+  --brand-primary-dark: color-mix(in srgb, var(--brand-primary) 60%, black);
+  --brand-primary-light: color-mix(in srgb, var(--brand-primary) 94%, white);
+  --brand-secondary: #f4f1ea;
+  /* Altura da barra superior do dashboard; atualizada em runtime pelo TopBar. */
+  --topbar-height: 94px;
+}
+
+body {
+  font-family: var(--font-inter), 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Mobile app shell: centraliza no desktop, ocupa a tela toda no celular. Sem background aqui:
+   cada tela aplica o seu bg-* (mesma regra do index.css original). */
+.app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.08);
 }

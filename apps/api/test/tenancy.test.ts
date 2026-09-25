@@ -31,7 +31,10 @@ describe('resolução de banca por hostname', () => {
 
   it('a mesma banca é resolvida com ou sem porta', async () => {
     for (const host of ['aurora.test', 'aurora.test:4000', 'AURORA.TEST:3000']) {
-      const res = await request(server).get('/v1/tenant').set('Host', host).set('Authorization', `Bearer ${KEYS.aurora}`);
+      const res = await request(server)
+        .get('/v1/tenant')
+        .set('Host', host)
+        .set('Authorization', `Bearer ${KEYS.aurora}`);
       expect(res.status, host).toBe(200);
       expect(res.body).toMatchObject({ slug: 'aurora' });
       expect(res.body).not.toHaveProperty('id');
@@ -40,7 +43,10 @@ describe('resolução de banca por hostname', () => {
 
   it('hostname desconhecido falha sem fallback para outra banca', async () => {
     for (const host of ['desconhecida.test', 'aurora.test.evil.test', 'test', 'localhost']) {
-      const res = await request(server).get('/v1/tenant').set('Host', host).set('Authorization', `Bearer ${KEYS.aurora}`);
+      const res = await request(server)
+        .get('/v1/tenant')
+        .set('Host', host)
+        .set('Authorization', `Bearer ${KEYS.aurora}`);
       expect(res.status, host).toBe(404);
       expect(res.body.code).toBe('TENANT_NOT_FOUND');
     }
@@ -100,7 +106,11 @@ describe('9. credencial de serviço por banca', () => {
     const user = await createUser(app, 'aurora');
     const get = await api(app, 'boreal', KEYS.aurora).get(`/v1/users/${user.id}`);
     expect(get.status).toBe(403);
-    const post = await api(app, 'boreal', KEYS.aurora).post('/v1/users', { name: 'X Y', phone: '11999999999', document: '99999999999' });
+    const post = await api(app, 'boreal', KEYS.aurora).post('/v1/users', {
+      name: 'X Y',
+      phone: '11999999999',
+      document: '99999999999',
+    });
     expect(post.status).toBe(403);
     const reverse = await api(app, 'aurora', KEYS.boreal).get(`/v1/users/${user.id}`);
     expect(reverse.status).toBe(403);

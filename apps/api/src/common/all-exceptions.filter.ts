@@ -40,6 +40,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const name = exception instanceof Error ? exception.name : typeof exception;
       this.logger.error(`erro não tratado: ${name}${prismaCode}`);
     }
+    if (exception instanceof AppError && exception.headers) res.set(exception.headers);
     res.status(body.statusCode).json(body);
   }
 }

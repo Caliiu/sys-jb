@@ -59,12 +59,10 @@ describe('5. role de runtime e políticas RLS', () => {
 
     const u = syntheticUser();
     await expect(
-      runtimePool.query('INSERT INTO users (tenant_id, name, phone, document, updated_at) VALUES ($1, $2, $3, $4, now())', [
-        aurora,
-        u.name,
-        u.phone,
-        u.document,
-      ]),
+      runtimePool.query(
+        'INSERT INTO users (tenant_id, name, phone, document, birth_date, password_hash, updated_at) VALUES ($1, $2, $3, $4, make_date(1990, 1, 1), $$$argon2id$sintetico$$, now())',
+        [aurora, u.name, u.phone, u.document],
+      ),
     ).rejects.toMatchObject({ code: '42501' });
 
     const upd = await runtimePool.query("UPDATE users SET name = 'Sem Contexto'");
@@ -72,10 +70,16 @@ describe('5. role de runtime e políticas RLS', () => {
   });
 
   it('com contexto: leitura restrita à banca corrente', async () => {
-    const ids = await asTenant(runtimePool, aurora, async (c) => (await c.query<{ id: string }>('SELECT id FROM users')).rows);
+    const ids = await asTenant(
+      runtimePool,
+      aurora,
+      async (c) => (await c.query<{ id: string }>('SELECT id FROM users')).rows,
+    );
     expect(ids.map((r) => r.id)).toEqual([auroraUser.id]);
-    const wallets = await asTenant(runtimePool, aurora, async (c) =>
-      (await c.query<{ tenant_id: string }>('SELECT tenant_id FROM wallets')).rows,
+    const wallets = await asTenant(
+      runtimePool,
+      aurora,
+      async (c) => (await c.query<{ tenant_id: string }>('SELECT tenant_id FROM wallets')).rows,
     );
     expect(wallets).toEqual([{ tenant_id: aurora }]);
   });
@@ -84,12 +88,10 @@ describe('5. role de runtime e políticas RLS', () => {
     const u = syntheticUser();
     await expect(
       asTenant(runtimePool, aurora, (c) =>
-        c.query('INSERT INTO users (tenant_id, name, phone, document, updated_at) VALUES ($1, $2, $3, $4, now())', [
-          boreal,
-          u.name,
-          u.phone,
-          u.document,
-        ]),
+        c.query(
+          'INSERT INTO users (tenant_id, name, phone, document, birth_date, password_hash, updated_at) VALUES ($1, $2, $3, $4, make_date(1990, 1, 1), $$$argon2id$sintetico$$, now())',
+          [boreal, u.name, u.phone, u.document],
+        ),
       ),
     ).rejects.toMatchObject({ code: '42501' });
 
@@ -100,7 +102,9 @@ describe('5. role de runtime e políticas RLS', () => {
 
     // Mover um usuário para outra banca também viola o WITH CHECK (e tenant_id nem é atualizável).
     await expect(
-      asTenant(runtimePool, aurora, (c) => c.query('UPDATE users SET tenant_id = $1 WHERE id = $2', [boreal, auroraUser.id])),
+      asTenant(runtimePool, aurora, (c) =>
+        c.query('UPDATE users SET tenant_id = $1 WHERE id = $2', [boreal, auroraUser.id]),
+      ),
     ).rejects.toMatchObject({ code: '42501' });
   });
 
@@ -118,7 +122,7 @@ describe('5. role de runtime e políticas RLS', () => {
     await expect(
       asTenant(runtimePool, aurora, (c) =>
         c.query(
-          'INSERT INTO users (tenant_id, name, phone, document, display_id, updated_at) VALUES ($1, $2, $3, $4, 1, now())',
+          'INSERT INTO users (tenant_id, name, phone, document, birth_date, password_hash, display_id, updated_at) VALUES ($1, $2, $3, $4, make_date(1990, 1, 1), $$$argon2id$sintetico$$, 1, now())',
           [aurora, u.name, u.phone, u.document],
         ),
       ),
@@ -130,7 +134,7 @@ describe('5. role de runtime e políticas RLS', () => {
     const u = syntheticUser();
     const orphanId = await asTenant(migratorPool, boreal, async (c) => {
       const { rows } = await c.query<{ id: string }>(
-        'INSERT INTO users (tenant_id, name, phone, document, updated_at) VALUES ($1, $2, $3, $4, now()) RETURNING id',
+        'INSERT INTO users (tenant_id, name, phone, document, birth_date, password_hash, updated_at) VALUES ($1, $2, $3, $4, make_date(1990, 1, 1), $$$argon2id$sintetico$$, now()) RETURNING id',
         [boreal, u.name, u.phone, u.document],
       );
       return rows[0]!.id;
@@ -181,8 +185,10 @@ describe('6. contexto de banca não vaza pelo pool', () => {
     const db = app.get(DatabaseService);
     await db.withTenant(aurora, (tx) => tx.user.findMany());
     const residual = await Promise.all(
-      Array.from({ length: 6 }, () =>
-        db.client.$queryRaw<Array<{ t: string | null; n: bigint }>>`
+      Array.from(
+        { length: 6 },
+        () =>
+          db.client.$queryRaw<Array<{ t: string | null; n: bigint }>>`
           SELECT current_setting('app.tenant_id', true) AS t, (SELECT count(*) FROM users) AS n`,
       ),
     );

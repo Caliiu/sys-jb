@@ -1,0 +1,12 @@
+node_modules
+dist
+.next
+.turbo
+coverage
+pnpm-lock.yaml
+packages/database/src/generated
+packages/database/prisma/migrations
+# Arquivos de referência do projeto antigo (mantidos como estão)
+ANTIGOS
+RegisterPage.tsx
+CLAUDE_BASE_MULTIBANCAS.md

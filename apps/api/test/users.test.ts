@@ -5,11 +5,14 @@ import { WalletsRepository } from '../src/users/users.repository.js';
 import {
   api,
   asTenant,
+  cpfFrom,
   createUser,
+  formatCpf,
   KEYS,
   migratorPool,
   resetUsers,
   startApp,
+  SYNTHETIC_PASSWORD,
   syntheticUser,
   tenantId,
 } from './helpers.js';
@@ -63,10 +66,13 @@ async function countRows(tenant: string) {
 
 describe('1. cadastro e contrato público', () => {
   it('persiste usuário e exatamente uma carteira zerada, com todos os campos do contrato', async () => {
+    const cpf = cpfFrom('000000001');
     const res = await api(app, 'aurora').post('/v1/users', {
       name: '  Pessoa Sintética Contrato  ',
       phone: '(11) 90000-0001',
-      document: '000.000.000-01',
+      document: formatCpf(cpf),
+      birthDate: '1985-01-31',
+      password: SYNTHETIC_PASSWORD,
       email: '  Contrato@Exemplo.TEST ',
     });
 
@@ -78,7 +84,7 @@ describe('1. cadastro e contrato público', () => {
       name: 'Pessoa Sintética Contrato',
       email: 'contrato@exemplo.test',
       phone: '11900000001',
-      document: '00000000001',
+      document: cpf,
       avatar: null,
       promoter: null,
       promoterName: null,
@@ -87,11 +93,14 @@ describe('1. cadastro e contrato público', () => {
     expect(user.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(Number.isSafeInteger(user.displayId) && user.displayId > 0).toBe(true);
     expect(Object.values(user.wallet).every((v) => v === 0)).toBe(true);
-    // Nada interno vaza.
-    expect(JSON.stringify(user)).not.toMatch(/tenant|createdAt|updatedAt/i);
+    // Nada interno vaza (nem senha/hash, nem data de nascimento).
+    expect(JSON.stringify(user)).not.toMatch(/tenant|createdAt|updatedAt|password|argon|birth/i);
+    expect(JSON.stringify(user)).not.toContain(SYNTHETIC_PASSWORD);
 
-    const db = await asTenant(migratorPool, auroraId, async (c) =>
-      (await c.query('SELECT * FROM wallets WHERE user_id = $1', [user.id])).rows,
+    const db = await asTenant(
+      migratorPool,
+      auroraId,
+      async (c) => (await c.query('SELECT * FROM wallets WHERE user_id = $1', [user.id])).rows,
     );
     expect(db).toHaveLength(1);
     expect(db[0]).toMatchObject({
