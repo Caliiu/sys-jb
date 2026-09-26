@@ -5,7 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import UserProfileCard from '@/components/admin/UserProfileCard';
 import UserStatusActions from '@/components/admin/UserStatusActions';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
-import { formatBirthDate, formatDateTime } from '@/lib/admin/format';
+import { formatBirthDate, formatDateTime } from '@/lib/datetime';
 import { formatCents } from '@/lib/currency';
 import { balanceAmounts } from '@/lib/wallet';
 

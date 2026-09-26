@@ -1,6 +1,7 @@
 'use client';
 
-import { formatBrl, MIN_RECHARGE_CENTS, POPULAR_AMOUNT_CENTS, QUICK_AMOUNTS_CENTS } from '@/lib/recharge';
+import { formatBrl } from '@/lib/currency';
+import { MIN_RECHARGE_CENTS, POPULAR_AMOUNT_CENTS, QUICK_AMOUNTS_CENTS } from '@/lib/recharge';
 
 interface QuickAmountsProps {
   amountCents: number;

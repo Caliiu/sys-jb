@@ -49,7 +49,7 @@ const MAIN_ITEMS: MenuItem[] = [
   { label: 'Resultados', icon: BarChart2, to: ROUTES.results },
   { label: 'Relatórios', icon: FileText, to: ROUTES.reports },
   { label: 'Recarga PIX', icon: PixIcon, to: ROUTES.pixTopUp, highlight: true },
-  { label: 'Solicitar saque', icon: Banknote },
+  { label: 'Solicitar saque', icon: Banknote, to: ROUTES.withdrawals },
   { label: 'Configurações', icon: Settings },
 ];
 

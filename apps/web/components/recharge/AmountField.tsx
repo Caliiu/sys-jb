@@ -1,6 +1,7 @@
 'use client';
 
-import { formatBrl, MIN_RECHARGE_CENTS, parseAmountInput } from '@/lib/recharge';
+import { formatBrl } from '@/lib/currency';
+import { MIN_RECHARGE_CENTS, parseAmountInput } from '@/lib/recharge';
 
 interface AmountFieldProps {
   cents: number;

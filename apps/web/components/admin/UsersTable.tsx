@@ -1,7 +1,7 @@
 import type { AdminUserListItem } from '@sysjb/contracts';
 import Link from 'next/link';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
-import { formatDate } from '@/lib/admin/format';
+import { formatDate } from '@/lib/datetime';
 import StatusBadge from './StatusBadge';
 
 const HEADERS = ['ID', 'Nome', 'CPF', 'Telefone', 'Status', 'Cadastro'];

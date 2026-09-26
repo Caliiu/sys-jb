@@ -5,4 +5,5 @@ export const ROUTES = {
   reports: '/relatorios',
   prizes: '/premiadas',
   pixTopUp: '/recarga-pix',
+  withdrawals: '/saques',
 } as const;

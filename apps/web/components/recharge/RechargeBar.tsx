@@ -1,23 +1,20 @@
 'use client';
 
-import { ChevronLeft, Eye, EyeOff } from 'lucide-react';
-import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useTopBarHeight } from '@/hooks/useTopBarHeight';
 import { formatCents } from '@/lib/currency';
 import SideMenu, { SIDE_MENU_ID } from '../dashboard/SideMenu';
 import TenantLogo from '../tenant/TenantLogo';
+import BackButton, { type BackAction } from '../ui/BackButton';
 import MenuButton from '../ui/MenuButton';
-
-const backClass = 'w-9 h-9 flex items-center justify-center shrink-0 active:scale-95 transition-transform';
-const backIcon = <ChevronLeft className="w-5 h-5 text-white" strokeWidth={2.5} aria-hidden />;
 
 interface RechargeBarProps {
   title: string;
   /** Etapa atual (1 ou 2) do indicador de progresso. */
   step: 1 | 2;
   /** Botão voltar: leva a outra página (href) ou volta a etapa da própria tela (onClick). */
-  back: { href: string } | { onClick: () => void };
+  back: BackAction;
   balanceCents: number;
   balanceVisible: boolean;
   onToggleBalance: () => void;
@@ -65,15 +62,7 @@ export default function RechargeBar({
         </div>
 
         <div className="flex items-center gap-2 px-3 pb-3">
-          {'href' in back ? (
-            <Link href={back.href} aria-label="Voltar" className={backClass}>
-              {backIcon}
-            </Link>
-          ) : (
-            <button type="button" onClick={back.onClick} aria-label="Voltar" className={backClass}>
-              {backIcon}
-            </button>
-          )}
+          <BackButton back={back} />
           <h1 className="text-white text-[19px] font-bold leading-tight">{title}</h1>
         </div>
 

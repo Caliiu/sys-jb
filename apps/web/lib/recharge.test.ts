@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { formatBrl } from './currency';
 import {
   addAmount,
-  formatBrl,
   formatClock,
   MAX_RECHARGE_CENTS,
   parseAmountInput,

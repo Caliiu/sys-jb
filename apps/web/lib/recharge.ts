@@ -1,4 +1,4 @@
-import { formatCents } from './currency';
+import { formatBrl, parseCurrencyInput } from './currency';
 
 /** Valor mínimo de recarga (R$ 1,00), em centavos. */
 export const MIN_RECHARGE_CENTS = 100;
@@ -24,26 +24,12 @@ export const DESTINATIONS: readonly DestinationOption[] = [
   { value: 'games', label: 'Games', description: 'Todas as modalidades', bonusAvailable: false },
 ];
 
-/**
- * Campo de valor estilo máscara de moeda: cada dígito digitado entra pela direita (centavos).
- * Retorna null se o resultado passar do teto, para a tela manter o valor anterior.
- */
-export function parseAmountInput(raw: string): number | null {
-  const digits = raw.replace(/\D/g, '');
-  if (digits === '') return 0;
-  if (digits.length > String(MAX_RECHARGE_CENTS).length) return null;
-  const cents = Number(digits);
-  return cents > MAX_RECHARGE_CENTS ? null : cents;
-}
+/** Campo de valor da recarga (máscara de moeda, com o teto da tela). null = passou do teto. */
+export const parseAmountInput = (raw: string): number | null => parseCurrencyInput(raw, MAX_RECHARGE_CENTS);
 
 /** Soma um valor rápido ao atual, respeitando o teto. */
 export function addAmount(currentCents: number, deltaCents: number): number {
   return Math.min(currentCents + deltaCents, MAX_RECHARGE_CENTS);
-}
-
-/** "R$ 1.234,56" */
-export function formatBrl(cents: number): string {
-  return `R$ ${formatCents(cents)}`;
 }
 
 /** Mensagem de erro do formulário, ou null se pode avançar. */

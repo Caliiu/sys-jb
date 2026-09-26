@@ -3,7 +3,8 @@
 import { ShieldAlert } from 'lucide-react';
 import { useSecondsUntil } from '@/hooks/useCountdown';
 import { maskCpfInput } from '@/lib/masks';
-import { formatBrl, type PixCharge } from '@/lib/recharge';
+import { formatBrl } from '@/lib/currency';
+import type { PixCharge } from '@/lib/recharge';
 import PaymentTimer from './PaymentTimer';
 import PixKeyCard from './PixKeyCard';
 import PixQrToggle from './PixQrToggle';

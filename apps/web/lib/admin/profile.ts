@@ -1,4 +1,5 @@
 import { digitsOnly, isValidBrPhone, isValidCpf } from '@sysjb/contracts';
+import { isPlausibleEmail } from '../email';
 
 /** Campos de cadastro que o operador pode corrigir. */
 export interface ProfileValues {
@@ -28,8 +29,6 @@ export function buildProfilePatch(
   return patch;
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /**
  * Feedback imediato antes de chamar a API (que continua sendo a validação oficial).
  * Valida só o que mudou: dados antigos, mesmo fora do padrão atual, não travam a edição de outro campo.
@@ -41,6 +40,6 @@ export function validateProfilePatch(patch: ProfilePatch): Partial<Record<Profil
   }
   if (patch.document !== undefined && !isValidCpf(patch.document)) errors.document = 'CPF inválido.';
   if (patch.phone !== undefined && !isValidBrPhone(patch.phone)) errors.phone = 'Informe um telefone válido com DDD.';
-  if (patch.email && !EMAIL.test(patch.email)) errors.email = 'E-mail inválido.';
+  if (patch.email && !isPlausibleEmail(patch.email)) errors.email = 'E-mail inválido.';
   return errors;
 }

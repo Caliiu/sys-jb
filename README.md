@@ -254,8 +254,18 @@ Exigem sessão (sem ela, redirecionam para `/login`) e seguem o mesmo modelo do 
 | `/relatorios`  | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
 | `/premiadas`   | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
 | `/recarga-pix` | Recarga em duas etapas na mesma rota (a URL não muda): 1) valor (máscara de moeda, mín. R$ 1,00, teto de tela R$ 10.000,00) e destino; 2) pagamento: chave Pix (copia e cola), QR Code sob demanda e contagem de 5 min |
+| `/saques`      | "Meus saques" (lista do usuário, vazia enquanto não há saques) e "Novo saque" na mesma rota, sem mudar a URL: 1) Pix, titular e chave; 2) resumo do saldo e valor                                                      |
 
 Os itens das listas ainda não têm página e avisam "disponível em breve". "Avançar" na recarga valida valor e destino e chama a server action `createPixChargeAction` (`app/recharge-actions.ts`), que exige sessão e revalida o pedido no servidor. Voltar da etapa 2 mantém o que foi digitado; expirado, "Gerar novo Pix" volta ao formulário. O menu lateral e a barra inferior do Dashboard já apontam para essas rotas (`lib/routes.ts`).
+
+**Saques (interface completa, sem envio)**: as telas dos prints estão prontas (lista com grupos por dia e detalhes, novo saque, "Confirmar saque" e "Solicitação enviada"), mas não existe solicitação de saque no backend. "Confirmar saque" chama a server action `requestWithdrawalAction` (`app/withdrawal-actions.ts`), que exige sessão e **revalida tudo no servidor** (tipo e formato da chave, CPF sempre o do titular da sessão, valor contra o saldo de agora), e então responde "Saque indisponível no momento". A tela "Solicitação enviada" só aparece quando o servidor devolve o saque criado, então nunca há um sucesso falso; a lista fica vazia. Nenhum saldo é alterado. As regras já estão prontas e testadas em `lib/withdrawal.ts` e `lib/pix-key.ts`, para o servidor reaproveitar quando existir:
+
+- **Disponível para resgate** = saldo total − recarga − bônus (o "Entenda": bônus e recargas não podem ser resgatados), sobre o saldo das loterias; na carteira atual equivale aos prêmios (`prizesJb`). Games não entra.
+- **Valor** entre R$ 1,00 (mínimo; suposição, os prints mostram um saque de R$ 8,00; ajuste `MIN_WITHDRAWAL_CENTS`) e o disponível.
+- **Chave Pix**: CPF (sempre o do titular, somente leitura), e-mail (até 77 caracteres), celular (com DDD e nono dígito) ou aleatória (UUID). O saque só vale para conta com o mesmo CPF do cadastro.
+- **Colar** (só na chave aleatória): lê a área de transferência; se o navegador negar ou estiver vazia, orienta a colar manualmente.
+- **Chaves recentes** (até 5, com "Limpar"): guardadas **só neste navegador** (`localStorage`), uma lista por usuário, e registradas quando a chave é validada e o usuário avança para o valor. Ao ler, cada entrada é revalidada (dado adulterado é descartado). Não há histórico no servidor; quando existir a solicitação de saque, o registro deve passar para o saque concluído.
+- **Para ligar o backend**: substituir o retorno "indisponível" da action pela chamada à API, com reserva atômica do saldo (sem saldo negativo) e chave de idempotência contra clique duplo. A lista (`items` de `WithdrawalsPage`) passa a vir da API; status previstos: Pendente, Pago, Recusado e Cancelado.
 
 **Pix ainda sem provedor**: o backend não tem cobrança. `lib/pix-charge.ts` (`createPixCharge`) é o ponto de integração: em desenvolvimento devolve uma cobrança de teste (BR Code válido com chave inexistente, marcada na tela); em produção devolve `null` e a tela mostra "Pix indisponível no momento" e continua na etapa 1. Cada "Avançar" cria uma cobrança nova, até existir um provedor que guarde a cobrança.
 
@@ -269,6 +279,7 @@ components/auth/     AuthLayout, AuthInput, FormError
 components/dashboard/ componentes do Dashboard, InviteProvider, TopBar
 components/section/   SectionBar e MenuList (telas de atalhos)
 components/recharge/  Recarga Pix: barra, valor, valores rápidos, destino, formulário
+components/withdrawal/ Saques: lista, etapas (chave Pix e valor), resumo do saldo, "Entenda"
 components/admin/     painel: menu, filtro, tabela, paginação, edição, bloqueio, confirmação
 components/tenant/   TenantProvider, TenantLogo (white label)
 components/ui/       Toast, QrCode, Notice

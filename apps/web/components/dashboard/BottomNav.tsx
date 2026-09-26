@@ -19,7 +19,7 @@ const LEFT_TABS: Tab[] = [
 ];
 
 const RIGHT_TABS: Tab[] = [
-  { label: 'Saque', icon: DollarSign },
+  { label: 'Saque', icon: DollarSign, to: ROUTES.withdrawals },
   { label: 'Premiadas', icon: Award, to: ROUTES.prizes },
 ];
 
