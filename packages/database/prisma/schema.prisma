@@ -13,6 +13,21 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+
+  @@map("user_status")
+}
+
+enum OperatorRole {
+  MANAGER
+  FINANCE
+  SUPPORT
+
+  @@map("operator_role")
+}
+
 model Tenant {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name           String
@@ -29,6 +44,9 @@ model Tenant {
   wallets       Wallet[]
   sessions      Session[]
   loginFailures LoginFailure[]
+  operators     Operator[]
+  operatorSessions OperatorSession[]
+  auditLogs     AuditLog[]
 
   @@map("tenants")
 }
@@ -45,6 +63,8 @@ model User {
   // Hash argon2id (formato PHC). Nunca sai da API.
   passwordHash String   @map("password_hash")
   displayId    Int      @unique @default(autoincrement()) @map("display_id")
+  // BLOCKED: não consegue entrar e perde as sessões abertas. Só operadores alteram.
+  status       UserStatus @default(ACTIVE)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -56,6 +76,7 @@ model User {
   @@unique([tenantId, phone])
   @@unique([tenantId, document])
   @@unique([tenantId, email])
+  @@index([tenantId, createdAt(sort: Desc), id])
   @@map("users")
 }
 
@@ -109,4 +130,62 @@ model LoginFailure {
 
   @@index([tenantId, identifierHash, createdAt])
   @@map("login_failures")
+}
+
+// Operador do painel administrativo de UMA banca. Criado por script (sem cadastro pela API).
+model Operator {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  name         String
+  email        String
+  // Hash argon2id (formato PHC). Nunca sai da API.
+  passwordHash String       @map("password_hash")
+  role         OperatorRole
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sessions OperatorSession[]
+  auditLogs AuditLog[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, email])
+  @@map("operators")
+}
+
+// Sessão de operador: token opaco; só o SHA-256 do token é persistido.
+model OperatorSession {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  operatorId String    @map("operator_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operator Operator @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, operatorId])
+  @@map("operator_sessions")
+}
+
+// Trilha de auditoria (somente inclusão): quem fez o quê. "details" guarda nomes de campos,
+// nunca valores pessoais.
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  operatorId String   @map("operator_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id") @db.Uuid
+  details    Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operator Operator @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, targetType, targetId, createdAt(sort: Desc)])
+  @@map("audit_logs")
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { User, Wallet } from '@sysjb/database';
+import type { User, UserStatus, Wallet } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
 import type { CreateUserInput, UpdateUserInput } from './user.schemas.js';
 
@@ -39,10 +39,10 @@ export class UsersRepository {
     tx: TenantTx,
     tenantId: string,
     document: string,
-  ): Promise<{ id: string; passwordHash: string } | null> {
+  ): Promise<{ id: string; passwordHash: string; status: UserStatus } | null> {
     return tx.user.findFirst({
       where: { tenantId, document },
-      select: { id: true, passwordHash: true },
+      select: { id: true, passwordHash: true, status: true },
     });
   }
 

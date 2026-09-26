@@ -104,6 +104,7 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'INVALID_CREDENTIALS'
+  | 'ACCOUNT_BLOCKED'
   | 'SESSION_INVALID'
   | 'TOO_MANY_ATTEMPTS'
   | 'PAYLOAD_TOO_LARGE'
@@ -117,4 +118,5 @@ export interface ApiError {
   details?: Array<{ field: string; message: string }>;
 }
 
+export * from './admin.js';
 export * from './validation.js';

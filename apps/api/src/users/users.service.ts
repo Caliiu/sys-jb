@@ -1,24 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PublicUser } from '@sysjb/contracts';
-import { AppError, Errors } from '../common/app-error.js';
-import { conflictingUserField, isUniqueViolation } from '../common/prisma-errors.js';
+import { Errors } from '../common/app-error.js';
 import { PasswordService } from '../auth/password.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
+import { mapUniqueViolation } from './user-conflicts.js';
 import { toPublicUser } from './user.mapper.js';
 import type { CreateUserInput, UpdateUserInput } from './user.schemas.js';
 import { UsersRepository, WalletsRepository } from './users.repository.js';
-
-const FIELD_LABEL = { phone: 'Telefone', document: 'CPF', email: 'Email' } as const;
-
-function mapUniqueViolation(error: unknown): never {
-  if (isUniqueViolation(error)) {
-    const field = conflictingUserField(error);
-    const message = field ? `${FIELD_LABEL[field]} já cadastrado nesta banca.` : 'Dados já cadastrados nesta banca.';
-    throw new AppError(409, 'CONFLICT', message, field ? [{ field, message: 'Já cadastrado.' }] : undefined);
-  }
-  throw error;
-}
 
 @Injectable()
 export class UsersService {

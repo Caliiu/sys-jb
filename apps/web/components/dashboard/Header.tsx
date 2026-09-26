@@ -1,6 +1,6 @@
 'use client';
 
-import { Menu, X } from 'lucide-react';
+import MenuButton from '../ui/MenuButton';
 import TenantLogo from '../tenant/TenantLogo';
 
 interface HeaderProps {
@@ -21,20 +21,7 @@ export default function Header({ userName, unitId, menuOpen, menuId, onMenuClick
         <p className="text-white/75 text-[11px] leading-tight">{unitId}</p>
       </div>
 
-      <button
-        type="button"
-        onClick={onMenuClick}
-        aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
-        aria-expanded={menuOpen}
-        aria-controls={menuId}
-        className="w-9 h-9 rounded-md bg-white/10 flex items-center justify-center active:scale-95 transition-transform shrink-0"
-      >
-        {menuOpen ? (
-          <X className="w-5 h-5 text-white" aria-hidden />
-        ) : (
-          <Menu className="w-5 h-5 text-white" aria-hidden />
-        )}
-      </button>
+      <MenuButton open={menuOpen} controlsId={menuId} onClick={onMenuClick} />
     </header>
   );
 }

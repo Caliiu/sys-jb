@@ -12,11 +12,17 @@ const nowInSeconds = () => Math.floor(Date.now() / 1000);
 // No servidor não há relógio "ao vivo": o contador aparece só no navegador (sem divergência de hidratação).
 const serverSnapshot = () => null;
 
-/** "HH:MM:SS" até `target` (ISO 8601), atualizado a cada segundo. null durante a renderização no servidor. */
-export function useCountdown(target: string): string | null {
+/** Segundos inteiros até `target` (ISO 8601), atualizado a cada segundo. null durante a renderização no servidor. */
+export function useSecondsUntil(target: string): number | null {
   const now = useSyncExternalStore(subscribeToClock, nowInSeconds, serverSnapshot);
   if (now === null) return null;
-  return formatCountdown(new Date(target).getTime() - now * 1000);
+  return Math.max(0, Math.floor((new Date(target).getTime() - now * 1000) / 1000));
+}
+
+/** "HH:MM:SS" até `target` (ISO 8601), atualizado a cada segundo. null durante a renderização no servidor. */
+export function useCountdown(target: string): string | null {
+  const seconds = useSecondsUntil(target);
+  return seconds === null ? null : formatCountdown(seconds * 1000);
 }
 
 export function formatCountdown(ms: number): string {

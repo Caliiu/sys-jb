@@ -101,6 +101,18 @@ export const updateUserSchema = z
   })
   .refine((patch) => Object.values(patch).some((v) => v !== undefined), 'Informe ao menos um campo para atualizar.');
 
+/**
+ * PATCH do painel: só dados de cadastro (sem avatar). Campo ausente mantém o valor; null só limpa o email.
+ */
+export const adminUpdateUserSchema = z
+  .strictObject({
+    name: name.optional(),
+    phone: phone.optional(),
+    document: document.optional(),
+    email: email.nullable().optional(),
+  })
+  .refine((patch) => Object.values(patch).some((v) => v !== undefined), 'Informe ao menos um campo para atualizar.');
+
 /** Login por CPF + senha. Mensagens genéricas: o erro de credencial é decidido no serviço. */
 export const loginSchema = z.strictObject({
   document: z
@@ -117,4 +129,5 @@ export const userIdSchema = z.uuid({ error: 'id deve ser um UUID.' });
 
 export type CreateUserInput = z.output<typeof createUserSchema>;
 export type UpdateUserInput = z.output<typeof updateUserSchema>;
+export type AdminUpdateUserInput = z.output<typeof adminUpdateUserSchema>;
 export type LoginInput = z.output<typeof loginSchema>;

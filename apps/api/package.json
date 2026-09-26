@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch --env-file=../../.env src/main.ts",
     "start": "node --env-file=../../.env dist/main.js",
+    "operator:create": "tsx --env-file=../../.env scripts/create-operator.ts",
     "test": "vitest run"
   },
   "dependencies": {

@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import type { PublicUser } from '@sysjb/contracts';
+import type { OperatorLoginResponse, OperatorRole, PublicUser } from '@sysjb/contracts';
 import pg from 'pg';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { createApp } from '../src/app.factory.js';
+import { PasswordService } from '../src/auth/password.service.js';
 import { type AppConfig, parseServiceKeys } from '../src/config/config.js';
 import { TEST_APP_URL, TEST_MIGRATOR_URL, TEST_TENANTS } from './env.js';
 
@@ -42,10 +43,15 @@ export async function startApp(overrides: Partial<AppConfig> = {}): Promise<INes
 }
 
 /** Cliente HTTP já com Host e credencial da banca informada. */
-export function api(app: INestApplication, tenant: TenantSlug, key: string = KEYS[tenant]) {
+export function api(
+  app: INestApplication,
+  tenant: TenantSlug,
+  key: string = KEYS[tenant],
+  extraHeaders: Record<string, string> = {},
+) {
   const server = app.getHttpServer() as App;
   const host = TEST_TENANTS[tenant].domain;
-  const auth = { Host: host, Authorization: `Bearer ${key}` };
+  const auth = { Host: host, Authorization: `Bearer ${key}`, ...extraHeaders };
   return {
     post: (path: string, body: unknown) =>
       request(server)
@@ -103,7 +109,9 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
 
 /** TRUNCATE não é afetado por RLS; a role de migração é dona das tabelas. */
 export async function resetUsers(): Promise<void> {
-  await migratorPool.query('TRUNCATE sessions, login_failures, wallets, users');
+  await migratorPool.query(
+    'TRUNCATE audit_logs, operator_sessions, operators, sessions, login_failures, wallets, users',
+  );
 }
 
 /** Consulta como dona das tabelas, mas com contexto de banca (FORCE RLS também se aplica a ela). */
@@ -127,4 +135,36 @@ export async function createUser(app: INestApplication, tenant: TenantSlug, extr
   const res = await api(app, tenant).post('/v1/users', syntheticUser(extra));
   if (res.status !== 201) throw new Error(`cadastro falhou: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body as PublicUser;
+}
+
+export const OPERATOR_PASSWORD = 'operator horse battery staple';
+const passwords = new PasswordService();
+let operatorSeq = 0;
+
+/** Cria um operador (só a credencial de migração pode: a role de runtime não tem INSERT em operators). */
+export async function createOperator(
+  tenant: TenantSlug,
+  options: { role?: OperatorRole; active?: boolean; email?: string } = {},
+) {
+  operatorSeq += 1;
+  const email = options.email ?? `operador${operatorSeq}.${runBase}@example.test`;
+  const passwordHash = await passwords.hash(OPERATOR_PASSWORD);
+  const id = await tenantId(tenant);
+  await asTenant(migratorPool, id, (client) =>
+    client.query(
+      `INSERT INTO operators (tenant_id, name, email, password_hash, role, active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())`,
+      [id, `Operador Sintético ${operatorSeq}`, email, passwordHash, options.role ?? 'MANAGER', options.active ?? true],
+    ),
+  );
+  return { email, password: OPERATOR_PASSWORD };
+}
+
+/** Cria o operador, faz login e devolve um cliente HTTP já autenticado como ele. */
+export async function loginOperator(app: INestApplication, tenant: TenantSlug, options: { role?: OperatorRole } = {}) {
+  const { email, password } = await createOperator(tenant, options);
+  const res = await api(app, tenant).post('/v1/admin/auth/login', { email, password });
+  if (res.status !== 200) throw new Error(`login do operador falhou: ${res.status} ${JSON.stringify(res.body)}`);
+  const session = res.body as OperatorLoginResponse;
+  return { ...session, email, http: api(app, tenant, KEYS[tenant], { 'X-Operator-Token': session.token }) };
 }

@@ -19,7 +19,11 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useOverlay } from '@/hooks/useOverlay';
 import PixIcon from '../icons/PixIcon';
+import { ROUTES } from '@/lib/routes';
 import { useToast } from '../ui/Toast';
+
+/** id do painel: o botão de menu das barras superiores aponta para ele (aria-controls). */
+export const SIDE_MENU_ID = 'side-menu';
 
 interface SideMenuProps {
   id: string;
@@ -36,15 +40,15 @@ interface MenuItem {
 }
 
 const MAIN_ITEMS: MenuItem[] = [
-  { label: 'Início', icon: Home, to: '/' },
+  { label: 'Início', icon: Home, to: ROUTES.home },
   { label: 'Perfil', icon: User },
   { label: 'Loterias', icon: Coins },
   { label: 'Cassino', icon: Gem },
   { label: 'Bingo', icon: Disc },
-  { label: 'Premiadas', icon: Award },
-  { label: 'Resultados', icon: BarChart2 },
-  { label: 'Relatórios', icon: FileText },
-  { label: 'Recarga PIX', icon: PixIcon, highlight: true },
+  { label: 'Premiadas', icon: Award, to: ROUTES.prizes },
+  { label: 'Resultados', icon: BarChart2, to: ROUTES.results },
+  { label: 'Relatórios', icon: FileText, to: ROUTES.reports },
+  { label: 'Recarga PIX', icon: PixIcon, to: ROUTES.pixTopUp, highlight: true },
   { label: 'Solicitar saque', icon: Banknote },
   { label: 'Configurações', icon: Settings },
 ];

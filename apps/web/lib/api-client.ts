@@ -18,7 +18,7 @@ export function apiRequest<T>(
   method: 'GET' | 'POST' | 'PATCH',
   path: string,
   body?: unknown,
-  options: { sessionToken?: string } = {},
+  options: { sessionToken?: string; operatorToken?: string } = {},
 ) {
   const key = serviceKeyFor(hostname);
   if (!key) {
@@ -43,6 +43,7 @@ export function apiRequest<T>(
           Authorization: `Bearer ${key}`,
           Accept: 'application/json',
           ...(options.sessionToken ? { 'X-Session-Token': options.sessionToken } : {}),
+          ...(options.operatorToken ? { 'X-Operator-Token': options.operatorToken } : {}),
           ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
       },

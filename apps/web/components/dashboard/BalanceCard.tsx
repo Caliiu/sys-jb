@@ -5,19 +5,8 @@ import type { PublicWallet } from '@sysjb/contracts';
 import { useState } from 'react';
 import { useWallet } from '@/hooks/useWallet';
 import { formatCents } from '@/lib/currency';
+import { balanceAmounts } from '@/lib/wallet';
 import { useInvite } from './InviteProvider';
-
-/**
- * Mapeamento da carteira pública para os três valores do card original (bolsas LOTERIAS,
- * BONUS e GAMES). Tudo em centavos.
- */
-export function balanceAmounts(wallet: PublicWallet) {
-  return {
-    main: wallet.balanceJb + wallet.prizesJb,
-    bonus: wallet.bonusJb,
-    games: wallet.totalAvailableGames,
-  };
-}
 
 export default function BalanceCard({ initialWallet }: { initialWallet: PublicWallet }) {
   const [visible, setVisible] = useState(true);
