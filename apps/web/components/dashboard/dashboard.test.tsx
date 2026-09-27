@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
 vi.mock('@/app/auth-actions', () => ({ meAction: (...args: unknown[]) => meAction(...args) }));
 
+const { default: Footer } = await import('./Footer');
 const { default: SideMenu } = await import('./SideMenu');
 const { default: InviteModal } = await import('./InviteModal');
 const { default: SorteioBanner } = await import('./SorteioBanner');
@@ -42,8 +43,11 @@ describe('SideMenu', () => {
     const onClose = vi.fn();
     renderWithProviders(<SideMenu id="menu" open onClose={onClose} />);
 
+    await userEvent.click(screen.getByRole('button', { name: 'Bingo' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Bingo: disponível em breve.');
+
     await userEvent.click(screen.getByRole('button', { name: 'Perfil' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Perfil: disponível em breve.');
+    expect(router.push).toHaveBeenCalledWith('/perfil');
 
     await userEvent.click(screen.getByRole('button', { name: 'Início' }));
     expect(router.push).toHaveBeenCalledWith('/');
@@ -51,6 +55,32 @@ describe('SideMenu', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
     expect(auth.logout).toHaveBeenCalledOnce();
     expect(router.replace).toHaveBeenCalledWith('/login');
+  });
+});
+
+describe('Footer', () => {
+  it('Resultados, Recarga e Saque são links para as páginas', () => {
+    renderWithProviders(<Footer version="1.2.3" />);
+    const nav = screen.getByRole('navigation', { name: 'Rodapé' });
+    expect(within(nav).getByRole('link', { name: 'Resultados' })).toHaveAttribute('href', '/resultados');
+    expect(within(nav).getByRole('link', { name: 'Recarga' })).toHaveAttribute('href', '/recarga-pix');
+    expect(within(nav).getByRole('link', { name: 'Saque' })).toHaveAttribute('href', '/saques');
+  });
+
+  it('mostra a versão recebida (nunca um número fixo no código)', () => {
+    const { unmount } = renderWithProviders(<Footer version="1.2.3" />);
+    expect(screen.getByText(/· v1.2.3$/)).toBeInTheDocument();
+    unmount();
+    renderWithProviders(<Footer version="9.9.9" />);
+    expect(screen.getByText(/· v9.9.9$/)).toBeInTheDocument();
+  });
+
+  it('os demais itens ainda avisam "em breve"', async () => {
+    renderWithProviders(<Footer version="1.2.3" />);
+    for (const label of ['Loterias', 'Cassino', 'Fazendinha', 'Bingo', 'Raspadinha']) {
+      await userEvent.click(screen.getByRole('button', { name: label }));
+      expect(screen.getByRole('status')).toHaveTextContent(`${label}: disponível em breve.`);
+    }
   });
 });
 

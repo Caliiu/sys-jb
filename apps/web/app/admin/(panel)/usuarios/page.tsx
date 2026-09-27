@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
-import { TenantUnavailable } from '@/components/ui/Notice';
+import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
@@ -17,7 +17,7 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const gate = await requireAdmin();
-  if (!gate.ok) return <TenantUnavailable hostname={gate.hostname} message={gate.message} />;
+  if (!gate.ok) return <AdminUnavailable message={gate.message} />;
   const { session } = gate;
   if (!can(session.operator, 'users.read')) {
     return <AdminMessage title="Sem permissão">Seu perfil não pode consultar usuários.</AdminMessage>;

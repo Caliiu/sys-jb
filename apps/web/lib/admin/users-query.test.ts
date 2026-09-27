@@ -27,13 +27,13 @@ describe('parseUsersQuery', () => {
 
 describe('usersHref', () => {
   it('omite o que é padrão', () => {
-    expect(usersHref({})).toBe('/admin/usuarios');
-    expect(usersHref({ page: 1, search: '', status: '' })).toBe('/admin/usuarios');
+    expect(usersHref({})).toBe('/usuarios');
+    expect(usersHref({ page: 1, search: '', status: '' })).toBe('/usuarios');
   });
 
   it('monta a query com codificação segura', () => {
     expect(usersHref({ page: 2, search: 'ana & cia', status: 'ACTIVE' })).toBe(
-      '/admin/usuarios?search=ana+%26+cia&status=ACTIVE&page=2',
+      '/usuarios?search=ana+%26+cia&status=ACTIVE&page=2',
     );
   });
 

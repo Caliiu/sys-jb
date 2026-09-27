@@ -21,11 +21,15 @@ export class UsersService {
   /** Usuário e carteira zerada na mesma transação: se a carteira falhar, nada é persistido. */
   async create(tenant: ResolvedTenant, input: CreateUserInput): Promise<PublicUser> {
     // Hash fora da transação: o argon2 é deliberadamente lento e não deve segurar conexão do pool.
-    const { password, ...data } = input;
+    const { password, inviteCode, ...data } = input;
     const passwordHash = await this.passwords.hash(password);
     try {
       return await this.db.withTenant(tenant.id, async (tx) => {
-        const user = await this.users.create(tx, tenant.id, { ...data, passwordHash });
+        // Código inexistente ou de quem não é promotor é ignorado: o cadastro segue sem vínculo.
+        const referredByUserId = inviteCode
+          ? await this.users.findActivePromoterId(tx, tenant.id, Number(inviteCode))
+          : null;
+        const user = await this.users.create(tx, tenant.id, { ...data, passwordHash, referredByUserId });
         const wallet = await this.wallets.createForUser(tx, tenant.id, user.id);
         return toPublicUser(user, wallet);
       });

@@ -7,7 +7,11 @@ import type { CreateUserInput, UpdateUserInput } from './user.schemas.js';
 export type SafeUser = Omit<User, 'passwordHash'>;
 const OMIT_SECRET = { passwordHash: true } as const;
 
-export type NewUserData = Omit<CreateUserInput, 'password'> & { passwordHash: string };
+export type NewUserData = Omit<CreateUserInput, 'password' | 'inviteCode'> & {
+  passwordHash: string;
+  /** Promotor que indicou o usuário (já conferido pelo serviço); null = sem convite. */
+  referredByUserId: string | null;
+};
 
 /** 'YYYY-MM-DD' -> Date à meia-noite UTC (coluna DATE, sem fuso). */
 const toDateOnly = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -30,8 +34,18 @@ export class UsersRepository {
         avatar: input.avatar,
         birthDate: toDateOnly(input.birthDate),
         passwordHash: input.passwordHash,
+        referredByUserId: input.referredByUserId,
       },
     });
+  }
+
+  /** Promotor ativo da banca com este ID exibido (o código do link de convite), ou null. */
+  async findActivePromoterId(tx: TenantTx, tenantId: string, displayId: number): Promise<string | null> {
+    const promoter = await tx.user.findFirst({
+      where: { tenantId, displayId, status: 'ACTIVE', promoterCommissionBps: { not: null } },
+      select: { id: true },
+    });
+    return promoter?.id ?? null;
   }
 
   /** Única leitura que traz o hash da senha; uso exclusivo do login. */
@@ -48,6 +62,12 @@ export class UsersRepository {
 
   findWithWallet(tx: TenantTx, tenantId: string, id: string): Promise<(SafeUser & { wallet: Wallet | null }) | null> {
     return tx.user.findFirst({ where: { id, tenantId }, omit: OMIT_SECRET, include: { wallet: true } });
+  }
+
+  /** Nova senha (hash argon2id). Retorna false se o usuário não existe nesta banca. */
+  async setPasswordHash(tx: TenantTx, tenantId: string, id: string, passwordHash: string): Promise<boolean> {
+    const { count } = await tx.user.updateMany({ where: { id, tenantId }, data: { passwordHash } });
+    return count === 1;
   }
 
   /** Atualiza apenas os campos presentes no patch. Retorna false se o usuário não existe nesta banca. */

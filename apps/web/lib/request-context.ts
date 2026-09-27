@@ -3,7 +3,7 @@ import type { PublicTenant, PublicUser } from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { apiRequest } from './api-client';
-import { hostnameOnly, serviceKeyFor } from './server-env';
+import { hostnameOnly, isAdminHost, serviceKeyFor } from './server-env';
 import { readSessionToken } from './session';
 
 export type TenantContext =
@@ -14,11 +14,13 @@ export type RequestContext =
   | { ok: false; hostname: string | null; message: string };
 
 /**
- * Banca da requisição, resolvida pelo hostname. Compartilhada pelo app do cliente e pelo painel
- * administrativo. cache(): layout (metadata) e página usam o mesmo resultado na mesma requisição.
+ * Banca da requisição, resolvida pelo hostname (só o app do cliente; o painel administrativo
+ * descobre a banca pelo operador logado). cache(): layout (metadata) e página usam o mesmo resultado na mesma requisição.
  */
 export const resolveTenant = cache(async (): Promise<TenantContext> => {
   const hostname = hostnameOnly((await headers()).get('host'));
+  // O painel administrativo (admin.<domínio>) não é uma banca: nada a resolver, nem chamada à API.
+  if (isAdminHost(hostname)) return { ok: false, hostname, message: 'Endereço do painel administrativo.' };
   if (!hostname || !serviceKeyFor(hostname)) {
     return { ok: false, hostname, message: 'Nenhuma banca configurada para este endereço.' };
   }

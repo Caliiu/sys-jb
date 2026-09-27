@@ -1,7 +1,7 @@
 'use client';
 
 import type { Permission } from '@sysjb/contracts';
-import { LogOut, Menu, Users, X } from 'lucide-react';
+import { BadgePercent, LogOut, Menu, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -17,7 +17,10 @@ interface NavItem {
   permission: Permission;
 }
 
-const NAV_ITEMS: NavItem[] = [{ href: ADMIN_ROUTES.users, label: 'Usuários', icon: Users, permission: 'users.read' }];
+const NAV_ITEMS: NavItem[] = [
+  { href: ADMIN_ROUTES.users, label: 'Usuários', icon: Users, permission: 'users.read' },
+  { href: ADMIN_ROUTES.promoters, label: 'Promotores', icon: BadgePercent, permission: 'promoters.read' },
+];
 
 interface AdminSidebarProps {
   tenantName: string;

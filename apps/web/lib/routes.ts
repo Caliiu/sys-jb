@@ -6,4 +6,6 @@ export const ROUTES = {
   prizes: '/premiadas',
   pixTopUp: '/recarga-pix',
   withdrawals: '/saques',
+  settings: '/configuracoes',
+  profile: '/perfil',
 } as const;

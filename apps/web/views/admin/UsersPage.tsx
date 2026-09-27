@@ -2,7 +2,7 @@ import type { AdminUserListItem, Page } from '@sysjb/contracts';
 import Pagination from '@/components/admin/Pagination';
 import UsersFilter from '@/components/admin/UsersFilter';
 import UsersTable from '@/components/admin/UsersTable';
-import type { UsersQuery } from '@/lib/admin/users-query';
+import { usersHref, type UsersQuery } from '@/lib/admin/users-query';
 
 interface UsersPageProps {
   query: UsersQuery;
@@ -17,7 +17,12 @@ export default function UsersPage({ query, result }: UsersPageProps) {
       <UsersFilter query={query} />
       <section aria-label="Resultados" className="overflow-hidden rounded-xl bg-admin-surface shadow-admin">
         <UsersTable items={result.items} />
-        <Pagination query={query} page={result.page} totalPages={result.totalPages} total={result.total} />
+        <Pagination
+          hrefFor={(page) => usersHref({ ...query, page })}
+          page={result.page}
+          totalPages={result.totalPages}
+          total={result.total}
+        />
       </section>
     </div>
   );

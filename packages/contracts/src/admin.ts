@@ -2,7 +2,7 @@
  * Contratos do painel administrativo (operadores, perfis, usuários vistos pelo operador).
  * Sem dependências de servidor: a API e o web importam daqui.
  */
-import type { PublicWallet } from './index.js';
+import type { PublicTenant, PublicWallet } from './index.js';
 
 export const USER_STATUSES = ['ACTIVE', 'BLOCKED'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
@@ -10,20 +10,26 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 export const OPERATOR_ROLES = ['MANAGER', 'FINANCE', 'SUPPORT'] as const;
 export type OperatorRole = (typeof OPERATOR_ROLES)[number];
 
-export const PERMISSIONS = ['users.read', 'users.update', 'users.status'] as const;
+export const PERMISSIONS = [
+  'users.read',
+  'users.update',
+  'users.status',
+  'promoters.read',
+  'promoters.manage',
+] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 /**
  * Permissões de cada perfil (fonte única, usada pela API para autorizar e pelo web para
  * decidir o que mostrar; a API é quem garante).
- * - MANAGER (Gerente): tudo.
- * - SUPPORT (Suporte): consulta e corrige dados de cadastro; não bloqueia.
- * - FINANCE (Financeiro): somente consulta.
+ * - MANAGER (Gerente): tudo (inclusive promover a promotor e definir a comissão).
+ * - SUPPORT (Suporte): consulta e corrige dados de cadastro; não bloqueia; não vê promotores.
+ * - FINANCE (Financeiro): somente consulta (usuários e promotores).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
-  MANAGER: ['users.read', 'users.update', 'users.status'],
+  MANAGER: ['users.read', 'users.update', 'users.status', 'promoters.read', 'promoters.manage'],
   SUPPORT: ['users.read', 'users.update'],
-  FINANCE: ['users.read'],
+  FINANCE: ['users.read', 'promoters.read'],
 };
 
 export function hasPermission(role: OperatorRole, permission: Permission): boolean {
@@ -51,13 +57,19 @@ export interface OperatorLoginResponse {
   operator: PublicOperator;
 }
 
-/** Linha da lista de usuários: CPF e telefone mascarados. */
+/** Quem está logado no painel e de qual banca (a banca vem do operador, nunca do endereço acessado). */
+export interface OperatorMeResponse {
+  operator: PublicOperator;
+  tenant: PublicTenant;
+}
+
+/** Linha da lista de usuários. CPF e telefone: só dígitos (a tela formata). */
 export interface AdminUserListItem {
   id: string;
   displayId: number;
   name: string;
-  documentMasked: string;
-  phoneMasked: string;
+  document: string;
+  phone: string;
   status: UserStatus;
   /** ISO 8601. */
   createdAt: string;
@@ -78,6 +90,34 @@ export interface AdminUserDetail {
   /** ISO 8601 do último login; null se nunca entrou. */
   lastLoginAt: string | null;
   wallet: PublicWallet;
+  /** Comissão em centésimos de % (1 a 10000); null = não é promotor. */
+  promoterCommissionBps: number | null;
+  /** Promotor que indicou este usuário no cadastro; null = veio sem convite. */
+  referredBy: { id: string; displayId: number; name: string } | null;
+}
+
+/** Comissão do promotor em centésimos de % (1 = 0,01%; 10000 = 100%). Inteiro: nunca ponto flutuante. */
+export const MIN_COMMISSION_BPS = 1;
+export const MAX_COMMISSION_BPS = 10_000;
+
+/** Linha da lista de promotores. */
+export interface AdminPromoterListItem {
+  id: string;
+  displayId: number;
+  name: string;
+  /** Só dígitos (a tela formata). */
+  phone: string;
+  status: UserStatus;
+  commissionBps: number;
+  /** Jogadores cadastrados pelo link de convite deste promotor. */
+  referralsCount: number;
+  /** ISO 8601. */
+  createdAt: string;
+}
+
+/** PUT /v1/admin/promoters/:userId: promove o usuário a promotor ou altera a comissão. */
+export interface SetPromoterRequest {
+  commissionBps: number;
 }
 
 export interface Page<T> {
@@ -94,15 +134,4 @@ export interface AdminUserListQuery {
   /** Nome, CPF, telefone ou ID do usuário. */
   search?: string;
   status?: UserStatus;
-}
-
-/** "52998224725" -> "***.982.247-**" */
-export function maskDocument(document: string): string {
-  return `***.${document.slice(3, 6)}.${document.slice(6, 9)}-**`;
-}
-
-/** "11912345678" -> "(11) *****-5678"; "1133334444" -> "(11) ****-4444" */
-export function maskPhone(phone: string): string {
-  const hidden = '*'.repeat(phone.length - 2 - 4);
-  return `(${phone.slice(0, 2)}) ${hidden}-${phone.slice(-4)}`;
 }

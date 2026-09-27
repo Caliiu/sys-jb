@@ -1,33 +1,33 @@
 import 'server-only';
-import type { Permission, PublicOperator, PublicTenant } from '@sysjb/contracts';
+import type { OperatorMeResponse, Permission, PublicOperator, PublicTenant } from '@sysjb/contracts';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { apiRequest } from '../api-client';
-import { resolveTenant } from '../request-context';
+import { hostnameOnly, isAdminHost, serviceKeyFor } from '../server-env';
 import { ADMIN_ROUTES } from './admin-routes';
 import { readOperatorToken } from './admin-session';
 
 export type AdminContext =
-  | { ok: true; hostname: string; tenant: PublicTenant; operator: PublicOperator | null; token: string | null }
+  | { ok: true; hostname: string; me: OperatorMeResponse | null; token: string | null }
   | { ok: false; hostname: string | null; message: string };
 
-/** Banca (hostname) e operador logado (cookie de sessão) da requisição. cache(): uma consulta por requisição. */
+/**
+ * Operador logado (cookie de sessão) e a banca dele. O painel é único: a banca não vem do endereço,
+ * vem do operador (a API a resolve pela sessão). cache(): uma consulta por requisição.
+ */
 export const resolveAdminRequest = cache(async (): Promise<AdminContext> => {
-  const ctx = await resolveTenant();
-  if (!ctx.ok) return ctx;
+  const hostname = hostnameOnly((await headers()).get('host'));
+  if (!hostname || !isAdminHost(hostname) || !serviceKeyFor(hostname)) {
+    return { ok: false, hostname, message: 'O painel administrativo não está disponível neste endereço.' };
+  }
 
   const token = (await readOperatorToken()) ?? null;
   const me = token
-    ? await apiRequest<PublicOperator>(ctx.hostname, 'GET', '/v1/admin/me', undefined, { operatorToken: token })
+    ? await apiRequest<OperatorMeResponse>(hostname, 'GET', '/v1/admin/me', undefined, { operatorToken: token })
     : null;
 
-  return {
-    ok: true,
-    hostname: ctx.hostname,
-    tenant: ctx.tenant,
-    operator: me?.ok ? me.data : null,
-    token: me?.ok ? token : null,
-  };
+  return { ok: true, hostname, me: me?.ok ? me.data : null, token: me?.ok ? token : null };
 });
 
 /** Sessão do operador já validada, para chamar a API em nome dele. */
@@ -47,10 +47,10 @@ export type AdminGate = { ok: true; session: AdminSession } | { ok: false; hostn
 export async function requireAdmin(): Promise<AdminGate> {
   const ctx = await resolveAdminRequest();
   if (!ctx.ok) return ctx;
-  if (!ctx.operator || !ctx.token) redirect(ADMIN_ROUTES.login);
+  if (!ctx.me || !ctx.token) redirect(ADMIN_ROUTES.login);
   return {
     ok: true,
-    session: { hostname: ctx.hostname, tenant: ctx.tenant, operator: ctx.operator, token: ctx.token },
+    session: { hostname: ctx.hostname, tenant: ctx.me.tenant, operator: ctx.me.operator, token: ctx.token },
   };
 }
 

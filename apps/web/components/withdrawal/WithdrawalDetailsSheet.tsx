@@ -5,7 +5,7 @@ import { formatBrl } from '@/lib/currency';
 import { formatShortDateTime } from '@/lib/datetime';
 import { pixKeyDisplay } from '@/lib/pix-key';
 import type { WithdrawalItem } from '@/lib/withdrawal';
-import BottomSheet from './BottomSheet';
+import BottomSheet from '../ui/BottomSheet';
 import DetailRows from './DetailRows';
 import WithdrawalStatusBadge from './WithdrawalStatusBadge';
 

@@ -3,7 +3,7 @@
 import { useId } from 'react';
 import { formatBrl } from '@/lib/currency';
 import { PIX_KEY_INFO, type PixKeyType, pixKeyDisplay } from '@/lib/pix-key';
-import BottomSheet from './BottomSheet';
+import BottomSheet from '../ui/BottomSheet';
 import DetailRows from './DetailRows';
 
 interface ConfirmWithdrawalSheetProps {

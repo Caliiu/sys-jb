@@ -13,7 +13,7 @@ import { registerSchema } from '@/schemas/register.schema';
 import { birthDateBrToIso, maskBirthDateInput, maskCpfInput, maskPhoneInput } from '@/lib/masks';
 import { ApiError } from '@/services/http';
 
-export default function RegisterPage() {
+export default function RegisterPage({ inviteCode }: { inviteCode?: string }) {
   const { register } = useAuth();
   const router = useRouter();
   const toast = useToast();
@@ -48,7 +48,7 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      await register(parsed.data);
+      await register({ ...parsed.data, inviteCode });
       toast.show('Cadastro concluído. Entre com seu CPF e senha.');
       router.replace('/login');
     } catch (err) {

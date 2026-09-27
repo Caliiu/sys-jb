@@ -2,12 +2,19 @@ import type { AdminUserListItem } from '@sysjb/contracts';
 import Link from 'next/link';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { formatDate } from '@/lib/datetime';
+import { maskCpfInput, maskPhoneInput } from '@/lib/masks';
 import StatusBadge from './StatusBadge';
 
 const HEADERS = ['ID', 'Nome', 'CPF', 'Telefone', 'Status', 'Cadastro'];
 
-/** Tabela de usuários. CPF e telefone chegam mascarados da API; os dados completos só no detalhe. */
-export default function UsersTable({ items }: { items: AdminUserListItem[] }) {
+/** Tabela de usuários. CPF e telefone chegam só com dígitos e são formatados aqui. */
+export default function UsersTable({
+  items,
+  emptyMessage = 'Nenhum usuário encontrado.',
+}: {
+  items: AdminUserListItem[];
+  emptyMessage?: string;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-[13px]">
@@ -25,7 +32,7 @@ export default function UsersTable({ items }: { items: AdminUserListItem[] }) {
           {items.length === 0 && (
             <tr>
               <td colSpan={HEADERS.length} className="px-4 py-8 text-center text-admin-muted">
-                Nenhum usuário encontrado.
+                {emptyMessage}
               </td>
             </tr>
           )}
@@ -37,8 +44,8 @@ export default function UsersTable({ items }: { items: AdminUserListItem[] }) {
                   {user.name}
                 </Link>
               </td>
-              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{user.documentMasked}</td>
-              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{user.phoneMasked}</td>
+              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{maskCpfInput(user.document)}</td>
+              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{maskPhoneInput(user.phone)}</td>
               <td className="px-4 py-3">
                 <StatusBadge status={user.status} />
               </td>

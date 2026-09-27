@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import { TenantProvider } from '@/components/tenant/TenantProvider';
-import { TenantUnavailable } from '@/components/ui/Notice';
+import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { requireAdmin } from '@/lib/admin/admin-context';
 import { ROLE_LABELS } from '@/lib/admin/format';
 import { brandStyle } from '@/lib/brand-style';
@@ -9,7 +9,7 @@ import { brandStyle } from '@/lib/brand-style';
 /** Estrutura do painel (menu + conteúdo). Cada página confere a sessão de novo: layouts não rodam a cada navegação. */
 export default async function PanelLayout({ children }: { children: ReactNode }) {
   const gate = await requireAdmin();
-  if (!gate.ok) return <TenantUnavailable hostname={gate.hostname} message={gate.message} />;
+  if (!gate.ok) return <AdminUnavailable message={gate.message} />;
   const { tenant, operator } = gate.session;
 
   return (

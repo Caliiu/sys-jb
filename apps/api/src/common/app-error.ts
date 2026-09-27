@@ -26,6 +26,7 @@ export const Errors = {
   forbidden: () => new AppError(403, 'FORBIDDEN', 'Credencial não autorizada para esta banca.'),
   tenantNotFound: () => new AppError(404, 'TENANT_NOT_FOUND', 'Banca não encontrada para este hostname.'),
   userNotFound: () => new AppError(404, 'NOT_FOUND', 'Usuário não encontrado.'),
+  promoterNotFound: () => new AppError(404, 'NOT_FOUND', 'Promotor não encontrado.'),
   invalidCredentials: () => new AppError(401, 'INVALID_CREDENTIALS', 'CPF ou senha inválidos.'),
   invalidOperatorCredentials: () => new AppError(401, 'INVALID_CREDENTIALS', 'E-mail ou senha inválidos.'),
   accountBlocked: () => new AppError(403, 'ACCOUNT_BLOCKED', 'Conta bloqueada. Entre em contato com o suporte.'),

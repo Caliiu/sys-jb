@@ -1,23 +1,23 @@
-import { type AdminUserDetail, type AdminUserListItem, maskDocument, maskPhone } from '@sysjb/contracts';
+import type { AdminUserDetail, AdminUserListItem } from '@sysjb/contracts';
 import type { User, Wallet } from '@sysjb/database';
 import { toPublicWallet } from '../users/user.mapper.js';
 
 type ListSource = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'>;
 
-/** Lista: CPF e telefone sempre mascarados. */
+/** Lista: CPF e telefone completos (só dígitos), para o operador identificar o usuário. */
 export function toAdminListItem(user: ListSource): AdminUserListItem {
   return {
     id: user.id,
     displayId: user.displayId,
     name: user.name,
-    documentMasked: maskDocument(user.document),
-    phoneMasked: maskPhone(user.phone),
+    document: user.document,
+    phone: user.phone,
     status: user.status,
     createdAt: user.createdAt.toISOString(),
   };
 }
 
-type DetailSource = Omit<User, 'passwordHash'>;
+type DetailSource = Omit<User, 'passwordHash'> & { referredBy: Pick<User, 'id' | 'displayId' | 'name'> | null };
 
 /** Detalhe: dados completos para o operador conferir e corrigir. Nunca inclui o hash da senha. */
 export function toAdminDetail(user: DetailSource, wallet: Wallet, lastLoginAt: Date | null): AdminUserDetail {
@@ -33,5 +33,7 @@ export function toAdminDetail(user: DetailSource, wallet: Wallet, lastLoginAt: D
     createdAt: user.createdAt.toISOString(),
     lastLoginAt: lastLoginAt ? lastLoginAt.toISOString() : null,
     wallet: toPublicWallet(wallet),
+    promoterCommissionBps: user.promoterCommissionBps,
+    referredBy: user.referredBy,
   };
 }

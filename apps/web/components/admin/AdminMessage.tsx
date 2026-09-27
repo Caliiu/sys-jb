@@ -6,10 +6,17 @@ interface AdminMessageProps {
   children: string;
   /** Mostra o atalho de volta à lista de usuários. */
   backToUsers?: boolean;
+  /** Mostra o atalho de volta à lista de promotores. */
+  backToPromoters?: boolean;
 }
 
 /** Aviso de página inteira dentro do painel (sem permissão, falha ao carregar, não encontrado). */
-export default function AdminMessage({ title, children, backToUsers = false }: AdminMessageProps) {
+export default function AdminMessage({
+  title,
+  children,
+  backToUsers = false,
+  backToPromoters = false,
+}: AdminMessageProps) {
   return (
     <section role="alert" className="rounded-xl bg-admin-surface p-6 shadow-admin">
       <h1 className="text-[16px] font-bold text-admin-text">{title}</h1>
@@ -17,6 +24,11 @@ export default function AdminMessage({ title, children, backToUsers = false }: A
       {backToUsers && (
         <Link href={ADMIN_ROUTES.users} className="mt-4 inline-block text-[13px] font-semibold text-admin-accent">
           Voltar para usuários
+        </Link>
+      )}
+      {backToPromoters && (
+        <Link href={ADMIN_ROUTES.promoters} className="mt-4 inline-block text-[13px] font-semibold text-admin-accent">
+          Voltar para promotores
         </Link>
       )}
     </section>

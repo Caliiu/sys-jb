@@ -5,10 +5,14 @@ import type { TenantTx } from '../database/database.service.js';
 import type { ListUsersQuery } from './admin.schemas.js';
 
 type ListRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'>;
-type DetailRow = Omit<User, 'passwordHash'> & { wallet: Wallet | null; sessions: Array<{ createdAt: Date }> };
+type DetailRow = Omit<User, 'passwordHash'> & {
+  wallet: Wallet | null;
+  sessions: Array<{ createdAt: Date }>;
+  referredBy: Pick<User, 'id' | 'displayId' | 'name'> | null;
+};
 
 /** Texto de busca só com dígitos e pontuação de CPF/telefone (ex.: "529.982", "(11) 91234"). */
-const NUMERIC_SEARCH = /^[\d\s().\-/]+$/;
+export const NUMERIC_SEARCH = /^[\d\s().\-/]+$/;
 
 /** O Prisma NÃO escapa curingas em `contains`: "\", "%" e "_" viram literais (escape padrão do LIKE no PostgreSQL). */
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -17,7 +21,7 @@ const escapeLike = (value: string) => value.replace(/[\\%_]/g, (char) => `\\${ch
  * Busca por nome, CPF, telefone, e-mail (se tiver "@") ou ID exibido do usuário.
  * O texto do operador nunca vira curinga de LIKE.
  */
-function searchFilter(search: string): Prisma.UserWhereInput {
+export function searchFilter(search: string): Prisma.UserWhereInput {
   const digits = digitsOnly(search);
   const any: Prisma.UserWhereInput[] = [{ name: { contains: escapeLike(search), mode: 'insensitive' } }];
   if (NUMERIC_SEARCH.test(search) && digits.length >= 3) {
@@ -53,7 +57,11 @@ export class AdminUsersRepository {
     return tx.user.findFirst({
       where: { id, tenantId },
       omit: { passwordHash: true },
-      include: { wallet: true, sessions: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+      include: {
+        wallet: true,
+        sessions: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+        referredBy: { select: { id: true, displayId: true, name: true } },
+      },
     });
   }
 

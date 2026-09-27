@@ -6,7 +6,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { createApp } from '../src/app.factory.js';
 import { PasswordService } from '../src/auth/password.service.js';
-import { type AppConfig, parseServiceKeys } from '../src/config/config.js';
+import { type AppConfig, digestKey, parseServiceKeys } from '../src/config/config.js';
 import { TEST_APP_URL, TEST_MIGRATOR_URL, TEST_TENANTS } from './env.js';
 
 type TenantSlug = keyof typeof TEST_TENANTS;
@@ -17,6 +17,10 @@ export const KEYS: Record<TenantSlug, string> = {
   boreal: randomBytes(24).toString('hex'),
   cometa: randomBytes(24).toString('hex'),
 };
+
+/** Credencial do painel administrativo (admin.<domínio>); gerada por execução. */
+export const ADMIN_KEY = randomBytes(24).toString('hex');
+export const ADMIN_HOST = 'admin.test';
 
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -30,6 +34,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
         .map(([slug, key]) => `${slug}=${key}`)
         .join(','),
     ),
+    adminKeyDigest: digestKey(ADMIN_KEY),
     authSecret: randomBytes(24).toString('hex'),
     ...overrides,
   };
@@ -42,16 +47,8 @@ export async function startApp(overrides: Partial<AppConfig> = {}): Promise<INes
   return app;
 }
 
-/** Cliente HTTP já com Host e credencial da banca informada. */
-export function api(
-  app: INestApplication,
-  tenant: TenantSlug,
-  key: string = KEYS[tenant],
-  extraHeaders: Record<string, string> = {},
-) {
+function client(app: INestApplication, auth: Record<string, string>) {
   const server = app.getHttpServer() as App;
-  const host = TEST_TENANTS[tenant].domain;
-  const auth = { Host: host, Authorization: `Bearer ${key}`, ...extraHeaders };
   return {
     post: (path: string, body: unknown) =>
       request(server)
@@ -59,6 +56,12 @@ export function api(
         .set(auth)
         .send(body as object),
     get: (path: string) => request(server).get(path).set(auth),
+    put: (path: string, body: unknown) =>
+      request(server)
+        .put(path)
+        .set(auth)
+        .send(body as object),
+    delete: (path: string) => request(server).delete(path).set(auth),
     patch: (path: string, body: unknown) =>
       request(server)
         .patch(path)
@@ -66,6 +69,21 @@ export function api(
         .send(body as object),
     raw: () => request(server),
   };
+}
+
+/** Cliente HTTP já com Host e credencial da banca informada. */
+export function api(
+  app: INestApplication,
+  tenant: TenantSlug,
+  key: string = KEYS[tenant],
+  extraHeaders: Record<string, string> = {},
+) {
+  return client(app, { Host: TEST_TENANTS[tenant].domain, Authorization: `Bearer ${key}`, ...extraHeaders });
+}
+
+/** Cliente HTTP do painel administrativo único: credencial do painel e nenhuma banca no endereço. */
+export function consoleApi(app: INestApplication, extraHeaders: Record<string, string> = {}, key: string = ADMIN_KEY) {
+  return client(app, { Host: ADMIN_HOST, Authorization: `Bearer ${key}`, ...extraHeaders });
 }
 
 /** Completa 9 dígitos-base com os dígitos verificadores do CPF (dados sintéticos). */
@@ -110,7 +128,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
 /** TRUNCATE não é afetado por RLS; a role de migração é dona das tabelas. */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE audit_logs, operator_sessions, operators, sessions, login_failures, wallets, users',
+    'TRUNCATE audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
 }
 
@@ -163,8 +181,8 @@ export async function createOperator(
 /** Cria o operador, faz login e devolve um cliente HTTP já autenticado como ele. */
 export async function loginOperator(app: INestApplication, tenant: TenantSlug, options: { role?: OperatorRole } = {}) {
   const { email, password } = await createOperator(tenant, options);
-  const res = await api(app, tenant).post('/v1/admin/auth/login', { email, password });
+  const res = await consoleApi(app).post('/v1/admin/auth/login', { email, password });
   if (res.status !== 200) throw new Error(`login do operador falhou: ${res.status} ${JSON.stringify(res.body)}`);
   const session = res.body as OperatorLoginResponse;
-  return { ...session, email, http: api(app, tenant, KEYS[tenant], { 'X-Operator-Token': session.token }) };
+  return { ...session, email, http: consoleApi(app, { 'X-Operator-Token': session.token }) };
 }

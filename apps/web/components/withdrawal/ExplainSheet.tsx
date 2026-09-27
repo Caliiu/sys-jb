@@ -2,7 +2,7 @@
 
 import { CircleAlert } from 'lucide-react';
 import { useId } from 'react';
-import BottomSheet from './BottomSheet';
+import BottomSheet from '../ui/BottomSheet';
 
 interface ExplainSheetProps {
   open: boolean;

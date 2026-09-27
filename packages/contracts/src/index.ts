@@ -46,6 +46,26 @@ export interface PublicUser extends PublicPromoterFields {
   wallet: PublicWallet;
 }
 
+/**
+ * Dados do perfil do próprio usuário (tela "Perfil"): o contrato público mais a data de nascimento,
+ * que só o dono da conta enxerga (fora de PublicUser de propósito).
+ */
+export interface PublicProfile extends PublicUser {
+  /** YYYY-MM-DD. */
+  birthDate: string;
+}
+
+/** PATCH /v1/me: o usuário só altera o próprio e-mail e telefone (null limpa o e-mail). Pelo menos um campo. */
+export interface UpdateProfileRequest {
+  email?: string | null;
+  phone?: string;
+}
+
+/** POST /v1/me/password: define a nova senha. As outras sessões do usuário são encerradas. */
+export interface ChangePasswordRequest {
+  password: string;
+}
+
 export const USER_WRITABLE_FIELDS = ['name', 'email', 'phone', 'document', 'avatar'] as const;
 export type UserWritableField = (typeof USER_WRITABLE_FIELDS)[number];
 
@@ -60,6 +80,8 @@ export interface CreateUserRequest {
   password: string;
   email?: string | null;
   avatar?: string | null;
+  /** Código do link de convite (`?convite=`), o ID exibido de um promotor. Só dígitos; código inexistente ou de quem não é promotor é ignorado (o cadastro segue). */
+  inviteCode?: string;
 }
 
 /** PATCH: campo ausente mantém o valor; null só é aceito em email e avatar. Pelo menos um campo. */

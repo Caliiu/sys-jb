@@ -65,18 +65,26 @@ model User {
   displayId    Int      @unique @default(autoincrement()) @map("display_id")
   // BLOCKED: não consegue entrar e perde as sessões abertas. Só operadores alteram.
   status       UserStatus @default(ACTIVE)
+  // Promotor = usuário com comissão definida (centésimos de %, 1 a 10000 = 0,01% a 100%). Null = não é promotor. Só operadores alteram.
+  promoterCommissionBps Int?    @map("promoter_commission_bps")
+  // Promotor que indicou este usuário (pelo link de convite, só no cadastro). Nunca muda depois.
+  referredByUserId      String? @map("referred_by_user_id") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  wallet   Wallet?
-  sessions Session[]
+  wallet     Wallet?
+  sessions   Session[]
+  referredBy User?  @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
+  referrals  User[] @relation("Referrals")
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
   @@unique([tenantId, document])
   @@unique([tenantId, email])
   @@index([tenantId, createdAt(sort: Desc), id])
+  @@index([tenantId, referredByUserId, createdAt(sort: Desc), id])
+  @@index([tenantId, promoterCommissionBps])
   @@map("users")
 }
 
@@ -132,12 +140,13 @@ model LoginFailure {
   @@map("login_failures")
 }
 
-// Operador do painel administrativo de UMA banca. Criado por script (sem cadastro pela API).
+// Operador do painel administrativo de UMA banca (o painel é único; a banca vem do operador). Criado por script (sem cadastro pela API).
 model Operator {
   id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId     String       @map("tenant_id") @db.Uuid
   name         String
-  email        String
+  // Único no sistema todo: o login do painel (admin.<domínio>) descobre a banca pelo e-mail.
+  email        String       @unique
   // Hash argon2id (formato PHC). Nunca sai da API.
   passwordHash String       @map("password_hash")
   role         OperatorRole
@@ -150,8 +159,18 @@ model Operator {
   auditLogs AuditLog[]
 
   @@unique([tenantId, id])
-  @@unique([tenantId, email])
   @@map("operators")
+}
+
+// Tentativas de login de operador que falharam. Sem banca: o e-mail digitado pode nem existir, e o
+// controle vale antes de se saber a banca. Guarda só o HMAC do e-mail.
+model OperatorLoginFailure {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  identifierHash String   @map("identifier_hash")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([identifierHash, createdAt])
+  @@map("operator_login_failures")
 }
 
 // Sessão de operador: token opaco; só o SHA-256 do token é persistido.

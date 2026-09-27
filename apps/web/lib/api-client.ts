@@ -15,7 +15,7 @@ const TIMEOUT_MS = 5_000;
  */
 export function apiRequest<T>(
   hostname: string,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
   options: { sessionToken?: string; operatorToken?: string } = {},

@@ -42,3 +42,15 @@ export function serviceKeyFor(hostname: string): string | null {
   }
   return null;
 }
+
+const DEFAULT_ADMIN_HOSTNAME = 'admin.localhost';
+
+/** Hostname do painel administrativo único (WEB_ADMIN_HOSTNAME). A banca do operador vem do login, não daqui. */
+export function adminHostname(): string {
+  ensureEnv();
+  return hostnameOnly(process.env.WEB_ADMIN_HOSTNAME ?? '') ?? DEFAULT_ADMIN_HOSTNAME;
+}
+
+export function isAdminHost(hostname: string | null): boolean {
+  return hostname !== null && hostname === adminHostname();
+}

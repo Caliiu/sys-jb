@@ -18,12 +18,16 @@ export interface RegisterInput {
   phone: string;
   birthDate: string;
   password: string;
+  /** Código do link de convite (`?convite=`). Só dígitos; qualquer outra coisa é descartada. */
+  inviteCode?: string;
 }
 
 export interface LoginInput {
   cpf: string;
   password: string;
 }
+
+const INVITE_CODE = /^\d{1,10}$/;
 
 async function authHost(): Promise<string | null> {
   const hostname = hostnameOnly((await headers()).get('host'));
@@ -56,6 +60,10 @@ export async function registerAction(input: RegisterInput): Promise<AuthResult> 
     document: input.cpf,
     birthDate: input.birthDate,
     password: input.password,
+    // Server action é endpoint público: o formato é conferido de novo aqui (a API também confere).
+    ...(typeof input.inviteCode === 'string' && INVITE_CODE.test(input.inviteCode)
+      ? { inviteCode: input.inviteCode }
+      : {}),
   });
   return res.ok ? { ok: true } : toAuthError(res.status, res.error);
 }

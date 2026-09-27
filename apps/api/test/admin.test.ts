@@ -1,15 +1,21 @@
 import { createHash } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { type AdminUserDetail, type AdminUserListItem, type OperatorRole, ROLE_PERMISSIONS } from '@sysjb/contracts';
+import request from 'supertest';
+import type { App } from 'supertest/types.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAX_FAILURES } from '../src/auth/auth.service.js';
 import { OPERATOR_SESSION_TTL_MS } from '../src/admin/operator-auth.service.js';
 import {
+  ADMIN_HOST,
+  ADMIN_KEY,
   api,
   asTenant,
+  consoleApi,
   createOperator,
   createUser,
   formatCpf,
+  KEYS,
   loginOperator,
   migratorPool,
   OPERATOR_PASSWORD,
@@ -19,6 +25,7 @@ import {
   SYNTHETIC_PASSWORD,
   tenantId,
 } from './helpers.js';
+import { TEST_TENANTS } from './env.js';
 
 let app: INestApplication;
 let auroraId: string;
@@ -37,8 +44,8 @@ beforeEach(resetUsers);
 
 const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
 
-const operatorLogin = (email: string, password: string, tenant: 'aurora' | 'boreal' = 'aurora') =>
-  api(app, tenant).post('/v1/admin/auth/login', { email, password });
+const operatorLogin = (email: string, password: string) =>
+  consoleApi(app).post('/v1/admin/auth/login', { email, password });
 
 const auditRows = (tenant: string, userId: string) =>
   asTenant(migratorPool, tenant, async (c) => {
@@ -100,9 +107,44 @@ describe('login do operador', () => {
     }
   });
 
-  it('operador de uma banca não entra em outra', async () => {
+  it('a banca vem do operador: cada um entra na sua, pelo mesmo endereço', async () => {
+    const aurora = await createOperator('aurora');
+    const boreal = await createOperator('boreal');
+    for (const [operator, slug] of [
+      [aurora, 'aurora'],
+      [boreal, 'boreal'],
+    ] as const) {
+      const login = await operatorLogin(operator.email, operator.password);
+      expect(login.status).toBe(200);
+      const me = await consoleApi(app, { 'X-Operator-Token': login.body.token }).get('/v1/admin/me');
+      expect(me.body.tenant.slug).toBe(slug);
+    }
+  });
+
+  it('não há como escolher a banca no login (campo extra é rejeitado)', async () => {
     const { email, password } = await createOperator('aurora');
-    expect((await operatorLogin(email, password, 'boreal')).status).toBe(401);
+    for (const extra of [{ tenant: 'boreal' }, { tenantId: borealId }, { slug: 'boreal' }]) {
+      const res = await consoleApi(app).post('/v1/admin/auth/login', { email, password, ...extra });
+      expect(res.status).toBe(400);
+    }
+    const viaHeader = await consoleApi(app, { 'X-Tenant': 'boreal', 'X-Forwarded-Host': 'boreal.test' }).post(
+      '/v1/admin/auth/login',
+      { email, password },
+    );
+    const me = await consoleApi(app, { 'X-Operator-Token': viaHeader.body.token }).get('/v1/admin/me');
+    expect(me.body.tenant.slug).toBe('aurora');
+  });
+
+  it('o mesmo e-mail não pode existir em duas bancas', async () => {
+    const { email } = await createOperator('aurora');
+    await expect(createOperator('boreal', { email })).rejects.toThrow(/operators_email_key/);
+  });
+
+  it('operador de banca inativa não entra', async () => {
+    const { email, password } = await createOperator('cometa');
+    const res = await operatorLogin(email, password);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('INVALID_CREDENTIALS');
   });
 
   it('bloqueia temporariamente após várias falhas, mesmo com a senha certa', async () => {
@@ -121,10 +163,11 @@ describe('login do operador', () => {
   it('as falhas do operador não bloqueiam o cliente com o mesmo texto (espaços de nome separados)', async () => {
     const { email } = await createOperator('aurora');
     for (let i = 0; i < MAX_FAILURES; i += 1) await operatorLogin(email, 'errada');
-    const { rows } = await asTenant(migratorPool, auroraId, (c) =>
-      c.query('SELECT identifier_hash FROM login_failures'),
-    );
-    expect(rows).toHaveLength(MAX_FAILURES);
+    // As falhas do operador vão para a própria tabela (sem banca); a do cliente continua na dele.
+    const operatorRows = await migratorPool.query('SELECT identifier_hash FROM operator_login_failures');
+    expect(operatorRows.rows).toHaveLength(MAX_FAILURES);
+    const clientRows = await asTenant(migratorPool, auroraId, (c) => c.query('SELECT 1 FROM login_failures'));
+    expect(clientRows.rows).toHaveLength(0);
     const user = await createUser(app, 'aurora');
     const res = await api(app, 'aurora').post('/v1/auth/login', {
       document: user.document,
@@ -135,16 +178,35 @@ describe('login do operador', () => {
 
   it('rejeita campos desconhecidos e corpo incompleto', async () => {
     const { email, password } = await createOperator('aurora');
-    expect((await api(app, 'aurora').post('/v1/admin/auth/login', { email, password, role: 'MANAGER' })).status).toBe(
-      400,
-    );
-    expect((await api(app, 'aurora').post('/v1/admin/auth/login', { email })).status).toBe(400);
+    expect((await consoleApi(app).post('/v1/admin/auth/login', { email, password, role: 'MANAGER' })).status).toBe(400);
+    expect((await consoleApi(app).post('/v1/admin/auth/login', { email })).status).toBe(400);
   });
 
-  it('exige a credencial de serviço da banca', async () => {
+  it('exige a credencial do painel: ausente, errada ou de banca não servem (e o painel não abre rotas de banca)', async () => {
     const { email, password } = await createOperator('aurora');
-    const res = await api(app, 'aurora', 'x'.repeat(40)).post('/v1/admin/auth/login', { email, password });
-    expect(res.status).toBe(401);
+    const body = { email, password };
+    expect((await consoleApi(app, {}, 'x'.repeat(40)).post('/v1/admin/auth/login', body)).status).toBe(401);
+    expect((await consoleApi(app, {}, KEYS.aurora).post('/v1/admin/auth/login', body)).status).toBe(401);
+    expect((await api(app, 'aurora').post('/v1/admin/auth/login', body)).status).toBe(401);
+    const bare = await request(app.getHttpServer() as App)
+      .post('/v1/admin/auth/login')
+      .send(body);
+    expect(bare.status).toBe(401);
+
+    // A credencial do painel não abre as rotas das bancas.
+    const tenantRoute = await api(app, 'aurora', ADMIN_KEY).get('/v1/tenant');
+    expect(tenantRoute.status).toBe(401);
+    expect(ADMIN_HOST).not.toBe(TEST_TENANTS.aurora.domain);
+  });
+
+  it('sem ADMIN_SERVICE_KEY configurada, o painel fica desativado', async () => {
+    const off = await startApp({ adminKeyDigest: null });
+    try {
+      const { email, password } = await createOperator('aurora');
+      expect((await consoleApi(off).post('/v1/admin/auth/login', { email, password })).status).toBe(401);
+    } finally {
+      await off.close();
+    }
   });
 });
 
@@ -153,12 +215,22 @@ describe('sessão do operador', () => {
     const session = await loginOperator(app, 'aurora', { role: 'FINANCE' });
     const res = await session.http.get('/v1/admin/me');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(session.operator);
+    expect(res.body).toEqual({
+      operator: session.operator,
+      tenant: {
+        name: TEST_TENANTS.aurora.name,
+        slug: 'aurora',
+        logoUrl: expect.toBeOneOf([null, expect.any(String)]),
+        primaryColor: expect.stringMatching(/^#[0-9a-fA-F]{6}$/),
+        secondaryColor: expect.stringMatching(/^#[0-9a-fA-F]{6}$/),
+      },
+    });
+    expect(JSON.stringify(res.body.tenant)).not.toMatch(/"(id|domain)"/);
     expect(res.headers['cache-control']).toBe('no-store');
   });
 
   it('sem token, com token malformado ou desconhecido: 401 SESSION_INVALID', async () => {
-    const base = api(app, 'aurora');
+    const base = consoleApi(app);
     for (const token of [undefined, '', 'curto', 'a'.repeat(43), 'ç'.repeat(43)]) {
       const req = base.get('/v1/admin/me');
       const res = token === undefined ? await req : await req.set('X-Operator-Token', token);
@@ -169,16 +241,40 @@ describe('sessão do operador', () => {
 
   it('token com lixo anexado no header é rejeitado', async () => {
     const session = await loginOperator(app, 'aurora');
-    const res = await api(app, 'aurora')
-      .get('/v1/admin/me')
-      .set('X-Operator-Token', `${session.token}, ${session.token}`);
+    const res = await consoleApi(app).get('/v1/admin/me').set('X-Operator-Token', `${session.token}, ${session.token}`);
     expect(res.status).toBe(401);
   });
 
-  it('a sessão só vale na banca onde foi criada', async () => {
+  it('a banca da sessão é a do operador, seja qual for o endereço ou a credencial de banca usada', async () => {
     const session = await loginOperator(app, 'aurora');
-    const res = await api(app, 'boreal').get('/v1/admin/me').set('X-Operator-Token', session.token);
-    expect(res.status).toBe(401);
+    const other = await consoleApi(app, { Host: TEST_TENANTS.boreal.domain, 'X-Operator-Token': session.token }).get(
+      '/v1/admin/me',
+    );
+    expect(other.status).toBe(200);
+    expect(other.body.tenant.slug).toBe('aurora');
+
+    // Credencial de banca não autentica no painel, mesmo com um token de sessão válido.
+    const withTenantKey = await api(app, 'boreal').get('/v1/admin/me').set('X-Operator-Token', session.token);
+    expect(withTenantKey.status).toBe(401);
+  });
+
+  it('a sessão de um operador nunca mostra dados de outra banca', async () => {
+    const aurora = await loginOperator(app, 'aurora');
+    const boreal = await loginOperator(app, 'boreal');
+    const foreign = await createUser(app, 'boreal');
+    expect((await aurora.http.get('/v1/admin/users')).body.total).toBe(0);
+    expect((await aurora.http.get(`/v1/admin/users/${foreign.id}`)).status).toBe(404);
+    expect((await boreal.http.get(`/v1/admin/users/${foreign.id}`)).status).toBe(200);
+  });
+
+  it('sessão de operador de banca desativada depois do login perde o acesso', async () => {
+    const session = await loginOperator(app, 'aurora');
+    await migratorPool.query("UPDATE tenants SET active = false WHERE slug = 'aurora'");
+    try {
+      expect((await session.http.get('/v1/admin/me')).status).toBe(401);
+    } finally {
+      await migratorPool.query("UPDATE tenants SET active = true WHERE slug = 'aurora'");
+    }
   });
 
   it('a sessão de cliente não vale como sessão de operador (e vice-versa)', async () => {
@@ -187,7 +283,7 @@ describe('sessão do operador', () => {
       document: user.document,
       password: SYNTHETIC_PASSWORD,
     });
-    const asOperator = await api(app, 'aurora').get('/v1/admin/me').set('X-Operator-Token', clientSession.body.token);
+    const asOperator = await consoleApi(app).get('/v1/admin/me').set('X-Operator-Token', clientSession.body.token);
     expect(asOperator.status).toBe(401);
 
     const operator = await loginOperator(app, 'aurora');
@@ -200,7 +296,7 @@ describe('sessão do operador', () => {
     expect((await session.http.post('/v1/admin/auth/logout', {})).status).toBe(204);
     expect((await session.http.get('/v1/admin/me')).status).toBe(401);
     expect((await session.http.post('/v1/admin/auth/logout', {})).status).toBe(204);
-    expect((await api(app, 'aurora').post('/v1/admin/auth/logout', {})).status).toBe(204);
+    expect((await consoleApi(app).post('/v1/admin/auth/logout', {})).status).toBe(204);
   });
 
   it('sessão expirada é rejeitada', async () => {
@@ -222,14 +318,12 @@ describe('sessão do operador', () => {
   it('rotas do painel exigem sessão de operador (a credencial de serviço sozinha não basta)', async () => {
     const user = await createUser(app, 'aurora');
     for (const path of ['/v1/admin/users', `/v1/admin/users/${user.id}`]) {
-      const res = await api(app, 'aurora').get(path);
+      const res = await consoleApi(app).get(path);
       expect(res.status, path).toBe(401);
       expect(res.body.code).toBe('SESSION_INVALID');
     }
-    expect((await api(app, 'aurora').patch(`/v1/admin/users/${user.id}`, { name: 'Novo Nome' })).status).toBe(401);
-    expect((await api(app, 'aurora').patch(`/v1/admin/users/${user.id}/status`, { status: 'BLOCKED' })).status).toBe(
-      401,
-    );
+    expect((await consoleApi(app).patch(`/v1/admin/users/${user.id}`, { name: 'Novo Nome' })).status).toBe(401);
+    expect((await consoleApi(app).patch(`/v1/admin/users/${user.id}/status`, { status: 'BLOCKED' })).status).toBe(401);
   });
 });
 
@@ -269,7 +363,7 @@ describe('perfis e permissões', () => {
 });
 
 describe('lista de usuários', () => {
-  it('só mostra usuários da banca do operador, com CPF e telefone mascarados', async () => {
+  it('só mostra usuários da banca do operador, com CPF e telefone completos (só dígitos)', async () => {
     const session = await loginOperator(app, 'aurora');
     const mine = await createUser(app, 'aurora');
     await createUser(app, 'boreal');
@@ -283,15 +377,12 @@ describe('lista de usuários', () => {
       id: mine.id,
       displayId: mine.displayId,
       name: mine.name,
-      documentMasked: `***.${mine.document.slice(3, 6)}.${mine.document.slice(6, 9)}-**`,
-      phoneMasked: expect.stringMatching(/^\(\d{2}\) \*+-\d{4}$/),
+      document: mine.document,
+      phone: mine.phone,
       status: 'ACTIVE',
       createdAt: expect.any(String),
     });
-    const raw = JSON.stringify(res.body);
-    expect(raw).not.toContain(mine.document);
-    expect(raw).not.toContain(mine.phone);
-    expect(raw).not.toMatch(/passwordHash|birthDate|tenantId/);
+    expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|birthDate|tenantId/);
   });
 
   it('pagina em ordem estável (mais novos primeiro), sem repetir nem perder linhas', async () => {
@@ -402,6 +493,8 @@ describe('detalhe do usuário', () => {
       createdAt: expect.any(String),
       lastLoginAt: null,
       wallet: user.wallet,
+      promoterCommissionBps: null,
+      referredBy: null,
     });
 
     await api(app, 'aurora').post('/v1/auth/login', { document: user.document, password: SYNTHETIC_PASSWORD });
@@ -585,6 +678,63 @@ describe('banco de dados: isolamento e privilégios', () => {
     }
   });
 
+  describe('leitura por chave, antes de haver banca', () => {
+    /** Consulta como a role de runtime, SEM banca, só com a chave de leitura informada. */
+    async function lookup(key: string | null, value: string, sql: string) {
+      const client = await runtimePool.connect();
+      try {
+        await client.query('BEGIN');
+        if (key) await client.query('SELECT set_config($1, $2, true)', [key, value]);
+        const { rows } = await client.query(sql);
+        await client.query('ROLLBACK');
+        return rows as Array<Record<string, unknown>>;
+      } finally {
+        client.release();
+      }
+    }
+
+    it('sem contexto nem chave, operadores e sessões continuam invisíveis', async () => {
+      const session = await loginOperator(app, 'aurora');
+      expect(session.token).toBeTruthy();
+      expect(await lookup(null, '', 'SELECT id FROM operators')).toEqual([]);
+      expect(await lookup(null, '', 'SELECT id FROM operator_sessions')).toEqual([]);
+      expect(await lookup('app.login_email', '', 'SELECT id FROM operators')).toEqual([]);
+    });
+
+    it('a chave libera só a linha correspondente, de qualquer banca', async () => {
+      const aurora = await loginOperator(app, 'aurora');
+      const boreal = await loginOperator(app, 'boreal');
+
+      const byEmail = await lookup('app.login_email', boreal.email, 'SELECT email, tenant_id FROM operators');
+      expect(byEmail).toEqual([{ email: boreal.email, tenant_id: borealId }]);
+      expect(await lookup('app.login_email', 'outro@example.test', 'SELECT id FROM operators')).toEqual([]);
+
+      const byHash = await lookup(
+        'app.session_hash',
+        sha256(aurora.token),
+        'SELECT tenant_id, token_hash FROM operator_sessions',
+      );
+      expect(byHash).toEqual([{ tenant_id: auroraId, token_hash: sha256(aurora.token) }]);
+    });
+
+    it('a chave não libera outras tabelas nem escrita', async () => {
+      const { email } = await loginOperator(app, 'aurora');
+      expect(await lookup('app.login_email', email, 'SELECT id FROM users')).toEqual([]);
+      expect(await lookup('app.login_email', email, 'SELECT id FROM audit_logs')).toEqual([]);
+      const client = await runtimePool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.session_hash', $1, true)", [sha256('x')]);
+        await expect(client.query('UPDATE operator_sessions SET revoked_at = now()')).resolves.toMatchObject({
+          rowCount: 0,
+        });
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+    });
+  });
+
   it('a role de runtime não cria nem altera operadores', async () => {
     const { email } = await createOperator('aurora');
     await expect(
@@ -629,13 +779,13 @@ describe('banco de dados: isolamento e privilégios', () => {
     ).rejects.toThrow(/users must be created with status ACTIVE/);
   });
 
-  it('a role de runtime só altera o status entre as colunas novas de users', async () => {
+  it('a role de runtime altera o status, mas não a data de nascimento nem a banca do usuário', async () => {
     const user = await createUser(app, 'aurora');
-    await expect(
-      asTenant(runtimePool, auroraId, (c) =>
-        c.query("UPDATE users SET password_hash = '$argon2id$x' WHERE id = $1", [user.id]),
-      ),
-    ).rejects.toThrow(/permission denied/);
+    for (const set of ["birth_date = '2000-01-01'", `tenant_id = '${borealId}'`, 'display_id = 1']) {
+      await expect(
+        asTenant(runtimePool, auroraId, (c) => c.query(`UPDATE users SET ${set} WHERE id = $1`, [user.id])),
+      ).rejects.toThrow(/permission denied/);
+    }
     await asTenant(runtimePool, auroraId, (c) =>
       c.query("UPDATE users SET status = 'BLOCKED' WHERE id = $1", [user.id]),
     );

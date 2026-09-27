@@ -8,7 +8,7 @@ Fora do escopo desta etapa: apostas, resultados, sorteios, pagamentos, depósito
 
 ```text
 apps/api             NestJS 12 (ESM): tenancy, users, carteira, login, painel administrativo (operadores), health
-apps/web             Next.js 16 + Tailwind 4: app do cliente, painel administrativo (/admin) e ferramentas de dev
+apps/web             Next.js 16 + Tailwind 4: app do cliente, painel administrativo (admin.<domínio>) e ferramentas de dev
 packages/contracts   Tipos públicos (PublicUser, PublicWallet, ApiError...), sem dependências de servidor
 packages/database    Prisma 7: schema, migrations versionadas, seed e fábrica do client
 docker/postgres      Script de init que cria as roles e os bancos
@@ -56,7 +56,7 @@ pnpm db:migrate
 # 5. Seed idempotente com as três bancas fictícias
 pnpm db:seed
 
-# 6. (Opcional) Operador do painel administrativo de uma banca, ver "Painel administrativo"
+# 6. (Opcional) Operador do painel administrativo (admin.localhost:3000), ver "Painel administrativo"
 pnpm operator:create --tenant aurora --name "Gerente Aurora" --email gerente@aurora.test --role MANAGER
 
 # 7. Em dois terminais
@@ -99,7 +99,9 @@ A porta é sempre ignorada na resolução: `aurora.localhost:3000` (web) e `auro
 `pnpm setup:env` gera valores aleatórios para cada `change-me-*` do `.env.example`. As credenciais de serviço ficam em:
 
 - `TENANT_SERVICE_KEYS` (API): `aurora=<chave>,boreal=<chave>`, indexadas pelo slug.
-- `WEB_SERVICE_KEYS` (web, somente servidor): as mesmas chaves, indexadas pelo hostname.
+- `WEB_SERVICE_KEYS` (web, somente servidor): as mesmas chaves, indexadas pelo hostname. Inclui o hostname do painel com a `ADMIN_SERVICE_KEY` (`admin.localhost=<chave>`).
+- `ADMIN_SERVICE_KEY` (API): credencial do painel administrativo único (mín. 32 caracteres, diferente das chaves das bancas). Vazia = painel desativado.
+- `WEB_ADMIN_HOSTNAME` (web): hostname do painel (padrão `admin.localhost`; em produção, algo como `admin.seudominio.com.br`). É lido ao iniciar/compilar o web.
 
 - `AUTH_SECRET` (API): chave HMAC do bloqueio de tentativas de login.
 
@@ -119,6 +121,9 @@ Todas as rotas `/v1/*` exigem `Authorization: Bearer <chave da banca>` e resolve
 | POST   | `/v1/auth/login`  | Login por CPF + senha. `200` com `{ token, expiresAt, user }`                   |
 | GET    | `/v1/me`          | Usuário da sessão (header `X-Session-Token`)                                    |
 | POST   | `/v1/auth/logout` | Revoga a sessão do `X-Session-Token`. `204`, idempotente                        |
+| GET    | `/v1/me/profile`  | Perfil do usuário da sessão: contrato público + `birthDate` (só o dono recebe)  |
+| PATCH  | `/v1/me`          | O usuário altera o PRÓPRIO `email` e `phone` (sessão). `409` se já cadastrados  |
+| POST   | `/v1/me/password` | Define a nova senha do usuário da sessão. `204`; encerra as OUTRAS sessões      |
 | GET    | `/v1/tenant`      | Nome e cores da banca atual (usado pela interface)                              |
 | GET    | `/health`         | `{"status":"ok","database":"up"}`, sem credencial e sem expor segredos          |
 
@@ -248,15 +253,31 @@ Correções em relação ao original:
 
 Exigem sessão (sem ela, redirecionam para `/login`) e seguem o mesmo modelo do Dashboard: `app/<rota>/page.tsx` (servidor) → `views/` → `components/`. Layout a partir dos prints da pasta `PRINTS/`; cores e logo vêm da banca.
 
-| Rota           | Tela                                                                                                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/resultados`  | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
-| `/relatorios`  | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
-| `/premiadas`   | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
-| `/recarga-pix` | Recarga em duas etapas na mesma rota (a URL não muda): 1) valor (máscara de moeda, mín. R$ 1,00, teto de tela R$ 10.000,00) e destino; 2) pagamento: chave Pix (copia e cola), QR Code sob demanda e contagem de 5 min |
-| `/saques`      | "Meus saques" (lista do usuário, vazia enquanto não há saques) e "Novo saque" na mesma rota, sem mudar a URL: 1) Pix, titular e chave; 2) resumo do saldo e valor                                                      |
+| Rota             | Tela                                                                                                                                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/resultados`    | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
+| `/relatorios`    | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
+| `/premiadas`     | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                              |
+| `/recarga-pix`   | Recarga em duas etapas na mesma rota (a URL não muda): 1) valor (máscara de moeda, mín. R$ 1,00, teto de tela R$ 10.000,00) e destino; 2) pagamento: chave Pix (copia e cola), QR Code sob demanda e contagem de 5 min |
+| `/saques`        | "Meus saques" (lista do usuário, vazia enquanto não há saques) e "Novo saque" na mesma rota, sem mudar a URL: 1) Pix, titular e chave; 2) resumo do saldo e valor                                                      |
+| `/configuracoes` | Preferências (aposta rápida, notificações, possível prêmio), versão do app e "Baixar aplicativo"                                                                                                                       |
+| `/perfil`        | Perfil: nome e ID (copiar), telefone ("Alterar") e e-mail editáveis, CPF e nascimento só leitura, senha nova opcional                                                                                                  |
 
 Os itens das listas ainda não têm página e avisam "disponível em breve". "Avançar" na recarga valida valor e destino e chama a server action `createPixChargeAction` (`app/recharge-actions.ts`), que exige sessão e revalida o pedido no servidor. Voltar da etapa 2 mantém o que foi digitado; expirado, "Gerar novo Pix" volta ao formulário. O menu lateral e a barra inferior do Dashboard já apontam para essas rotas (`lib/routes.ts`).
+
+**Perfil**: salva de verdade, pela API, sempre na conta da sessão (as rotas `/v1/me*` não recebem id: exigem a credencial de serviço da banca **e** o `X-Session-Token` do cliente; sessão de outra banca, de operador, expirada ou de usuário bloqueado é `401`).
+
+- **Só e-mail e telefone** mudam por aqui (corpo estrito: nome, CPF, nascimento, senha, status, banca e outros campos são recusados). Duplicidade na banca é `409` com o campo, sem revelar valores.
+- **Senha**: a tela pede só "Nova senha" (como no design). A API aplica as regras do cadastro (tamanho, senha comum, não conter CPF, telefone ou nascimento), grava o hash argon2id e **encerra todas as outras sessões** do usuário; a atual continua. Na tela, a senha é conferida contra o telefone que ficará salvo. Se e-mail/telefone e senha são enviados juntos, o perfil é salvo primeiro; se a senha falhar, a tela avisa que os dados foram salvos e a senha não.
+- **Data de nascimento** vem de `GET /v1/me/profile` (não faz parte do contrato público `PublicUser`).
+- **Riscos aceitos** (decisão do produto): a troca de senha **não exige a senha atual**, então quem tem a sessão aberta consegue trocá-la (mitigado por encerrar as outras sessões, mas não impede quem já está na sessão); o telefone muda **sem verificação por SMS**; e não há trilha de auditoria para alterações feitas pelo próprio cliente (`audit_logs` é de operadores). Para endurecer: exigir `currentPassword` em `POST /v1/me/password` e confirmar telefone por código.
+
+**Configurações**: as três preferências são aplicadas na hora e guardadas **só neste navegador** (`localStorage`), uma por usuário; ao ler, só vale valor booleano (dado adulterado volta ao padrão). Não há backend de preferências, então não sincronizam entre aparelhos.
+
+- **Aposta rápida** e **Exibir possível prêmio** ainda não têm efeito: as telas de apostas e recibos não existem. Ficam guardadas para quando existirem (padrão: ligadas).
+- **Permitir notificações** usa a permissão **real** do navegador: ligar abre o pedido; se for negado (ou já estiver bloqueado, ou o navegador não suportar) o interruptor fica desligado, desabilitado e com aviso. A preferência só aparece ligada se a permissão estiver concedida (se o usuário revogar depois, volta a aparecer desligada). Ainda **não há envio de notificações** (nem service worker/push).
+- **Baixar aplicativo**: instala na tela inicial (PWA). O navegador avisa "pode instalar" uma única vez, por isso `InstallCapture` (no layout raiz) captura o aviso desde o carregamento; com ele, um toque abre a instalação; sem ele (iPhone, Firefox...), abre o passo a passo. Já instalado, o banner não aparece. O manifesto (`/manifest.webmanifest`) e os ícones PNG (`/pwa-icon/192` e `/512`: inicial da banca sobre a cor da banca) são gerados **por banca**, pelo hostname.
+- **Versão**: vem de `apps/web/package.json` (hoje `0.0.0`), por `lib/app-version.ts`, e aparece em dois lugares: `V…` em Configurações e `v…` no rodapé do Dashboard. Para mudar o número, altere só esse arquivo.
 
 **Saques (interface completa, sem envio)**: as telas dos prints estão prontas (lista com grupos por dia e detalhes, novo saque, "Confirmar saque" e "Solicitação enviada"), mas não existe solicitação de saque no backend. "Confirmar saque" chama a server action `requestWithdrawalAction` (`app/withdrawal-actions.ts`), que exige sessão e **revalida tudo no servidor** (tipo e formato da chave, CPF sempre o do titular da sessão, valor contra o saldo de agora), e então responde "Saque indisponível no momento". A tela "Solicitação enviada" só aparece quando o servidor devolve o saque criado, então nunca há um sucesso falso; a lista fica vazia. Nenhum saldo é alterado. As regras já estão prontas e testadas em `lib/withdrawal.ts` e `lib/pix-key.ts`, para o servidor reaproveitar quando existir:
 
@@ -280,6 +301,9 @@ components/dashboard/ componentes do Dashboard, InviteProvider, TopBar
 components/section/   SectionBar e MenuList (telas de atalhos)
 components/recharge/  Recarga Pix: barra, valor, valores rápidos, destino, formulário
 components/withdrawal/ Saques: lista, etapas (chave Pix e valor), resumo do saldo, "Entenda"
+components/settings/ Configurações: interruptores, banner "Baixar aplicativo"
+components/profile/  Perfil: identidade (nome e ID), formulário, painel "Nova senha"
+components/pwa/       InstallCapture (captura o aviso de instalação do navegador)
 components/admin/     painel: menu, filtro, tabela, paginação, edição, bloqueio, confirmação
 components/tenant/   TenantProvider, TenantLogo (white label)
 components/ui/       Toast, QrCode, Notice
@@ -292,17 +316,19 @@ schemas/             validação dos formulários (regras de @sysjb/contracts)
 
 ## Painel administrativo
 
-Cada banca tem o seu painel, na mesma aplicação web e no mesmo domínio da banca: `http://aurora.localhost:3000/admin`. O operador só enxerga e altera a **própria banca** (a banca vem do hostname e do RLS, nunca do que o navegador enviar). O visual segue o admin do app original (`trv-clone/admin`); o código foi feito do zero.
+Há **um painel só**, em um endereço próprio: `http://admin.localhost:3000` (mesma aplicação web, host diferente). Não existe um painel por banca: o operador entra com e-mail e senha e **a banca é descoberta no login** (cada operador pertence a uma banca). Depois disso ele só enxerga e altera a **própria banca**: a banca vem da sessão do operador e do RLS, nunca do endereço, de campo do formulário ou de header enviado pelo navegador. O visual segue o admin do app original (`trv-clone/admin`); o código foi feito do zero.
+
+No host do painel os caminhos são curtos (`/login`, `/usuarios`, `/usuarios/:id`); as páginas vivem em `app/admin` e o `next.config.ts` faz o mapeamento por host. `/admin/...` digitado direto, em qualquer host, responde `404`, e os apps das bancas (`aurora.localhost`…) não têm nenhuma rota do painel.
 
 ### Operadores e perfis
 
-Cada banca pode ter vários operadores, cada um com um perfil. As permissões ficam em `packages/contracts/src/admin.ts` (`ROLE_PERMISSIONS`), usadas pela API para autorizar e pelo web para decidir o que mostrar:
+Cada banca pode ter vários operadores, cada um com um perfil. O **e-mail do operador é único no sistema todo** (é ele que diz a qual banca o operador pertence); quem operar duas bancas precisa de dois e-mails. As permissões ficam em `packages/contracts/src/admin.ts` (`ROLE_PERMISSIONS`), usadas pela API para autorizar e pelo web para decidir o que mostrar:
 
-| Perfil     | Consultar usuários | Corrigir cadastro | Bloquear/reativar |
-| ---------- | :----------------: | :---------------: | :---------------: |
-| Gerente    |         ✔          |         ✔         |         ✔         |
-| Suporte    |         ✔          |         ✔         |         ✘         |
-| Financeiro |         ✔          |         ✘         |         ✘         |
+| Perfil     | Consultar usuários | Corrigir cadastro | Bloquear/reativar | Ver promotores | Gerenciar promotores |
+| ---------- | :----------------: | :---------------: | :---------------: | :------------: | :------------------: |
+| Gerente    |         ✔          |         ✔         |         ✔         |       ✔        |          ✔           |
+| Suporte    |         ✔          |         ✔         |         ✘         |       ✘        |          ✘           |
+| Financeiro |         ✔          |         ✘         |         ✘         |       ✔        |          ✘           |
 
 Operadores **não têm cadastro pela API nem pela interface** (nesta etapa); são criados por script, com a credencial de migração:
 
@@ -313,33 +339,48 @@ pnpm operator:create --tenant aurora --name "Maria Souza" --email maria@banca.co
 
 ### Página de usuários
 
-- **Lista** (`/admin/usuarios`): busca por nome, CPF, telefone, e-mail ou ID exibido; filtro por status; paginação de 20 em 20. Tudo vive na URL (formulário `GET`, links de página), então funciona sem JavaScript, o botão voltar respeita o filtro e o link é compartilhável. CPF e telefone aparecem **mascarados**.
-- **Detalhe** (`/admin/usuarios/:id`): dados completos, data de nascimento, último acesso e carteira. Quem tem permissão edita nome, CPF, telefone e e-mail e bloqueia/reativa (com confirmação).
+- **Lista** (`/usuarios`): busca por nome, CPF, telefone, e-mail ou ID exibido; filtro por status; paginação de 20 em 20. Tudo vive na URL (formulário `GET`, links de página), então funciona sem JavaScript, o botão voltar respeita o filtro e o link é compartilhável. CPF e telefone aparecem completos e formatados.
+- **Detalhe** (`/usuarios/:id`): dados completos, data de nascimento, último acesso e carteira. Quem tem permissão edita nome, CPF, telefone e e-mail e bloqueia/reativa (com confirmação).
 - **Bloquear** encerra as sessões abertas do usuário na hora e impede novo login. Só informa "conta bloqueada" depois de a senha conferir (não revela o bloqueio a quem não a conhece). `GET /v1/me` de um usuário bloqueado passa a responder `SESSION_INVALID`.
+
+### Promotores
+
+Promotor **não é um cadastro à parte**: é um jogador comum que ganhou uma **comissão** (em `users.promoter_commission_bps`, centésimos de %: 1 = 0,01%, 10000 = 100%, sempre inteiro). O Gerente promove um jogador existente de dois jeitos: na página **Promotores** (`/promotores`, botão "Novo promotor": busca o jogador, escolhe e define a %) ou na seção **Promotor** do detalhe do usuário. Na mesma página ele vê os promotores, a comissão e quantos jogadores cada um trouxe; clicando, vê os jogadores indicados, altera a comissão ou remove o promotor.
+
+- **Vínculo pelo link de convite:** o link já existente (`/cadastro?convite=<ID exibido do promotor>`) agora vale de verdade. Quem se cadastra por ele fica vinculado ao promotor (`users.referred_by_user_id`). O vínculo só nasce no cadastro e **nunca muda** (a role de runtime não tem `UPDATE` nessa coluna). Código inexistente, de quem não é promotor, de promotor bloqueado ou de outra banca é ignorado: o cadastro segue sem vínculo (e sem revelar nada). Só o formato inválido é `400`. Um trigger no banco confere de novo que o indicador é um promotor ativo da mesma banca; a FK composta impede vínculo entre bancas e um CHECK impede auto-indicação.
+- **Remover promotor:** os jogadores já vinculados continuam vinculados (histórico), mas ninguém novo entra pelo link.
+- **Comissão a pagar:** a comissão incide sobre as apostas dos jogadores indicados. **O projeto ainda não tem apostas**, então o painel guarda o percentual e mostra os indicados, mas não calcula ganhos. Quando as apostas existirem, o cálculo entra sobre essa base.
+- **Auditoria:** `promoter.enable`, `promoter.update` e `promoter.disable`, com a comissão antes/depois (`from`/`to`). Repetir o mesmo valor não gera registro.
+- Os campos `promoter`, `promoterName` e `promoterPhone` da resposta pública do jogador seguem `null` (o jogador não vê quem o indicou).
 
 ### Rotas da API do painel
 
-Todas exigem a credencial de serviço da banca **e** a sessão do operador (header `X-Operator-Token`), além da permissão do perfil (`401` sem sessão, `403` sem permissão). Respostas com `Cache-Control: no-store`.
+Todas exigem a credencial do painel (`ADMIN_SERVICE_KEY`, no `Authorization: Bearer`; as credenciais das bancas **não** abrem estas rotas, nem esta abre as das bancas) **e**, exceto login e logout, a sessão do operador (header `X-Operator-Token`) com a permissão do perfil (`401` sem sessão, `403` sem permissão). A banca da requisição é a do operador da sessão; o `Host` não conta. Respostas com `Cache-Control: no-store`.
 
-| Método | Rota                         | Permissão      | Comportamento                                                                    |
-| ------ | ---------------------------- | -------------- | -------------------------------------------------------------------------------- |
-| POST   | `/v1/admin/auth/login`       | (sem sessão)   | E-mail + senha. `200` com `{ token, expiresAt, operator }`. Sessão de 8 h        |
-| GET    | `/v1/admin/me`               | sessão         | Operador da sessão e suas permissões                                             |
-| POST   | `/v1/admin/auth/logout`      | (sem sessão)   | Revoga a sessão. `204`, idempotente                                              |
-| GET    | `/v1/admin/users`            | `users.read`   | `?page&pageSize(≤100)&search&status`. Itens com CPF/telefone mascarados          |
-| GET    | `/v1/admin/users/:id`        | `users.read`   | Detalhe com dados completos e carteira                                           |
-| PATCH  | `/v1/admin/users/:id`        | `users.update` | Só `name`, `email`, `phone`, `document`. `409` se CPF/telefone/e-mail já existem |
-| PATCH  | `/v1/admin/users/:id/status` | `users.status` | `{ "status": "ACTIVE" \| "BLOCKED" }`. Repetir o status é aceito sem efeito      |
+| Método | Rota                                | Permissão          | Comportamento                                                                      |
+| ------ | ----------------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| POST   | `/v1/admin/auth/login`              | (sem sessão)       | E-mail + senha. `200` com `{ token, expiresAt, operator }`. Sessão de 8 h          |
+| GET    | `/v1/admin/me`                      | sessão             | `{ operator, tenant }`: o operador, suas permissões e a identidade visual da banca |
+| POST   | `/v1/admin/auth/logout`             | (sem sessão)       | Revoga a sessão. `204`, idempotente                                                |
+| GET    | `/v1/admin/users`                   | `users.read`       | `?page&pageSize(≤100)&search&status`. Itens com CPF e telefone (só dígitos)        |
+| GET    | `/v1/admin/users/:id`               | `users.read`       | Detalhe com dados completos e carteira                                             |
+| PATCH  | `/v1/admin/users/:id`               | `users.update`     | Só `name`, `email`, `phone`, `document`. `409` se CPF/telefone/e-mail já existem   |
+| PATCH  | `/v1/admin/users/:id/status`        | `users.status`     | `{ "status": "ACTIVE" \| "BLOCKED" }`. Repetir o status é aceito sem efeito        |
+| GET    | `/v1/admin/promoters`               | `promoters.read`   | `?page&pageSize(≤100)&search`. Comissão e quantidade de jogadores indicados        |
+| GET    | `/v1/admin/promoters/:id`           | `promoters.read`   | Um promotor (`404` se o usuário não é promotor)                                    |
+| GET    | `/v1/admin/promoters/:id/referrals` | `promoters.read`   | Jogadores indicados (paginado)                                                     |
+| PUT    | `/v1/admin/promoters/:id`           | `promoters.manage` | `{ "commissionBps": 1..10000 }`. Promove ou altera a comissão                      |
+| DELETE | `/v1/admin/promoters/:id`           | `promoters.manage` | Remove a condição de promotor. `204`, idempotente                                  |
 
 ### Segurança do painel
 
-- **Sessão do operador**: token opaco de 256 bits; só o SHA-256 vai para o banco (`operator_sessions`). O web guarda o token num cookie `HttpOnly`, restrito ao caminho `/admin` (o app do cliente nem o recebe); o navegador nunca lê o token. A sessão de cliente e a de operador **não são intercambiáveis** (headers e tabelas separados).
-- **Login**: e-mail inexistente, operador inativo e senha errada têm a mesma resposta e o mesmo custo; 5 falhas por e-mail em 15 min bloqueiam (`429`), contadas em espaço de nomes separado do login de cliente. Desativar um operador (`active = false`) derruba as sessões dele na hora.
+- **Sessão do operador**: token opaco de 256 bits; só o SHA-256 vai para o banco (`operator_sessions`). O web guarda o token num cookie `HttpOnly`, sem `Domain` (preso ao host do painel: os apps das bancas nem o recebem; em produção, com prefixo `__Host-` e `Secure`); o navegador nunca lê o token. A sessão de cliente e a de operador **não são intercambiáveis** (headers e tabelas separados).
+- **Login**: e-mail inexistente, operador inativo, banca inativa e senha errada têm a mesma resposta e o mesmo custo (a resposta nunca revela se o e-mail existe nem de qual banca é); 5 falhas por e-mail em 15 min bloqueiam (`429`), contadas em tabela própria (`operator_login_failures`, só o HMAC do e-mail, sem banca), separada do login de cliente. Desativar um operador (`active = false`) derruba as sessões dele na hora.
 - **Autorização na API**, não na tela: esconder um botão é só conveniência. Cada rota confere a sessão e a permissão a cada chamada; as páginas do web também conferem a sessão (layouts não rodam a cada navegação).
-- **Banco**: `operators`, `operator_sessions` e `audit_logs` têm RLS por banca. A role de runtime **não cria nem altera operadores** e **não altera nem apaga a auditoria** (somente inclusão); só ganhou `UPDATE` na coluna `users.status`. Um trigger garante que todo usuário nasce `ACTIVE`.
+- **Banco**: `operators`, `operator_sessions` e `audit_logs` têm RLS por banca. Como o login e a leitura da sessão acontecem **antes** de a banca ser conhecida, duas policies extras liberam só `SELECT` de **uma linha**, escolhida por um valor que a transação informa (`app.login_email` em `operators`; `app.session_hash`, o hash do token, em `operator_sessions`); sem esse valor nada extra fica visível, e escrita continua exigindo o contexto da banca. Depois de achar a sessão, a mesma transação entra na banca dela e só então lê o operador. A role de runtime **não cria nem altera operadores** e **não altera nem apaga a auditoria** (somente inclusão); só ganhou `UPDATE` na coluna `users.status`. Um trigger garante que todo usuário nasce `ACTIVE`.
 - **Auditoria** (`audit_logs`): toda edição e todo bloqueio/reativação registra quem fez, em quem e quando, **na mesma transação** da alteração. Guarda só nomes de campos, nunca valores pessoais.
 - **Busca**: `%`, `_` e `\` do texto digitado são escapados (o Prisma não escapa curingas de `LIKE`).
-- **Dados pessoais**: a lista mostra CPF/telefone mascarados; os completos só no detalhe. Nenhuma resposta traz hash de senha.
+- **Dados pessoais**: a lista e o detalhe mostram CPF e telefone completos (decisão do produto: o operador identifica o usuário sem abrir cada um). Como a lista expõe esses dados em lote, o acesso ao painel deve ser restrito (rede, 2FA). Nenhuma resposta traz hash de senha.
 
 ## Contrato monetário
 
@@ -361,11 +402,11 @@ Todas exigem a credencial de serviço da banca **e** a sessão do operador (head
 
 ### Roles do PostgreSQL
 
-| Role             | Uso                                                           | Atributos                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `postgres`       | Só o init do container                                        | superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `sysjb_migrator` | Migrations, seed e setup dos testes (`DATABASE_MIGRATOR_URL`) | dona do schema e das tabelas; `CREATEDB` para o shadow DB do `prisma migrate dev`; sem superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `sysjb_app`      | Runtime da API (`DATABASE_URL`)                               | `NOSUPERUSER`, `NOBYPASSRLS`, não é dona de nada. `SELECT` em `tenants`; `SELECT`/`INSERT`/`UPDATE` (só colunas editáveis; senha e nascimento só no INSERT) em `users`; `SELECT`/`INSERT` em `wallets`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `sessions`; `SELECT`/`INSERT`/`DELETE` em `login_failures`; `SELECT` em `operators`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `operator_sessions`; `SELECT`/`INSERT` (somente inclusão) em `audit_logs`; `UPDATE` também de `users.status`; sem `DELETE` nas demais; não pode escolher `id` nem `displayId` |
+| Role             | Uso                                                           | Atributos                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres`       | Só o init do container                                        | superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `sysjb_migrator` | Migrations, seed e setup dos testes (`DATABASE_MIGRATOR_URL`) | dona do schema e das tabelas; `CREATEDB` para o shadow DB do `prisma migrate dev`; sem superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `sysjb_app`      | Runtime da API (`DATABASE_URL`)                               | `NOSUPERUSER`, `NOBYPASSRLS`, não é dona de nada. `SELECT` em `tenants`; `SELECT`/`INSERT`/`UPDATE` (só colunas editáveis; `password_hash` também no UPDATE, para a troca de senha; nascimento só no INSERT) em `users`; `SELECT`/`INSERT` em `wallets`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `sessions`; `SELECT`/`INSERT`/`DELETE` em `login_failures`; `SELECT` em `operators`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `operator_sessions`; `SELECT`/`INSERT` (somente inclusão) em `audit_logs`; `UPDATE` também de `users.status`; sem `DELETE` nas demais; não pode escolher `id` nem `displayId` |
 
 `displayId` vem de uma sequence do PostgreSQL (começa em 100000). Aceita lacunas e é `int4`, portanto sempre um inteiro seguro em JSON.
 
@@ -412,7 +453,7 @@ Nada é publicado nem implantado automaticamente.
 | 9   | Credencial de uma banca não autoriza outra (`tenancy.test.ts`); chaves e um canário ausentes do bundle do navegador (`apps/web/scripts/check-client-bundle.mjs`)                                       | ambos                |
 | —   | CPF com dígitos verificadores, maioridade, regras de senha, hash argon2id; login, resposta igual para CPF inexistente, bloqueio com `Retry-After`, sessão por banca, expiração, logout, RLS de sessões | `auth.test.ts`       |
 
-`admin.test.ts` cobre o painel: login de operador (resposta única, bloqueio, isolamento entre bancas), sessão (expirada, desativado, cliente × operador), perfis e permissões (matriz completa), lista (máscara, paginação estável, busca sem curingas, filtro), detalhe, edição com auditoria, bloqueio (sessões revogadas, login, `/v1/me`) e privilégios do banco (auditoria somente inclusão, operadores só leitura, usuário só nasce `ACTIVE`).
+`admin.test.ts` cobre o painel: login de operador (resposta única, bloqueio, cada operador na sua banca pelo mesmo endereço, e-mail único no sistema, banca inativa, credencial do painel × das bancas, painel desativado sem `ADMIN_SERVICE_KEY`), sessão (expirada, desativado, cliente × operador), perfis e permissões (matriz completa), lista (máscara, paginação estável, busca sem curingas, filtro), detalhe, edição com auditoria, bloqueio (sessões revogadas, login, `/v1/me`) e privilégios do banco (auditoria somente inclusão, operadores só leitura, usuário só nasce `ACTIVE`, leitura por chave antes de haver banca). `config.test.ts` cobre a validação da `ADMIN_SERVICE_KEY`.
 
 `apps/web` tem testes de componentes (Vitest + Testing Library + jsdom) para máscaras, moeda, schemas, login e cadastro, menu lateral (inert, Esc, foco), convite (QR, cópia com falha, compartilhamento cancelado), saldo (oculto, erro, sessão expirada), contador do sorteio e o painel administrativo (lista, filtros e paginação na URL, detalhe por perfil, edição com erros por campo, bloqueio com confirmação, login e menu).
 
@@ -436,7 +477,7 @@ Nada é publicado nem implantado automaticamente.
 - `GET`/`PATCH /v1/users/:id` (integração) ainda dependem só da credencial de serviço (ver acima). O painel usa rotas próprias (`/v1/admin/*`), com sessão e perfil de operador.
 - Painel: só a página de usuários existe. Não há cadastro/edição de operadores pela interface (só o script `operator:create`), troca ou recuperação de senha de operador, nem tela para consultar a auditoria (os registros ficam em `audit_logs`).
 - A busca de usuários usa `ILIKE` sem índice de trigrama: adequada para milhares de usuários por banca; com centenas de milhares, criar índice `pg_trgm`.
-- Sem troca/recuperação de senha e sem listar/encerrar outras sessões do cliente.
+- Troca de senha só logado (sem exigir a senha atual, ver "Perfil"); sem recuperação de senha ("esqueci") e sem listar/encerrar sessões avulsas do cliente.
 - O bloqueio de login é por CPF; não há limite por IP, porque todo tráfego chega pelo servidor do web. Um atacante pode bloquear temporariamente o login de um CPF conhecido (efeito colateral aceito do bloqueio por conta).
 - Linhas antigas de `sessions` não são apagadas (só expiram); falhas de login antigas são limpas a cada falha nova.
 - Redis e BullMQ só previstos; não há filas nem dependências instaladas.

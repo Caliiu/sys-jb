@@ -12,7 +12,7 @@ import { Errors } from '../common/app-error.js';
 import { OperatorAuthService } from './operator-auth.service.js';
 import type { AuthenticatedOperator, OperatorRequest } from './operator.types.js';
 
-/** Header com o token de sessão do operador (a credencial de serviço continua em Authorization). */
+/** Header com o token de sessão do operador (a credencial do painel continua em Authorization). */
 export const OPERATOR_HEADER = 'x-operator-token';
 
 const PERMISSION_KEY = 'requiredPermission';
@@ -21,8 +21,9 @@ const PERMISSION_KEY = 'requiredPermission';
 export const RequirePermission = (permission: Permission) => SetMetadata(PERMISSION_KEY, permission);
 
 /**
- * Autentica o operador pela sessão e confere a permissão da rota. Deve rodar DEPOIS do TenantGuard
- * (`@UseGuards(TenantGuard, OperatorGuard)`): a sessão só vale na banca do hostname.
+ * Autentica o operador pela sessão, define a banca da requisição (`req.tenant`) a partir dele e confere
+ * a permissão da rota. Deve rodar DEPOIS do ConsoleGuard (`@UseGuards(ConsoleGuard, OperatorGuard)`).
+ * A banca nunca vem do endereço, de body, query ou header: só da sessão do operador.
  * 401 (sessão) -> 403 (perfil sem a permissão).
  */
 @Injectable()
@@ -34,10 +35,9 @@ export class OperatorGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<OperatorRequest>();
-    if (!req.tenant) throw Errors.internal();
 
     const header = req.headers[OPERATOR_HEADER];
-    const operator = await this.auth.authenticate(req.tenant, typeof header === 'string' ? header : undefined);
+    const { operator, tenant } = await this.auth.authenticate(typeof header === 'string' ? header : undefined);
 
     const required = this.reflector.getAllAndOverride<Permission | undefined>(PERMISSION_KEY, [
       context.getHandler(),
@@ -46,6 +46,7 @@ export class OperatorGuard implements CanActivate {
     if (required && !hasPermission(operator.role, required)) throw Errors.permissionDenied();
 
     req.operator = operator;
+    req.tenant = tenant;
     return true;
   }
 }

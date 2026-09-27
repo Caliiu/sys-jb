@@ -41,7 +41,7 @@ interface MenuItem {
 
 const MAIN_ITEMS: MenuItem[] = [
   { label: 'Início', icon: Home, to: ROUTES.home },
-  { label: 'Perfil', icon: User },
+  { label: 'Perfil', icon: User, to: ROUTES.profile },
   { label: 'Loterias', icon: Coins },
   { label: 'Cassino', icon: Gem },
   { label: 'Bingo', icon: Disc },
@@ -50,7 +50,7 @@ const MAIN_ITEMS: MenuItem[] = [
   { label: 'Relatórios', icon: FileText, to: ROUTES.reports },
   { label: 'Recarga PIX', icon: PixIcon, to: ROUTES.pixTopUp, highlight: true },
   { label: 'Solicitar saque', icon: Banknote, to: ROUTES.withdrawals },
-  { label: 'Configurações', icon: Settings },
+  { label: 'Configurações', icon: Settings, to: ROUTES.settings },
 ];
 
 const itemClass = 'w-full flex items-center gap-3 px-5 py-3 text-[14.5px] font-medium';

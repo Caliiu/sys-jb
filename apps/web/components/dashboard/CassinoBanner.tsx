@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowRight } from 'lucide-react';
+import Image from 'next/image';
 import type { GameModalityResponse } from '@/lib/modalities';
 import { useToast } from '../ui/Toast';
 import { bannerStyle, findModality } from './modality-tiles';
@@ -35,7 +36,22 @@ export default function CassinoBanner({ modalities, isLoading }: CassinoBannerPr
   return (
     <button type="button" onClick={open} className={baseClass}>
       <span className="absolute inset-0 bg-gradient-to-br from-purple-900 via-fuchsia-800 to-rose-700" />
-      <span className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+      <span
+        className="absolute inset-y-0 right-0 w-[68%]"
+        style={{
+          maskImage: 'linear-gradient(to right, transparent, #000 45%)',
+          WebkitMaskImage: 'linear-gradient(to right, transparent, #000 45%)',
+        }}
+      >
+        <Image
+          src="/banners/cassino.webp"
+          alt=""
+          fill
+          sizes="(max-width: 480px) 70vw, 340px"
+          className="object-cover object-[50%_35%]"
+        />
+      </span>
+      <span className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/10 to-transparent" />
       <span className="relative h-full flex flex-col justify-center px-4">
         <span className="text-white font-display text-[19px] leading-none">CASSINO</span>
         <span className="flex items-center gap-1 text-white/90 text-[12px] font-medium mt-1.5">

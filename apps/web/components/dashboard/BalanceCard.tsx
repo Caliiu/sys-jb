@@ -1,6 +1,7 @@
 'use client';
 
-import { RefreshCw, EyeOff, Eye, Grid2x2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, EyeOff, Eye, AlertTriangle } from 'lucide-react';
+import QrCodeIcon from '../ui/QrCodeIcon';
 import type { PublicWallet } from '@sysjb/contracts';
 import { useState } from 'react';
 import { useWallet } from '@/hooks/useWallet';
@@ -100,7 +101,7 @@ export default function BalanceCard({ initialWallet }: { initialWallet: PublicWa
         className="w-full flex items-center justify-between mt-2 border border-brand-primary rounded-xl2 px-4 py-5 active:scale-[0.98] transition-transform"
       >
         <span className="text-[13px] font-bold text-brand-primary">Ganhe convidando seus amigos</span>
-        <Grid2x2 className="w-4.5 h-4.5 text-brand-primary" size={18} aria-hidden />
+        <QrCodeIcon className="text-brand-primary" />
       </button>
     </section>
   );

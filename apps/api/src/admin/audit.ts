@@ -1,6 +1,7 @@
 import type { TenantTx } from '../database/database.service.js';
 
-export type AuditAction = 'user.update' | 'user.block' | 'user.unblock';
+export type AuditAction =
+  'user.update' | 'user.block' | 'user.unblock' | 'promoter.enable' | 'promoter.update' | 'promoter.disable';
 
 interface AuditEntry {
   tenantId: string;
@@ -8,8 +9,11 @@ interface AuditEntry {
   action: AuditAction;
   targetType: 'user';
   targetId: string;
-  /** Somente metadados (ex.: nomes de campos alterados), nunca valores pessoais. */
-  details?: { fields: string[] };
+  /**
+   * Somente metadados (nomes de campos alterados e, para a comissão, o valor antes/depois em
+   * centésimos de %), nunca valores pessoais.
+   */
+  details?: { fields: string[]; from?: number | null; to?: number | null };
 }
 
 /** Registra a ação na trilha de auditoria, na MESMA transação da alteração (ambas ou nenhuma). */

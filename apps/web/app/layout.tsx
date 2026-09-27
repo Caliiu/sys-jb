@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Archivo_Black, Inter } from 'next/font/google';
 import type { ReactNode } from 'react';
+import InstallCapture from '@/components/pwa/InstallCapture';
 import { ToastProvider } from '@/components/ui/Toast';
 import { tenantIcon } from '@/lib/favicon';
 import { resolveRequest } from '@/lib/request-context';
@@ -15,7 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const ctx = await resolveRequest();
   return {
     title: ctx.ok ? ctx.tenant.name : 'Painel do Jogador',
-    icons: ctx.ok ? { icon: tenantIcon(ctx.tenant) } : undefined,
+    icons: ctx.ok ? { icon: tenantIcon(ctx.tenant), apple: '/pwa-icon/192' } : undefined,
+    // iPhone: nome do atalho na tela inicial e abertura em tela cheia.
+    appleWebApp: ctx.ok ? { capable: true, title: ctx.tenant.name } : undefined,
     robots: { index: false, follow: false },
   };
 }
@@ -35,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-BR" className={`${archivoBlack.variable} ${inter.variable}`}>
       <body className="min-h-screen bg-[#EDEDED] text-slate-900">
+        <InstallCapture />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

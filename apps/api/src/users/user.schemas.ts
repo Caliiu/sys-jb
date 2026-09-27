@@ -73,6 +73,12 @@ const avatar = z
     }
   }, 'Avatar deve ser uma URL http ou https.');
 
+// ID exibido de um promotor (int4). Só o formato é validado aqui; se o código existe e é de promotor, o serviço decide.
+const inviteCode = z
+  .string({ error: 'Código de convite inválido.' })
+  .regex(/^\d{1,10}$/, 'Código de convite inválido.')
+  .refine((value) => Number(value) <= 2_147_483_647, 'Código de convite inválido.');
+
 /** POST: somente estes campos; qualquer outra chave (id, displayId, tenantId, wallet, promoter...) é rejeitada. */
 export const createUserSchema = z
   .strictObject({
@@ -83,6 +89,7 @@ export const createUserSchema = z
     password,
     email: email.nullish().transform((v) => v ?? null),
     avatar: avatar.nullish().transform((v) => v ?? null),
+    inviteCode: inviteCode.optional(),
   })
   .superRefine((data, ctx) => {
     // A senha não pode conter CPF, telefone ou data de nascimento.
@@ -113,6 +120,17 @@ export const adminUpdateUserSchema = z
   })
   .refine((patch) => Object.values(patch).some((v) => v !== undefined), 'Informe ao menos um campo para atualizar.');
 
+/** PATCH /v1/me: o usuário só altera o próprio e-mail e telefone (null limpa o e-mail). */
+export const updateProfileSchema = z
+  .strictObject({
+    email: email.nullable().optional(),
+    phone: phone.optional(),
+  })
+  .refine((patch) => Object.values(patch).some((v) => v !== undefined), 'Informe ao menos um campo para atualizar.');
+
+/** POST /v1/me/password. A checagem contra CPF, telefone e nascimento fica no serviço (precisa dos dados do usuário). */
+export const changePasswordSchema = z.strictObject({ password });
+
 /** Login por CPF + senha. Mensagens genéricas: o erro de credencial é decidido no serviço. */
 export const loginSchema = z.strictObject({
   document: z
@@ -130,4 +148,6 @@ export const userIdSchema = z.uuid({ error: 'id deve ser um UUID.' });
 export type CreateUserInput = z.output<typeof createUserSchema>;
 export type UpdateUserInput = z.output<typeof updateUserSchema>;
 export type AdminUpdateUserInput = z.output<typeof adminUpdateUserSchema>;
+export type UpdateProfileInput = z.output<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.output<typeof changePasswordSchema>;
 export type LoginInput = z.output<typeof loginSchema>;

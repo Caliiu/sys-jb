@@ -1,4 +1,4 @@
-import type { Cents, PublicPromoterFields, PublicUser, PublicWallet } from '@sysjb/contracts';
+import type { Cents, PublicProfile, PublicPromoterFields, PublicUser, PublicWallet } from '@sysjb/contracts';
 import type { User, Wallet } from '@sysjb/database';
 
 function toCents(value: bigint): Cents {
@@ -53,4 +53,9 @@ export function toPublicUser(user: PublicUserSource, wallet: Wallet): PublicUser
     wallet: toPublicWallet(wallet),
     ...promoterFields(),
   };
+}
+
+/** Perfil do próprio usuário: o contrato público + data de nascimento (só o dono da conta a recebe). */
+export function toPublicProfile(user: PublicUserSource & Pick<User, 'birthDate'>, wallet: Wallet): PublicProfile {
+  return { ...toPublicUser(user, wallet), birthDate: user.birthDate.toISOString().slice(0, 10) };
 }

@@ -5,9 +5,7 @@ import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { type LoginInput, loginSchema } from '../users/user.schemas.js';
 import { AuthService } from './auth.service.js';
-
-/** Header com o token de sessão do cliente (a credencial de serviço continua em Authorization). */
-export const SESSION_HEADER = 'x-session-token';
+import { SESSION_HEADER } from './session.guard.js';
 
 @Controller('v1')
 @UseGuards(TenantGuard)

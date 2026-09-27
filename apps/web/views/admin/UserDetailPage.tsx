@@ -1,10 +1,12 @@
 import type { AdminUserDetail } from '@sysjb/contracts';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import PromoterControls from '@/components/admin/PromoterControls';
 import StatusBadge from '@/components/admin/StatusBadge';
 import UserProfileCard from '@/components/admin/UserProfileCard';
 import UserStatusActions from '@/components/admin/UserStatusActions';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
+import { formatCommission } from '@/lib/admin/commission';
 import { formatBirthDate, formatDateTime } from '@/lib/datetime';
 import { formatCents } from '@/lib/currency';
 import { balanceAmounts } from '@/lib/wallet';
@@ -13,12 +15,22 @@ interface UserDetailPageProps {
   user: AdminUserDetail;
   canEdit: boolean;
   canChangeStatus: boolean;
+  /** Pode consultar promotores (o link para o promotor só aparece para quem abre a página dele). */
+  canReadPromoters?: boolean;
+  /** Pode promover a promotor, alterar a comissão e remover. */
+  canManagePromoters?: boolean;
 }
 
 const labelClass = 'text-[11.5px] font-semibold uppercase tracking-wide text-admin-muted';
 
 /** Detalhe de um usuário: cadastro (editável conforme o perfil), conta e carteira. Componente de servidor. */
-export default function UserDetailPage({ user, canEdit, canChangeStatus }: UserDetailPageProps) {
+export default function UserDetailPage({
+  user,
+  canEdit,
+  canChangeStatus,
+  canReadPromoters = false,
+  canManagePromoters = false,
+}: UserDetailPageProps) {
   const wallet = balanceAmounts(user.wallet);
   const account: Array<{ label: string; value: string }> = [
     { label: 'ID', value: String(user.displayId) },
@@ -77,6 +89,57 @@ export default function UserDetailPage({ user, canEdit, canChangeStatus }: UserD
             ))}
           </dl>
         </section>
+
+        {(canReadPromoters || canManagePromoters || user.referredBy) && (
+          <section aria-labelledby="promoter-title" className="rounded-xl bg-admin-surface p-5 shadow-admin">
+            <h2 id="promoter-title" className="mb-4 text-[14px] font-bold text-admin-text">
+              Promotor
+            </h2>
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              <div>
+                <dt className={labelClass}>Situação</dt>
+                <dd className="mt-0.5 text-[13.5px] text-admin-text">
+                  {user.promoterCommissionBps === null ? (
+                    'Não é promotor'
+                  ) : canReadPromoters ? (
+                    <Link
+                      href={ADMIN_ROUTES.promoter(user.id)}
+                      className="font-semibold text-admin-accent hover:underline"
+                    >
+                      Promotor · comissão de {formatCommission(user.promoterCommissionBps)}
+                    </Link>
+                  ) : (
+                    `Promotor · comissão de ${formatCommission(user.promoterCommissionBps)}`
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className={labelClass}>Indicado por</dt>
+                <dd className="mt-0.5 text-[13.5px] text-admin-text">
+                  {user.referredBy ? (
+                    canReadPromoters ? (
+                      <Link
+                        href={ADMIN_ROUTES.promoter(user.referredBy.id)}
+                        className="font-semibold text-admin-accent hover:underline"
+                      >
+                        {user.referredBy.name} (ID {user.referredBy.displayId})
+                      </Link>
+                    ) : (
+                      `${user.referredBy.name} (ID ${user.referredBy.displayId})`
+                    )
+                  ) : (
+                    'Ninguém (cadastro sem convite)'
+                  )}
+                </dd>
+              </div>
+            </dl>
+            {canManagePromoters && (
+              <div className="mt-5 border-t border-admin-border pt-5">
+                <PromoterControls userId={user.id} commissionBps={user.promoterCommissionBps} />
+              </div>
+            )}
+          </section>
+        )}
 
         <section aria-labelledby="wallet-title" className="rounded-xl bg-admin-surface p-5 shadow-admin">
           <h2 id="wallet-title" className="mb-4 text-[14px] font-bold text-admin-text">

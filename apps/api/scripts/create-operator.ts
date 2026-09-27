@@ -1,4 +1,5 @@
-// Cria um operador do painel administrativo de uma banca.
+// Cria um operador do painel administrativo (admin.<domínio>) e o vincula a uma banca. O e-mail é
+// único no sistema todo: é ele que diz a qual banca o operador pertence.
 // Uso: pnpm operator:create --tenant aurora --name "Maria Souza" --email maria@banca.com --role MANAGER
 // A senha vem de --password ou da variável OPERATOR_PASSWORD; se não for informada, uma senha forte é
 // gerada e mostrada UMA vez. Executa com a credencial de migração (DATABASE_MIGRATOR_URL): a role de
@@ -82,7 +83,9 @@ try {
   if (!provided) console.log(`Senha gerada (mostrada só agora, guarde): ${password}`);
 } catch (error) {
   const duplicate = error instanceof Error && 'code' in error && error.code === 'P2002';
-  console.error(`Erro: ${duplicate ? 'já existe um operador com este e-mail nesta banca' : (error as Error).message}`);
+  console.error(
+    `Erro: ${duplicate ? 'já existe um operador com este e-mail (o e-mail é único em todas as bancas)' : (error as Error).message}`,
+  );
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

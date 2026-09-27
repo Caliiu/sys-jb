@@ -10,6 +10,7 @@ import SorteioBanner, { type NextDraw } from '@/components/dashboard/SorteioBann
 import SupportBanner from '@/components/dashboard/SupportBanner';
 import TopBar from '@/components/dashboard/TopBar';
 import UtilityTiles from '@/components/dashboard/UtilityTiles';
+import { APP_VERSION } from '@/lib/app-version';
 import { brandStyle } from '@/lib/brand-style';
 import { DEFAULT_MODALITIES } from '@/lib/modalities';
 
@@ -43,7 +44,7 @@ export default function DashboardPage({ tenant, user, nextDraw = null }: Dashboa
           <GamesGrid modalities={modalities} isLoading={false} />
           <SupportBanner />
         </main>
-        <Footer />
+        <Footer version={APP_VERSION} />
 
         <BottomNav />
       </InviteProvider>

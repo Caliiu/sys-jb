@@ -1,4 +1,4 @@
-import type { AdminUserDetail, AdminUserListItem, Page } from '@sysjb/contracts';
+import type { AdminUserDetail, AdminUserListItem, Page, Permission } from '@sysjb/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +11,7 @@ const actions = {
   setUserStatusAction: vi.fn(),
 };
 
-vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/admin/usuarios' }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/usuarios' }));
 vi.mock('@/app/admin/actions', () => ({
   adminLoginAction: (...args: unknown[]) => actions.adminLoginAction(...args),
   adminLogoutAction: (...args: unknown[]) => actions.adminLogoutAction(...args),
@@ -29,8 +29,8 @@ const item = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => ({
   id: ID_ANA,
   displayId: 100002,
   name: 'Ana Souza Lima',
-  documentMasked: '***.982.247-**',
-  phoneMasked: '(11) *****-5678',
+  document: '52998224725',
+  phone: '11912345678',
   status: 'ACTIVE',
   createdAt: '2026-09-25T17:30:00.000Z',
   ...over,
@@ -65,13 +65,15 @@ const detail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
     totalAvailableJb: 124000,
     totalAvailableGames: 1000,
   },
+  promoterCommissionBps: null,
+  referredBy: null,
   ...over,
 });
 
 beforeEach(() => vi.clearAllMocks());
 
 describe('lista de usuários', () => {
-  it('mostra os usuários com dados mascarados, status e link para o detalhe', () => {
+  it('mostra os usuários com CPF e telefone formatados, status e link para o detalhe', () => {
     renderWithProviders(
       <UsersPage
         query={{ page: 1, search: '', status: '' }}
@@ -85,10 +87,10 @@ describe('lista de usuários', () => {
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByRole('link', { name: 'Ana Souza Lima' })).toHaveAttribute(
       'href',
-      `/admin/usuarios/${ID_ANA}`,
+      `/usuarios/${ID_ANA}`,
     );
-    expect(within(rows[0]!).getByText('***.982.247-**')).toBeInTheDocument();
-    expect(within(rows[0]!).getByText('(11) *****-5678')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('529.982.247-25')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('(11) 91234-5678')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('25/09/2026')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('Ativo')).toBeInTheDocument();
     expect(within(rows[1]!).getByText('Bloqueado')).toBeInTheDocument();
@@ -103,10 +105,10 @@ describe('lista de usuários', () => {
     renderWithProviders(<UsersPage query={{ page: 1, search: 'ana', status: 'BLOCKED' }} result={page([item()])} />);
     const form = screen.getByRole('search');
     expect(form).toHaveAttribute('method', 'get');
-    expect(form).toHaveAttribute('action', '/admin/usuarios');
+    expect(form).toHaveAttribute('action', '/usuarios');
     expect(screen.getByRole('searchbox', { name: 'Buscar usuários' })).toHaveValue('ana');
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('BLOCKED');
-    expect(screen.getByRole('link', { name: 'Limpar' })).toHaveAttribute('href', '/admin/usuarios');
+    expect(screen.getByRole('link', { name: 'Limpar' })).toHaveAttribute('href', '/usuarios');
   });
 
   it('sem filtro ativo não mostra "Limpar"', () => {
@@ -122,11 +124,11 @@ describe('lista de usuários', () => {
     expect(screen.getByText('Página 2 de 3 · 41 usuários')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Anterior' })).toHaveAttribute(
       'href',
-      '/admin/usuarios?search=ana&status=ACTIVE',
+      '/usuarios?search=ana&status=ACTIVE',
     );
     expect(screen.getByRole('link', { name: 'Próxima' })).toHaveAttribute(
       'href',
-      '/admin/usuarios?search=ana&status=ACTIVE&page=3',
+      '/usuarios?search=ana&status=ACTIVE&page=3',
     );
     unmount();
 
@@ -237,7 +239,7 @@ describe('bloquear e reativar', () => {
     renderWithProviders(<UserDetailPage user={detail()} canEdit canChangeStatus />);
     const dialog = await open(ui, 'Bloquear usuário');
     await ui.click(within(dialog).getByRole('button', { name: 'Bloquear' }));
-    expect(router.replace).toHaveBeenCalledWith('/admin/login');
+    expect(router.replace).toHaveBeenCalledWith('/login');
   });
 
   it('erro inesperado não quebra a tela', async () => {
@@ -339,10 +341,11 @@ describe('login do painel', () => {
     await ui.click(screen.getByRole('button', { name: 'Entrar' }));
   };
 
-  it('mostra a banca e valida os campos antes de chamar a API', async () => {
+  it('é neutra (a banca vem do login, não da tela) e valida os campos antes de chamar a API', async () => {
     const ui = userEvent.setup();
-    renderWithProviders(<AdminLoginPage tenant={tenant} />);
-    expect(screen.getByText(tenant.name)).toBeInTheDocument();
+    renderWithProviders(<AdminLoginPage />);
+    expect(screen.getByRole('heading', { name: 'PAINEL ADMINISTRATIVO' })).toBeInTheDocument();
+    expect(screen.queryByText(tenant.name)).toBeNull();
 
     await fill(ui, '', '');
     expect(screen.getByRole('alert')).toHaveTextContent('Informe o e-mail.');
@@ -354,13 +357,13 @@ describe('login do painel', () => {
   it('entra e vai para a lista de usuários', async () => {
     actions.adminLoginAction.mockResolvedValue({ ok: true, data: null });
     const ui = userEvent.setup();
-    renderWithProviders(<AdminLoginPage tenant={tenant} />);
+    renderWithProviders(<AdminLoginPage />);
     await fill(ui, 'op@example.test', 'segredo qualquer');
     expect(actions.adminLoginAction).toHaveBeenCalledExactlyOnceWith({
       email: 'op@example.test',
       password: 'segredo qualquer',
     });
-    expect(router.replace).toHaveBeenCalledWith('/admin/usuarios');
+    expect(router.replace).toHaveBeenCalledWith('/usuarios');
   });
 
   it('mostra a mensagem de erro e permite tentar de novo', async () => {
@@ -370,7 +373,7 @@ describe('login do painel', () => {
       message: 'E-mail ou senha inválidos.',
     });
     const ui = userEvent.setup();
-    renderWithProviders(<AdminLoginPage tenant={tenant} />);
+    renderWithProviders(<AdminLoginPage />);
     await fill(ui, 'op@example.test', 'errada');
     expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha inválidos.');
     expect(screen.getByRole('button', { name: 'Entrar' })).toBeEnabled();
@@ -380,14 +383,14 @@ describe('login do painel', () => {
   it('falha inesperada não quebra a tela', async () => {
     actions.adminLoginAction.mockRejectedValue(new Error('rede'));
     const ui = userEvent.setup();
-    renderWithProviders(<AdminLoginPage tenant={tenant} />);
+    renderWithProviders(<AdminLoginPage />);
     await fill(ui, 'op@example.test', 'segredo qualquer');
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível entrar. Tente novamente.');
   });
 });
 
 describe('menu do painel', () => {
-  const renderSidebar = (permissions: readonly ('users.read' | 'users.update' | 'users.status')[]) =>
+  const renderSidebar = (permissions: readonly Permission[]) =>
     renderWithProviders(
       <AdminSidebar
         tenantName="Banca Teste"
@@ -400,7 +403,7 @@ describe('menu do painel', () => {
   it('mostra a banca, o operador com o perfil e os itens permitidos (marcando o atual)', () => {
     renderSidebar(['users.read']);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-    expect(within(nav).getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/admin/usuarios');
+    expect(within(nav).getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/usuarios');
     expect(within(nav).getByRole('link', { name: 'Usuários' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getAllByText('Maria Souza').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gerente').length).toBeGreaterThan(0);
@@ -416,7 +419,7 @@ describe('menu do painel', () => {
     renderSidebar(['users.read']);
     await userEvent.click(screen.getAllByRole('button', { name: 'Sair' })[0]!);
     expect(actions.adminLogoutAction).toHaveBeenCalledOnce();
-    expect(router.replace).toHaveBeenCalledWith('/admin/login');
+    expect(router.replace).toHaveBeenCalledWith('/login');
   });
 
   it('se o logout falhar, avisa e continua na tela (a sessão pode seguir válida)', async () => {

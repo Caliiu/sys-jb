@@ -1,15 +1,38 @@
 'use client';
 
 import { Download } from 'lucide-react';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
 import PixIcon from '../icons/PixIcon';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import TenantLogo from '../tenant/TenantLogo';
 import { useToast } from '../ui/Toast';
 
-const LINKS = ['Loterias', 'Cassino', 'Fazendinha', 'Bingo', 'Raspadinha', 'Resultados', 'Recarga', 'Saque'];
+interface FooterLink {
+  label: string;
+  /** Sem rota, o link avisa que a página vem em breve. */
+  to?: string;
+}
+
+const LINKS: FooterLink[] = [
+  { label: 'Loterias' },
+  { label: 'Cassino' },
+  { label: 'Fazendinha' },
+  { label: 'Bingo' },
+  { label: 'Raspadinha' },
+  { label: 'Resultados', to: ROUTES.results },
+  { label: 'Recarga', to: ROUTES.pixTopUp },
+  { label: 'Saque', to: ROUTES.withdrawals },
+];
+const linkClass = 'text-[13px] text-gray-500 hover:text-brand-primary';
 const YEAR = new Date().getFullYear();
 
-export default function Footer() {
+interface FooterProps {
+  /** Versão do app exibida no rodapé (vem do servidor, de package.json). */
+  version: string;
+}
+
+export default function Footer({ version }: FooterProps) {
   const toast = useToast();
 
   return (
@@ -17,16 +40,17 @@ export default function Footer() {
       <TenantLogo size={56} className="w-14 h-14 mx-auto" />
 
       <nav aria-label="Rodapé" className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4 max-w-[340px] mx-auto">
-        {LINKS.map((link) => (
-          <button
-            key={link}
-            type="button"
-            onClick={() => toast.comingSoon(link)}
-            className="text-[13px] text-gray-500 hover:text-brand-primary"
-          >
-            {link}
-          </button>
-        ))}
+        {LINKS.map(({ label, to }) =>
+          to ? (
+            <Link key={label} href={to} className={linkClass}>
+              {label}
+            </Link>
+          ) : (
+            <button key={label} type="button" onClick={() => toast.comingSoon(label)} className={linkClass}>
+              {label}
+            </button>
+          ),
+        )}
       </nav>
 
       <div className="flex items-center justify-center gap-5 mt-5">
@@ -62,7 +86,9 @@ export default function Footer() {
         </span>
       </div>
 
-      <p className="text-[11px] text-gray-400 mt-2">Jogue com responsabilidade · © {YEAR} · v0.0.1</p>
+      <p className="text-[11px] text-gray-400 mt-2">
+        Jogue com responsabilidade · © {YEAR} · v{version}
+      </p>
     </footer>
   );
 }

@@ -17,6 +17,8 @@ export interface AppConfig {
   databaseUrl: string;
   dbPoolMax: number;
   serviceKeys: ServiceKeyEntry[];
+  /** SHA-256 da credencial do painel administrativo (admin.<domínio>); null = painel desativado. */
+  adminKeyDigest: Buffer | null;
   /** Chave HMAC para pseudonimizar o CPF no controle de tentativas de login. */
   authSecret: string;
 }
@@ -59,6 +61,20 @@ export function parseServiceKeys(raw: string): ServiceKeyEntry[] {
   return entries;
 }
 
+/** Credencial do painel: mesmo tamanho mínimo das outras e nunca igual à de uma banca. Vazia = painel desativado. */
+export function parseAdminKey(raw: string | undefined, tenantKeys: ServiceKeyEntry[]): Buffer | null {
+  const key = raw?.trim();
+  if (!key) return null;
+  if (key.length < MIN_SERVICE_KEY_LENGTH) {
+    throw new Error(`ADMIN_SERVICE_KEY: precisa de ao menos ${MIN_SERVICE_KEY_LENGTH} caracteres`);
+  }
+  const digest = digestKey(key);
+  if (tenantKeys.some((entry) => entry.digest.equals(digest))) {
+    throw new Error('ADMIN_SERVICE_KEY: não pode ser igual à credencial de uma banca');
+  }
+  return digest;
+}
+
 function parseTrustProxy(raw: string): false | string {
   if (raw === 'false' || raw === '') return false;
   if (raw === 'true') {
@@ -74,6 +90,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   TENANT_SERVICE_KEYS: z.string().min(1),
+  ADMIN_SERVICE_KEY: z.string().optional(),
   AUTH_SECRET: z.string().min(MIN_SERVICE_KEY_LENGTH),
 });
 
@@ -84,13 +101,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     throw new Error(`Configuração inválida: ${fields}`);
   }
   const e = parsed.data;
+  const serviceKeys = parseServiceKeys(e.TENANT_SERVICE_KEYS);
   return {
     host: e.API_HOST,
     port: e.API_PORT,
     trustProxy: parseTrustProxy(e.API_TRUST_PROXY),
     databaseUrl: e.DATABASE_URL,
     dbPoolMax: e.DB_POOL_MAX,
-    serviceKeys: parseServiceKeys(e.TENANT_SERVICE_KEYS),
+    serviceKeys,
+    adminKeyDigest: parseAdminKey(e.ADMIN_SERVICE_KEY, serviceKeys),
     authSecret: e.AUTH_SECRET,
   };
 }

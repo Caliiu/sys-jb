@@ -8,6 +8,7 @@ import { type LoginInput, sessionTokenSchema } from '../users/user.schemas.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { LoginThrottleService } from './login-throttle.service.js';
 import { PasswordService } from './password.service.js';
+import type { UserSession } from './session.types.js';
 import { newSessionToken, sha256 } from './session-tokens.js';
 
 export { FAILURE_WINDOW_MS, MAX_FAILURES } from './login-throttle.service.js';
@@ -79,6 +80,25 @@ export class AuthService {
     if (!session) throw Errors.sessionInvalid();
     if (!session.user.wallet) throw Errors.internal();
     return toPublicUser(session.user, session.user.wallet);
+  }
+
+  /** Sessão do cliente válida (mesma regra do /me), sem carregar o usuário. Usada pelo SessionGuard. */
+  async authenticate(tenant: ResolvedTenant, token: string | undefined): Promise<UserSession> {
+    const tokenHash = this.tokenHash(token);
+    const session = await this.db.withTenant(tenant.id, (tx) =>
+      tx.session.findFirst({
+        where: {
+          tenantId: tenant.id,
+          tokenHash,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          user: { status: 'ACTIVE' },
+        },
+        select: { id: true, userId: true },
+      }),
+    );
+    if (!session) throw Errors.sessionInvalid();
+    return { sessionId: session.id, userId: session.userId };
   }
 
   /** Idempotente: sessão inexistente ou já encerrada também resulta em sucesso. */

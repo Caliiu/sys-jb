@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Header, Inject, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import type { AdminUserDetail, AdminUserListItem, Page } from '@sysjb/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
-import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
+import { CurrentTenant } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { type AdminUpdateUserInput, adminUpdateUserSchema, userIdSchema } from '../users/user.schemas.js';
 import { AdminUsersService } from './admin-users.service.js';
@@ -11,12 +11,13 @@ import {
   type SetUserStatusInput,
   setUserStatusSchema,
 } from './admin.schemas.js';
+import { ConsoleGuard } from './console.guard.js';
 import { CurrentOperator, OperatorGuard, RequirePermission } from './operator.guard.js';
 import type { AuthenticatedOperator } from './operator.types.js';
 
 /** Usuários vistos pelo operador. Cada rota exige a permissão correspondente ao perfil. */
 @Controller('v1/admin/users')
-@UseGuards(TenantGuard, OperatorGuard)
+@UseGuards(ConsoleGuard, OperatorGuard)
 export class AdminUsersController {
   constructor(@Inject(AdminUsersService) private readonly users: AdminUsersService) {}
 

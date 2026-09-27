@@ -73,6 +73,18 @@ describe('RegisterPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Cadastro concluído');
   });
 
+  it('com o link de convite, envia o código junto (e sem ele, não envia)', async () => {
+    auth.register.mockResolvedValue(undefined);
+    renderWithProviders(<RegisterPage inviteCode="100042" />);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Nome completo' }), 'Pessoa Sintética');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Telefone' }), '11912345678');
+    await userEvent.type(screen.getByRole('textbox', { name: 'CPF' }), '52998224725');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Data de nascimento (DD/MM/AAAA)' }), '17051990');
+    await userEvent.type(screen.getByLabelText('Senha'), 'frase secreta longa');
+    await userEvent.click(screen.getByRole('button', { name: 'Avançar' }));
+    expect(auth.register).toHaveBeenCalledWith(expect.objectContaining({ inviteCode: '100042' }));
+  });
+
   it('mostrar/ocultar senha', async () => {
     renderWithProviders(<RegisterPage />);
     const senha = screen.getByLabelText('Senha');
