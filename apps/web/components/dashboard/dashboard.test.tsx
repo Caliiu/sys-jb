@@ -15,6 +15,7 @@ const { default: Footer } = await import('./Footer');
 const { default: SideMenu } = await import('./SideMenu');
 const { default: InviteModal } = await import('./InviteModal');
 const { default: SorteioBanner } = await import('./SorteioBanner');
+const { default: UtilityTiles } = await import('./UtilityTiles');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -67,6 +68,13 @@ describe('Footer', () => {
     expect(within(nav).getByRole('link', { name: 'Resultados' })).toHaveAttribute('href', '/resultados');
     expect(within(nav).getByRole('link', { name: 'Recarga' })).toHaveAttribute('href', '/recarga-pix');
     expect(within(nav).getByRole('link', { name: 'Saque' })).toHaveAttribute('href', '/saques');
+  });
+
+  it('atalho Calcular abre o simulador; os outros avisam "em breve"', async () => {
+    renderWithProviders(<UtilityTiles />);
+    expect(screen.getByRole('link', { name: 'Calcular' })).toHaveAttribute('href', '/loterias/calcular');
+    await userEvent.click(screen.getByRole('button', { name: 'Sonhos' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Sonhos: disponível em breve.');
   });
 
   it('mostra a versão recebida (nunca um número fixo no código)', () => {

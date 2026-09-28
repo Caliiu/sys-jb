@@ -2,6 +2,7 @@
 export const ROUTES = {
   home: '/',
   lotteries: '/loterias',
+  prizeCalculator: '/loterias/calcular',
   fazendinha: '/fazendinha',
   results: '/resultados',
   reports: '/relatorios',

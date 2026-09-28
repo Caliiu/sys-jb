@@ -66,7 +66,10 @@ describe('Loterias', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Quininha: disponível em breve.');
     await click(/Repetir pule/);
     expect(screen.getByRole('status')).toHaveTextContent('Repetir pule: disponível em breve.');
-    expect(within(screen.getByRole('navigation', { name: 'Ferramentas' })).getAllByRole('button')).toHaveLength(4);
+    const tools = within(screen.getByRole('navigation', { name: 'Ferramentas' }));
+    // Prêmio abre o simulador; as outras ainda são "em breve".
+    expect(tools.getByRole('link', { name: 'Prêmio' })).toHaveAttribute('href', '/loterias/calcular');
+    expect(tools.getAllByRole('button').map((b) => b.textContent)).toEqual(['Horóscopo', 'Sonhos', 'Atrasados']);
   });
 
   it('fluxo completo até o carrinho, com as etapas e o resumo de cada uma', async () => {

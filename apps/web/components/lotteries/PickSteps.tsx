@@ -8,10 +8,11 @@ import {
   LOTTERY_MODALITIES,
   lotteryQuoteCents,
 } from '@sysjb/contracts';
-import { Calculator, ChevronRight, Clover, Moon, Repeat2, Search, Sparkles, Timer } from 'lucide-react';
+import { ChevronRight, Clover, Repeat2, Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { type LotteryDay, quoteBadge } from '@/lib/lotteries';
 import { LOTTERY_STEP_COUNT } from './LotteryBar';
+import LotteryToolsNav from './LotteryToolsNav';
 
 /** Cores do trevo de cada tipo de jogo (como no print). */
 const TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -114,27 +115,7 @@ export function TypeStep({ onPick, onComingSoon }: { onPick: () => void; onComin
         <ChevronRight className="w-4 h-4 text-gray-300" aria-hidden />
       </button>
 
-      <nav
-        aria-label="Ferramentas"
-        className="fixed bottom-0 left-0 right-0 z-20 mx-auto flex max-w-[480px] bg-brand-primary pb-[env(safe-area-inset-bottom)]"
-      >
-        {[
-          { label: 'Prêmio', icon: Calculator },
-          { label: 'Horóscopo', icon: Sparkles },
-          { label: 'Sonhos', icon: Moon },
-          { label: 'Atrasados', icon: Timer },
-        ].map(({ label, icon: Icon }) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => onComingSoon(label)}
-            className="flex flex-1 flex-col items-center gap-1 pt-2.5 pb-2 text-white"
-          >
-            <Icon className="w-5 h-5" aria-hidden />
-            <span className="text-[11px] font-semibold">{label}</span>
-          </button>
-        ))}
-      </nav>
+      <LotteryToolsNav />
     </main>
   );
 }
