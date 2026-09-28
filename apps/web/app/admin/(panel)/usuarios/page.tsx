@@ -33,5 +33,5 @@ export default async function Page({
   // Página além do fim (ex.: filtro mudou): leva à última página existente.
   if (query.page > res.data.totalPages) redirect(usersHref({ ...query, page: res.data.totalPages }));
 
-  return <UsersPage query={query} result={res.data} />;
+  return <UsersPage query={query} result={res.data} canReadPromoters={can(session.operator, 'promoters.read')} />;
 }

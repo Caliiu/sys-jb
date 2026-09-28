@@ -10,7 +10,7 @@ import QrCode from '../ui/QrCode';
 interface InviteModalProps {
   open: boolean;
   onClose: () => void;
-  /** Código de convite do usuário (hoje, o displayId). */
+  /** Código de convite do usuário (5 caracteres, ex.: CDYGE). */
   inviteCode: string;
 }
 

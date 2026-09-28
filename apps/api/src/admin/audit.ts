@@ -1,19 +1,18 @@
+import type { AuditAction, AuditDetails } from '@sysjb/contracts';
 import type { TenantTx } from '../database/database.service.js';
-
-export type AuditAction =
-  'user.update' | 'user.block' | 'user.unblock' | 'promoter.enable' | 'promoter.update' | 'promoter.disable';
 
 interface AuditEntry {
   tenantId: string;
   operatorId: string;
   action: AuditAction;
-  targetType: 'user';
+  /** 'tenant' = ação sobre a banca (targetId = id da banca). */
+  targetType: 'user' | 'tenant';
   targetId: string;
   /**
-   * Somente metadados (nomes de campos alterados e, para a comissão, o valor antes/depois em
-   * centésimos de %), nunca valores pessoais.
+   * Somente metadados (nomes de campos alterados; para a comissão, o valor antes/depois em
+   * centésimos de %; para o crédito de carteira, o valor em centavos), nunca valores pessoais.
    */
-  details?: { fields: string[]; from?: number | null; to?: number | null };
+  details?: AuditDetails;
 }
 
 /** Registra a ação na trilha de auditoria, na MESMA transação da alteração (ambas ou nenhuma). */

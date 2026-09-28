@@ -381,6 +381,8 @@ describe('lista de usuários', () => {
       phone: mine.phone,
       status: 'ACTIVE',
       createdAt: expect.any(String),
+      referredBy: null,
+      promoter: null,
     });
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|birthDate|tenantId/);
   });
@@ -489,6 +491,7 @@ describe('detalhe do usuário', () => {
       phone: user.phone,
       document: user.document,
       birthDate: '1990-05-17',
+      inviteCode: user.inviteCode,
       status: 'ACTIVE',
       createdAt: expect.any(String),
       lastLoginAt: null,

@@ -15,7 +15,7 @@ interface SectionMenuPageProps {
 export default function SectionMenuPage({ tenant, user, menu }: SectionMenuPageProps) {
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-[#F4F6F6] font-body">
-      <InviteProvider inviteCode={String(user.displayId)}>
+      <InviteProvider inviteCode={user.inviteCode}>
         <SectionBar title={menu.title} />
         <main>
           <MenuList items={menu.items} label={menu.title} />

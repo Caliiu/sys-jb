@@ -1,0 +1,101 @@
+import { AUDIT_ACTIONS, type AdminAuditEntry, type AuditAction } from '@sysjb/contracts';
+import { ADMIN_ROUTES } from './admin-routes';
+import { formatBrl } from '../currency';
+import { formatCommission } from './commission';
+import { parsePage } from './promoters-query';
+
+export const AUDIT_PAGE_SIZE = 20;
+
+export interface AuditQuery {
+  page: number;
+  /** '' = todas as ações. */
+  action: AuditAction | '';
+  /** '' = todos os usuários; senão, o id (UUID) do usuário afetado. */
+  userId: string;
+}
+
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Filtros da URL com tolerância: valor inválido vira "sem filtro", nunca erro (a URL é digitável). */
+export function parseAuditQuery(raw: Record<string, string | string[] | undefined>): AuditQuery {
+  const action = first(raw.acao) ?? '';
+  const userId = first(raw.usuario) ?? '';
+  return {
+    page: parsePage(raw.page),
+    action: (AUDIT_ACTIONS as readonly string[]).includes(action) ? (action as AuditAction) : '',
+    userId: UUID_RE.test(userId) ? userId.toLowerCase() : '',
+  };
+}
+
+/** Endereço da auditoria com filtros e página; omite o que é padrão. */
+export function auditHref(query: Partial<AuditQuery>): string {
+  const params = new URLSearchParams();
+  if (query.action) params.set('acao', query.action);
+  if (query.userId) params.set('usuario', query.userId);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  const qs = params.toString();
+  return qs ? `${ADMIN_ROUTES.audit}?${qs}` : ADMIN_ROUTES.audit;
+}
+
+export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
+  'user.update': 'Cadastro corrigido',
+  'user.block': 'Usuário bloqueado',
+  'user.unblock': 'Usuário reativado',
+  'promoter.enable': 'Promovido a promotor',
+  'promoter.update': 'Comissão alterada',
+  'promoter.disable': 'Deixou de ser promotor',
+  'wallet.credit': 'Carteira creditada',
+  'commission.rate': 'Indique e ganhe alterado',
+  'commission.close': 'Comissões do mês fechadas',
+  'quote.update': 'Cotações alteradas',
+  'draw.create': 'Sorteio cadastrado',
+  'draw.update': 'Sorteio alterado',
+  'draw.delete': 'Sorteio excluído',
+  'draw.exception.create': 'Exceção de data criada',
+  'draw.exception.delete': 'Exceção de data removida',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nome',
+  email: 'E-mail',
+  phone: 'Telefone',
+  document: 'CPF',
+  promoterCommissionBps: 'Comissão',
+  balanceJb: 'Saldo',
+  bonusJb: 'Bônus',
+  balanceGames: 'Disponível em Games',
+};
+
+const commission = (bps: number | null | undefined) => (typeof bps === 'number' ? formatCommission(bps) : '—');
+
+/** Resumo legível do que mudou (só nomes de campos e comissão: a trilha não guarda valores pessoais). */
+export function describeAuditDetails(entry: AdminAuditEntry): string {
+  const details = entry.details;
+  if (!details) return '—';
+  if (details.month && typeof details.amount === 'number') {
+    const [year, month] = details.month.split('-');
+    return `Mês ${month}/${year}: ${formatBrl(details.amount)} pagos`;
+  }
+  if (details.draw && details.date) {
+    const [year, month, day] = details.date.split('-');
+    const kind = details.fields[0] === 'EXTRA' ? 'Sorteio extra' : 'Sem sorteio';
+    const draw = details.draw === 'Todos' ? 'todos os sorteios' : details.draw;
+    return `${kind} em ${day}/${month}/${year}: ${draw}`;
+  }
+  if (details.draw) return details.fields.length ? `${details.draw}: ${details.fields.join(', ')}` : details.draw;
+  if (details.fields.includes('referralCommissionBps')) {
+    return `Indique e ganhe de ${commission(details.from)} para ${commission(details.to)}`;
+  }
+  if (typeof details.amount === 'number') {
+    const bucket = details.fields.map((field) => FIELD_LABELS[field] ?? field).join(', ');
+    return `${bucket}: + ${formatBrl(details.amount)}`;
+  }
+  if (details.fields.includes('promoterCommissionBps') && ('from' in details || 'to' in details)) {
+    if (details.from == null) return `Comissão de ${commission(details.to)}`;
+    if (details.to == null) return `Comissão era ${commission(details.from)}`;
+    return `Comissão de ${commission(details.from)} para ${commission(details.to)}`;
+  }
+  if (details.fields.length === 0) return '—';
+  return `Campos: ${details.fields.map((field) => FIELD_LABELS[field] ?? field).join(', ')}`;
+}

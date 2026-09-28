@@ -2,6 +2,18 @@ import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { AdminAuthController } from './admin/admin-auth.controller.js';
 import { AdminUsersController } from './admin/admin-users.controller.js';
+import { AuditController } from './admin/audit.controller.js';
+import { AuditService } from './admin/audit.service.js';
+import { CommissionsController } from './admin/commissions.controller.js';
+import { CommissionsService } from './admin/commissions.service.js';
+import { QuotesAdminController } from './admin/quotes-admin.controller.js';
+import { DrawsAdminController } from './admin/draws-admin.controller.js';
+import { DrawsController } from './draws/draws.controller.js';
+import { DrawsService } from './draws/draws.service.js';
+import { LotteriesController } from './lotteries/lotteries.controller.js';
+import { LotteriesService } from './lotteries/lotteries.service.js';
+import { QuotesController } from './quotes/quotes.controller.js';
+import { QuotesService } from './quotes/quotes.service.js';
 import { PromotersController } from './admin/promoters.controller.js';
 import { PromotersRepository } from './admin/promoters.repository.js';
 import { PromotersService } from './admin/promoters.service.js';
@@ -18,6 +30,8 @@ import { SessionGuard } from './auth/session.guard.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { DatabaseService } from './database/database.service.js';
+import { FazendinhaController } from './fazendinha/fazendinha.controller.js';
+import { FazendinhaService } from './fazendinha/fazendinha.service.js';
 import { HealthController } from './health/health.controller.js';
 import { TenantController } from './tenancy/tenant.controller.js';
 import { TenantGuard } from './tenancy/tenant.guard.js';
@@ -28,7 +42,7 @@ import { UsersController } from './users/users.controller.js';
 import { UsersRepository, WalletsRepository } from './users/users.repository.js';
 import { UsersService } from './users/users.service.js';
 
-/** Monólito modular: tenancy, users/wallet, painel administrativo e health compartilham a mesma conexão de runtime. */
+/** Monólito modular: tenancy, users/wallet, fazendinha, painel administrativo e health compartilham a mesma conexão de runtime. */
 @Module({})
 export class AppModule {
   static forRoot(config: AppConfig): DynamicModule {
@@ -42,7 +56,15 @@ export class AppModule {
         AdminAuthController,
         AdminUsersController,
         PromotersController,
+        AuditController,
+        CommissionsController,
+        QuotesAdminController,
+        DrawsAdminController,
+        DrawsController,
+        QuotesController,
+        LotteriesController,
         ProfileController,
+        FazendinhaController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -63,8 +85,14 @@ export class AppModule {
         AdminUsersService,
         PromotersRepository,
         PromotersService,
+        AuditService,
+        CommissionsService,
+        QuotesService,
+        DrawsService,
+        LotteriesService,
         SessionGuard,
         ProfileService,
+        FazendinhaService,
       ],
     };
   }

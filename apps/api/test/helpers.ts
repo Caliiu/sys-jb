@@ -125,11 +125,15 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
   return rows[0].id;
 }
 
-/** TRUNCATE não é afetado por RLS; a role de migração é dona das tabelas. */
+/**
+ * TRUNCATE não é afetado por RLS; a role de migração é dona das tabelas. O cadastro de sorteios volta ao
+ * padrão (draws_seed_defaults).
+ */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
+  await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
 }
 
 /** Consulta como dona das tabelas, mas com contexto de banca (FORCE RLS também se aplica a ela). */

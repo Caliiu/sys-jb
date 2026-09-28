@@ -40,43 +40,62 @@ model Tenant {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  users         User[]
-  wallets       Wallet[]
-  sessions      Session[]
-  loginFailures LoginFailure[]
-  operators     Operator[]
-  operatorSessions OperatorSession[]
-  auditLogs     AuditLog[]
+  users                User[]
+  wallets              Wallet[]
+  sessions             Session[]
+  loginFailures        LoginFailure[]
+  operators            Operator[]
+  operatorSessions     OperatorSession[]
+  auditLogs            AuditLog[]
+  fazendinhaBets       FazendinhaBet[]
+  fazendinhaBetNumbers FazendinhaBetNumber[]
+  walletEntries        WalletEntry[]
+  settings             TenantSettings?
+  lotteryTickets       LotteryTicket[]
+  lotteryTicketItems   LotteryTicketItem[]
+  traditionalQuotes    TraditionalQuote[]
+  fazendinhaQuotes     FazendinhaQuote[]
+  commissionClosings   CommissionClosing[]
+  commissionPayouts    CommissionPayout[]
+  draws                Draw[]
+  drawExceptions       DrawException[]
 
   @@map("tenants")
 }
 
 model User {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  name         String
-  email        String?
-  phone        String
-  document     String
-  avatar       String?
-  birthDate    DateTime @map("birth_date") @db.Date
+  id                    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String     @map("tenant_id") @db.Uuid
+  name                  String
+  email                 String?
+  phone                 String
+  document              String
+  avatar                String?
+  birthDate             DateTime   @map("birth_date") @db.Date
   // Hash argon2id (formato PHC). Nunca sai da API.
-  passwordHash String   @map("password_hash")
-  displayId    Int      @unique @default(autoincrement()) @map("display_id")
+  passwordHash          String     @map("password_hash")
+  displayId             Int        @unique @default(autoincrement()) @map("display_id")
+  // Código do link de convite (?convite=): 5 caracteres sem ambíguos (sem O/0/I/1), gerado pelo banco,
+  // único no sistema todo e fixo (a API não altera). Ver migration invite_codes.
+  inviteCode            String     @unique @default(dbgenerated("generate_invite_code()")) @map("invite_code")
   // BLOCKED: não consegue entrar e perde as sessões abertas. Só operadores alteram.
-  status       UserStatus @default(ACTIVE)
+  status                UserStatus @default(ACTIVE)
   // Promotor = usuário com comissão definida (centésimos de %, 1 a 10000 = 0,01% a 100%). Null = não é promotor. Só operadores alteram.
-  promoterCommissionBps Int?    @map("promoter_commission_bps")
+  promoterCommissionBps Int?       @map("promoter_commission_bps")
   // Promotor que indicou este usuário (pelo link de convite, só no cadastro). Nunca muda depois.
-  referredByUserId      String? @map("referred_by_user_id") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  referredByUserId      String?    @map("referred_by_user_id") @db.Uuid
+  createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  wallet     Wallet?
-  sessions   Session[]
-  referredBy User?  @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
-  referrals  User[] @relation("Referrals")
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  wallet            Wallet?
+  sessions          Session[]
+  referredBy        User?              @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
+  referrals         User[]             @relation("Referrals")
+  fazendinhaBets    FazendinhaBet[]
+  lotteryTickets    LotteryTicket[]
+  walletEntries     WalletEntry[]
+  commissionPayouts CommissionPayout[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -154,9 +173,11 @@ model Operator {
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  sessions OperatorSession[]
-  auditLogs AuditLog[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sessions           OperatorSession[]
+  auditLogs          AuditLog[]
+  walletEntries      WalletEntry[]
+  commissionClosings CommissionClosing[]
 
   @@unique([tenantId, id])
   @@map("operators")
@@ -207,4 +228,309 @@ model AuditLog {
 
   @@index([tenantId, targetType, targetId, createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+enum FazendinhaMode {
+  GRUPO
+  DEZENA
+  CENTENA
+
+  @@map("fazendinha_mode")
+}
+
+// Pule da Fazendinha: uma compra de palpites numa extração (data + loteria + hora), modalidade e valor.
+// Criado pela API na mesma transação do débito (função fazendinha_debit); um trigger adiado recusa o commit
+// de pule sem o débito correspondente. Somente inclusão.
+model FazendinhaBet {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  // Número exibido no comprovante (sequence global, lacunas aceitas).
+  puleNumber     Int            @unique @default(autoincrement()) @map("pule_number")
+  // Gerada pelo cliente por tentativa de compra: repetir a chave devolve o mesmo pule.
+  idempotencyKey String         @map("idempotency_key") @db.Uuid
+  drawDate       DateTime       @map("draw_date") @db.Date
+  lottery        String
+  drawHour       Int            @map("draw_hour") @db.SmallInt
+  mode           FazendinhaMode
+  stakeCents     Int            @map("stake_cents")
+  // Prêmio de cada número pela cotação vigente na compra (a cotação pode mudar depois).
+  prizeCents     Int            @map("prize_cents")
+  multiplier     Int
+  totalCents     BigInt         @map("total_cents")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  numbers     FazendinhaBetNumber[]
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, idempotencyKey])
+  // Alvo da FK composta dos números: garante que o número vendido é da mesma extração/modalidade/valor do pule.
+  @@unique([tenantId, id, drawDate, lottery, drawHour, mode, stakeCents])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([tenantId, lottery, drawHour, drawDate])
+  @@map("fazendinha_bets")
+}
+
+// Número vendido. O UNIQUE da extração/modalidade/valor impede vender o mesmo número duas vezes.
+model FazendinhaBetNumber {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  betId      String         @map("bet_id") @db.Uuid
+  drawDate   DateTime       @map("draw_date") @db.Date
+  lottery    String
+  drawHour   Int            @map("draw_hour") @db.SmallInt
+  mode       FazendinhaMode
+  stakeCents Int            @map("stake_cents")
+  number     Int            @db.SmallInt
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  bet    FazendinhaBet @relation(fields: [tenantId, betId, drawDate, lottery, drawHour, mode, stakeCents], references: [tenantId, id, drawDate, lottery, drawHour, mode, stakeCents], onDelete: Restrict)
+
+  @@unique([tenantId, drawDate, lottery, drawHour, mode, stakeCents, number])
+  @@index([tenantId, betId])
+  @@map("fazendinha_bet_numbers")
+}
+
+// Movimentação da carteira (somente inclusão, inclusive para a dona). Deltas em centavos por bolsa;
+// negativos = débito. O banco exige, ao fim de cada transação, saldo = soma das movimentações.
+// Tipos: FAZENDINHA_BET (função fazendinha_debit), MANUAL_ADJUSTMENT (função wallet_manual_adjust, com
+// motivo), OPERATOR_CREDIT (crédito pelo painel, função wallet_operator_credit, com operador e motivo),
+// OPENING_BALANCE (saldos anteriores ao registro, criados pelas migrations).
+model WalletEntry {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  kind               String
+  balanceJbDelta     BigInt   @map("balance_jb_delta")
+  prizesJbDelta      BigInt   @map("prizes_jb_delta")
+  bonusJbDelta       BigInt   @default(0) @map("bonus_jb_delta")
+  balanceGamesDelta  BigInt   @default(0) @map("balance_games_delta")
+  // Motivo (obrigatório no ajuste manual e no crédito pelo painel).
+  note               String?
+  // Operador que creditou pelo painel (OPERATOR_CREDIT).
+  operatorId         String?  @map("operator_id") @db.Uuid
+  // Chave do crédito pelo painel: repetir a mesma chave não credita de novo.
+  idempotencyKey     String?  @map("idempotency_key") @db.Uuid
+  // Pagamento de comissão do fechamento mensal (COMMISSION).
+  commissionPayoutId String?  @map("commission_payout_id") @db.Uuid
+  // Débito de um pule de loteria (LOTTERY_BET).
+  lotteryTicketId    String?  @map("lottery_ticket_id") @db.Uuid
+  // Um débito por pule (UNIQUE): a função não debita duas vezes o mesmo pule.
+  fazendinhaBetId    String?  @map("fazendinha_bet_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user             User              @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  fazendinhaBet    FazendinhaBet?    @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
+  operator         Operator?         @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+  commissionPayout CommissionPayout? @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
+  lotteryTicket    LotteryTicket?    @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, fazendinhaBetId])
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, commissionPayoutId])
+  @@unique([tenantId, lotteryTicketId])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@map("wallet_entries")
+}
+
+// Configurações da banca editáveis pelo painel. Uma linha por banca (criada na primeira alteração).
+model TenantSettings {
+  tenantId              String   @id @map("tenant_id") @db.Uuid
+  // "Indique e ganhe": % (centésimos) do valor apostado pelos indicados, pago a quem indicou no fechamento.
+  referralCommissionBps Int      @default(0) @map("referral_commission_bps")
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("tenant_settings")
+}
+
+enum CommissionPayoutStatus {
+  PAID
+  BLOCKED
+  ZERO
+
+  @@map("commission_payout_status")
+}
+
+// Fechamento mensal de comissões (indicação + promotor), feito pelo Gerente. Um por banca e mês; somente
+// inclusão. Criado só pela função commission_close_month, que também credita os pagamentos.
+model CommissionClosing {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  // Primeiro dia do mês fechado (Brasília).
+  month           DateTime @db.Date
+  operatorId      String   @map("operator_id") @db.Uuid
+  // % de indicação vigente no fechamento (a de promotor fica em cada pagamento).
+  referralRateBps Int      @map("referral_rate_bps")
+  totalPaidCents  BigInt   @map("total_paid_cents")
+  closedAt        DateTime @default(now()) @map("closed_at") @db.Timestamptz(3)
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operator Operator           @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+  payouts  CommissionPayout[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, month])
+  @@map("commission_closings")
+}
+
+// Linha do fechamento: quanto os indicados de um usuário apostaram no mês e quanto ele recebeu.
+model CommissionPayout {
+  id              String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String                 @map("tenant_id") @db.Uuid
+  closingId       String                 @map("closing_id") @db.Uuid
+  userId          String                 @map("user_id") @db.Uuid
+  wageredCents    BigInt                 @map("wagered_cents")
+  referralRateBps Int                    @map("referral_rate_bps")
+  promoterRateBps Int                    @map("promoter_rate_bps")
+  amountCents     BigInt                 @map("amount_cents")
+  status          CommissionPayoutStatus
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  closing     CommissionClosing @relation(fields: [tenantId, closingId], references: [tenantId, id], onDelete: Restrict)
+  user        User              @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@unique([closingId, userId])
+  @@map("commission_payouts")
+}
+
+// Cotação do Tradicional por banca: prêmio para cada R$ 1,00 apostado. Sem linha = vale o padrão
+// (@sysjb/contracts, TRADITIONAL_QUOTE_MODALITIES). 0 = modalidade desligada.
+model TraditionalQuote {
+  tenantId   String   @map("tenant_id") @db.Uuid
+  modality   String
+  prizeCents Int      @map("prize_cents")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@id([tenantId, modality])
+  @@map("traditional_quotes")
+}
+
+// Cotação da Fazendinha por banca: prêmio de cada número por modalidade e valor de aposta. Sem linha =
+// padrão (valor × 22/88/880). 0 = valor não oferecido.
+model FazendinhaQuote {
+  tenantId   String         @map("tenant_id") @db.Uuid
+  mode       FazendinhaMode
+  stakeCents Int            @map("stake_cents")
+  prizeCents Int            @map("prize_cents")
+  updatedAt  DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@id([tenantId, mode, stakeCents])
+  @@map("fazendinha_quotes")
+}
+
+// Pule de loteria (Tradicional): uma extração de uma compra. Criado pela API junto com os itens e o débito
+// (função lottery_debit); um trigger adiado recusa o commit de pule sem débito. Somente inclusão.
+model LotteryTicket {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  // Número exibido no comprovante (sequence própria, lacunas aceitas).
+  puleNumber  Int      @unique @default(autoincrement()) @map("pule_number")
+  // Chave da compra (a mesma em todos os pules dela): repetir a chave devolve os mesmos pules.
+  purchaseKey String   @map("purchase_key") @db.Uuid
+  drawDate    DateTime @map("draw_date") @db.Date
+  lottery     String
+  drawHour    Int      @map("draw_hour") @db.SmallInt
+  // Horário limite da extração (do cadastro de sorteios; o trigger grava o valor do cadastro).
+  closesAt    DateTime @map("closes_at") @db.Timestamptz(3)
+  totalCents  BigInt   @map("total_cents")
+  // Nome da tabela de cotação na compra (ex.: 800/1/8000).
+  quoteTable  String   @map("quote_table")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User                @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  items       LotteryTicketItem[]
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, purchaseKey, lottery, drawHour])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, lottery, drawHour, drawDate])
+  @@map("lottery_tickets")
+}
+
+// Aposta dentro do pule: modalidade + colocação + palpites + valor, com a cotação vigente na compra.
+model LotteryTicketItem {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  ticketId           String   @map("ticket_id") @db.Uuid
+  position           Int      @db.SmallInt
+  modality           String
+  placement          String
+  guesses            String[]
+  amountCents        BigInt   @map("amount_cents")
+  split              String
+  totalCents         BigInt   @map("total_cents")
+  quoteCents         Int      @map("quote_cents")
+  possiblePrizeCents BigInt   @map("possible_prize_cents")
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket LotteryTicket @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([ticketId, position])
+  @@index([tenantId, ticketId])
+  @@map("lottery_ticket_items")
+}
+
+// Sorteio (extração) da banca: uma lista só, que vale para Loterias e/ou Fazendinha. O pule guarda o nome e a
+// hora (draw_minutes / 60); a venda é conferida contra esta tabela por trigger (dia da semana, exceções,
+// ativo, jogo e horário limite). Horários em minutos desde a meia-noite, em Brasília.
+model Draw {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  // Grupo da tela (ex.: RIO/FEDERAL).
+  groupName     String   @map("group_name")
+  // Nome no pule e na tela (ex.: LT PT RIO 09HS). Único na banca.
+  name          String
+  drawMinutes   Int      @map("draw_minutes") @db.SmallInt
+  // Horário máximo de venda (<= horário do sorteio).
+  closesMinutes Int      @map("closes_minutes") @db.SmallInt
+  // Dias da semana em que corre (0 = domingo … 6 = sábado).
+  weekdays      Int[]    @db.SmallInt
+  lotteries     Boolean  @default(true)
+  fazendinha    Boolean  @default(true)
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  exceptions DrawException[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name])
+  @@index([tenantId, sortOrder])
+  @@map("draws")
+}
+
+// Exceção de data: CANCEL (feriado; sem sorteio = todos os sorteios do dia) ou EXTRA (o sorteio corre num dia
+// fora da semana dele). Um trigger recusa exceções que deixariam apostas vendidas sem sorteio.
+model DrawException {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  date      DateTime @db.Date
+  drawId    String?  @map("draw_id") @db.Uuid
+  kind      String
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  draw   Draw?  @relation(fields: [tenantId, drawId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, date])
+  @@map("draw_exceptions")
 }

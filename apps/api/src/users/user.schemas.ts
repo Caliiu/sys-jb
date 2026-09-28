@@ -4,6 +4,7 @@ import {
   digitsOnly,
   isValidBrPhone,
   isValidCpf,
+  parseInviteRef,
   PASSWORD_MAX,
   PASSWORD_MIN,
   passwordProblem,
@@ -73,11 +74,16 @@ const avatar = z
     }
   }, 'Avatar deve ser uma URL http ou https.');
 
-// ID exibido de um promotor (int4). Só o formato é validado aqui; se o código existe e é de promotor, o serviço decide.
+// Código de convite de quem indicou: o de 5 caracteres ou, em links antigos, o ID exibido. Só o formato é
+// validado aqui; se o código existe e é de usuário ativo, o serviço decide.
 const inviteCode = z
   .string({ error: 'Código de convite inválido.' })
-  .regex(/^\d{1,10}$/, 'Código de convite inválido.')
-  .refine((value) => Number(value) <= 2_147_483_647, 'Código de convite inválido.');
+  .max(20, 'Código de convite inválido.')
+  .transform((value, ctx) => {
+    const ref = parseInviteRef(value);
+    if (!ref) ctx.addIssue({ code: 'custom', message: 'Código de convite inválido.' });
+    return ref ?? { code: '' };
+  });
 
 /** POST: somente estes campos; qualquer outra chave (id, displayId, tenantId, wallet, promoter...) é rejeitada. */
 export const createUserSchema = z

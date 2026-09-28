@@ -1,12 +1,27 @@
 'use server';
 
 import type {
+  AdminCommissionMonth,
+  AdminCommissionSettings,
+  AdminDrawsResponse,
   AdminPromoterListItem,
+  PublicQuotes,
+  SetFazendinhaQuotesRequest,
+  SetTraditionalQuotesRequest,
   AdminUserDetail,
   AdminUserListItem,
   OperatorLoginResponse,
 } from '@sysjb/contracts';
-import { MAX_COMMISSION_BPS, MIN_COMMISSION_BPS, USER_STATUSES } from '@sysjb/contracts';
+import {
+  DRAW_EXCEPTION_KINDS,
+  DRAW_GAMES,
+  DRAW_LIMITS,
+  MAX_COMMISSION_BPS,
+  MAX_WALLET_CREDIT_CENTS,
+  MIN_COMMISSION_BPS,
+  USER_STATUSES,
+  WALLET_CREDIT_BUCKETS,
+} from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { apiRequest } from '@/lib/api-client';
@@ -137,6 +152,153 @@ export async function removePromoterAction(userId: unknown): Promise<AdminAction
 
   const res = await adminApi.removePromoter(caller, id.data);
   return res.ok ? { ok: true, data: null } : toAdminFailure(res.status, res.error);
+}
+
+const walletCreditSchema = z.strictObject({
+  idempotencyKey: z.uuid(),
+  bucket: z.enum(WALLET_CREDIT_BUCKETS),
+  amountCents: z.number().int().min(1).max(MAX_WALLET_CREDIT_CENTS),
+  note: z.string().trim().min(3).max(200),
+});
+
+/** Adiciona saldo, bônus ou disponível em games. A API (e o banco) conferem perfil, limite e a chave. */
+export async function creditWalletAction(userId: unknown, input: unknown): Promise<AdminActionResult<AdminUserDetail>> {
+  const id = userIdSchema.safeParse(userId);
+  const body = walletCreditSchema.safeParse(input);
+  if (!id.success || !body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.creditWallet(caller, id.data, body.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Altera a % do "Indique e ganhe" (0% a 100%, em centésimos). A API confere a permissão e audita. */
+export async function setReferralRateAction(bps: unknown): Promise<AdminActionResult<AdminCommissionSettings>> {
+  const rate = z.number().int().min(0).max(MAX_COMMISSION_BPS).safeParse(bps);
+  if (!rate.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.setCommissionSettings(caller, rate.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Fecha o mês (YYYY-MM): paga as comissões no Saldo. Só uma vez por mês; a API e o banco conferem. */
+export async function closeCommissionMonthAction(month: unknown): Promise<AdminActionResult<AdminCommissionMonth>> {
+  const value = z
+    .string()
+    .regex(/^20\d{2}-(0[1-9]|1[0-2])$/)
+    .safeParse(month);
+  if (!value.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.closeCommissionMonth(caller, value.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+// Só o formato; catálogo, completude e limites são conferidos pela API.
+const quoteTableSchema = z.strictObject({
+  quotes: z
+    .array(
+      z.strictObject({
+        modality: z.string().max(40).optional(),
+        mode: z.enum(['grupo', 'dezena', 'centena']).optional(),
+        stakeCents: z.number().int().optional(),
+        prizeCents: z.number().int().min(0),
+      }),
+    )
+    .max(100),
+});
+
+/** Salva a tabela do Tradicional (inteira). A API confere a permissão, grava e audita o que mudou. */
+export async function saveTraditionalQuotesAction(input: unknown): Promise<AdminActionResult<PublicQuotes>> {
+  const body = quoteTableSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.setTraditionalQuotes(caller, body.data as SetTraditionalQuotesRequest);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Salva a tabela da Fazendinha (inteira: modalidades × valores). */
+export async function saveFazendinhaQuotesAction(input: unknown): Promise<AdminActionResult<PublicQuotes>> {
+  const body = quoteTableSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.setFazendinhaQuotes(caller, body.data as SetFazendinhaQuotesRequest);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+// Sorteios: só o formato; horários, dias, travas de apostas vendidas e permissão são da API.
+const drawIdSchema = z.uuid();
+const saveDrawSchema = z.strictObject({
+  id: drawIdSchema.optional(),
+  draw: z.strictObject({
+    group: z.string().max(DRAW_LIMITS.groupMax + 10),
+    name: z.string().max(DRAW_LIMITS.nameMax + 10),
+    drawTime: z.string().max(5),
+    closesAt: z.string().max(5),
+    weekdays: z.array(z.number().int()).max(7),
+    games: z.array(z.enum(DRAW_GAMES)).max(DRAW_GAMES.length),
+    active: z.boolean(),
+    sortOrder: z.number().int().min(0).max(DRAW_LIMITS.sortOrderMax),
+  }),
+});
+const drawExceptionSchema = z.strictObject({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  drawId: drawIdSchema.nullable(),
+  kind: z.enum(DRAW_EXCEPTION_KINDS),
+  note: z
+    .string()
+    .max(DRAW_LIMITS.noteMax + 10)
+    .optional(),
+});
+
+/** Cadastra (sem id) ou altera um sorteio. A API confere a permissão e as apostas vendidas, e audita. */
+export async function saveDrawAction(input: unknown): Promise<AdminActionResult<AdminDrawsResponse>> {
+  const body = saveDrawSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const { id, draw } = body.data;
+  const res = id ? await adminApi.updateDraw(caller, id, draw) : await adminApi.createDraw(caller, draw);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+export async function deleteDrawAction(id: unknown): Promise<AdminActionResult<AdminDrawsResponse>> {
+  const drawId = drawIdSchema.safeParse(id);
+  if (!drawId.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.deleteDraw(caller, drawId.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+export async function addDrawExceptionAction(input: unknown): Promise<AdminActionResult<AdminDrawsResponse>> {
+  const body = drawExceptionSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.createDrawException(caller, body.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+export async function removeDrawExceptionAction(id: unknown): Promise<AdminActionResult<AdminDrawsResponse>> {
+  const exceptionId = drawIdSchema.safeParse(id);
+  if (!exceptionId.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.deleteDrawException(caller, exceptionId.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 
 const SEARCH_RESULTS = 5;

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AdminUserDetail, AdminUserListItem, Page, UserStatus } from '@sysjb/contracts';
-import { Errors } from '../common/app-error.js';
+import { Prisma } from '@sysjb/database';
+import { AppError, Errors } from '../common/app-error.js';
 import { DatabaseService, type TenantTx } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { mapUniqueViolation } from '../users/user-conflicts.js';
@@ -8,9 +9,20 @@ import type { AdminUpdateUserInput } from '../users/user.schemas.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
 import { toAdminDetail, toAdminListItem } from './admin-user.mapper.js';
-import type { ListUsersQuery } from './admin.schemas.js';
+import type { ListUsersQuery, WalletCreditInput } from './admin.schemas.js';
 import { recordAudit } from './audit.js';
 import type { AuthenticatedOperator } from './operator.types.js';
+
+/** Nome do campo da carteira creditado, para a auditoria. */
+const CREDIT_FIELD: Record<WalletCreditInput['bucket'], string> = {
+  balance: 'balanceJb',
+  bonus: 'bonusJb',
+  games: 'balanceGames',
+};
+
+/** O SQLSTATE vem nos metadados do erro do driver; a mensagem do banco não é usada. */
+const hasSqlState = (error: unknown, sqlState: string) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && JSON.stringify(error.meta ?? {}).includes(sqlState);
 
 @Injectable()
 export class AdminUsersService {
@@ -58,6 +70,47 @@ export class AdminUsersService {
       });
     } catch (error) {
       mapUniqueViolation(error);
+    }
+  }
+
+  /**
+   * Credita a carteira (saldo, bônus ou disponível em games) pela função do banco, que confere perfil,
+   * limite e a chave anti-repetição, e grava a movimentação com o operador e o motivo. A auditoria vai na
+   * mesma transação e só quando o crédito aconteceu agora (repetição da mesma chave não duplica nada).
+   */
+  async creditWallet(
+    tenant: ResolvedTenant,
+    operator: AuthenticatedOperator,
+    id: string,
+    input: WalletCreditInput,
+  ): Promise<AdminUserDetail> {
+    try {
+      return await this.db.withTenant(tenant.id, async (tx) => {
+        const user = await tx.user.findFirst({ where: { id, tenantId: tenant.id }, select: { id: true } });
+        if (!user) throw Errors.userNotFound();
+        const [result] = await tx.$queryRaw<Array<{ created: boolean }>>`
+          SELECT wallet_operator_credit(${id}::uuid, ${operator.id}::uuid, ${input.bucket}, ${input.amountCents}::bigint,
+                                        ${input.note}, ${input.idempotencyKey}::uuid) AS created`;
+        if (result?.created) {
+          await recordAudit(tx, {
+            tenantId: tenant.id,
+            operatorId: operator.id,
+            action: 'wallet.credit',
+            targetType: 'user',
+            targetId: id,
+            details: { fields: [CREDIT_FIELD[input.bucket]], amount: input.amountCents },
+          });
+        }
+        return this.detail(tx, tenant.id, id);
+      });
+    } catch (error) {
+      // Mesma chave em cliques simultâneos: o outro já creditou; devolve o estado atual.
+      if (hasSqlState(error, '23505')) return this.get(tenant, id);
+      if (hasSqlState(error, 'SJ003')) {
+        throw new AppError(409, 'CONFLICT', 'Chave de crédito já usada em outro lançamento.');
+      }
+      if (hasSqlState(error, '42501')) throw Errors.permissionDenied();
+      throw error;
     }
   }
 

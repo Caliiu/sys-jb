@@ -59,9 +59,11 @@ describe('SideMenu', () => {
 });
 
 describe('Footer', () => {
-  it('Resultados, Recarga e Saque são links para as páginas', () => {
+  it('Loterias, Fazendinha, Resultados, Recarga e Saque são links para as páginas', () => {
     renderWithProviders(<Footer version="1.2.3" />);
     const nav = screen.getByRole('navigation', { name: 'Rodapé' });
+    expect(within(nav).getByRole('link', { name: 'Fazendinha' })).toHaveAttribute('href', '/fazendinha');
+    expect(within(nav).getByRole('link', { name: 'Loterias' })).toHaveAttribute('href', '/loterias');
     expect(within(nav).getByRole('link', { name: 'Resultados' })).toHaveAttribute('href', '/resultados');
     expect(within(nav).getByRole('link', { name: 'Recarga' })).toHaveAttribute('href', '/recarga-pix');
     expect(within(nav).getByRole('link', { name: 'Saque' })).toHaveAttribute('href', '/saques');
@@ -77,7 +79,7 @@ describe('Footer', () => {
 
   it('os demais itens ainda avisam "em breve"', async () => {
     renderWithProviders(<Footer version="1.2.3" />);
-    for (const label of ['Loterias', 'Cassino', 'Fazendinha', 'Bingo', 'Raspadinha']) {
+    for (const label of ['Cassino', 'Bingo', 'Raspadinha']) {
       await userEvent.click(screen.getByRole('button', { name: label }));
       expect(screen.getByRole('status')).toHaveTextContent(`${label}: disponível em breve.`);
     }
@@ -88,15 +90,15 @@ describe('InviteModal', () => {
   it('mostra link da banca e QR real; cópia bem-sucedida', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="100042" />);
+    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="CDYGE" />);
 
     const link = screen.getByRole('textbox', { name: 'Link de convite' });
-    expect(link).toHaveValue(`${window.location.origin}/cadastro?convite=100042`);
+    expect(link).toHaveValue(`${window.location.origin}/cadastro?convite=CDYGE`);
     expect(screen.getByRole('img', { name: 'QR code do link de convite' }).querySelector('path')).toHaveAttribute('d');
     expect(screen.queryByText(/1%/)).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Copiar link' }));
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/cadastro?convite=100042`);
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/cadastro?convite=CDYGE`);
     expect(screen.getByText('Link copiado!')).toBeInTheDocument();
   });
 
@@ -105,7 +107,7 @@ describe('InviteModal', () => {
       value: { writeText: vi.fn().mockRejectedValue(new Error('negado')) },
       configurable: true,
     });
-    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="100042" />);
+    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="CDYGE" />);
     await userEvent.click(screen.getByRole('button', { name: 'Copiar link' }));
     expect(screen.getByText(/Copie o link selecionado/)).toBeInTheDocument();
   });
@@ -117,14 +119,14 @@ describe('InviteModal', () => {
       value: vi.fn().mockRejectedValue(new DOMException('cancelado', 'AbortError')),
       configurable: true,
     });
-    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="100042" />);
+    renderWithProviders(<InviteModal open onClose={vi.fn()} inviteCode="CDYGE" />);
     await userEvent.click(screen.getByRole('button', { name: /Compartilhar/ }));
     expect(writeText).not.toHaveBeenCalled();
   });
 
   it('Esc e o botão Fechar chamam onClose', async () => {
     const onClose = vi.fn();
-    renderWithProviders(<InviteModal open onClose={onClose} inviteCode="100042" />);
+    renderWithProviders(<InviteModal open onClose={onClose} inviteCode="CDYGE" />);
     await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('button', { name: 'Fechar' }));
     expect(onClose).toHaveBeenCalledTimes(2);

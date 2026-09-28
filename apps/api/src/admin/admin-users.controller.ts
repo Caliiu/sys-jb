@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Inject, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type { AdminUserDetail, AdminUserListItem, Page } from '@sysjb/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant } from '../tenancy/tenant.guard.js';
@@ -10,6 +10,8 @@ import {
   listUsersQuerySchema,
   type SetUserStatusInput,
   setUserStatusSchema,
+  type WalletCreditInput,
+  walletCreditSchema,
 } from './admin.schemas.js';
 import { ConsoleGuard } from './console.guard.js';
 import { CurrentOperator, OperatorGuard, RequirePermission } from './operator.guard.js';
@@ -63,5 +65,18 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(setUserStatusSchema)) body: SetUserStatusInput,
   ): Promise<AdminUserDetail> {
     return this.users.setStatus(tenant, operator, id, body.status);
+  }
+
+  /** Adiciona saldo, bônus ou disponível em games. Repetir a mesma chave não credita de novo (200 igual). */
+  @Post(':id/wallet/credits')
+  @RequirePermission('wallet.adjust')
+  @Header('Cache-Control', 'no-store')
+  creditWallet(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @CurrentOperator() operator: AuthenticatedOperator,
+    @Param('id', new ZodValidationPipe(userIdSchema)) id: string,
+    @Body(new ZodValidationPipe(walletCreditSchema)) body: WalletCreditInput,
+  ): Promise<AdminUserDetail> {
+    return this.users.creditWallet(tenant, operator, id, body);
   }
 }

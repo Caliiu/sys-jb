@@ -91,6 +91,7 @@ describe('promover, alterar e remover', () => {
       displayId: user.displayId,
       name: user.name,
       phone: user.phone,
+      inviteCode: user.inviteCode,
       status: 'ACTIVE',
       commissionBps: 1250,
       referralsCount: 0,
@@ -202,14 +203,16 @@ describe('promover, alterar e remover', () => {
     expect((await session.http.get(`/v1/admin/promoters/${promoter.id}`)).status).toBe(404);
     expect((await detail(session, promoter.id)).promoterCommissionBps).toBeNull();
 
-    // Histórico preservado, mas ninguém novo entra pelo link.
-    expect((await detail(session, player.id)).referredBy).toEqual({
+    // Histórico preservado. Sem ser promotor, o link continua valendo como indicação comum (Promotor ≠ Indicação).
+    const asReferrer = {
       id: promoter.id,
       displayId: promoter.displayId,
       name: promoter.name,
-    });
+      promoterCommissionBps: null,
+    };
+    expect((await detail(session, player.id)).referredBy).toEqual(asReferrer);
     const late = (await register(String(promoter.displayId))).body;
-    expect((await detail(session, late.id)).referredBy).toBeNull();
+    expect((await detail(session, late.id)).referredBy).toEqual(asReferrer);
 
     const actions = (await auditRows(auroraId, promoter.id)).map((row) => row.action);
     expect(actions).toEqual(['promoter.enable', 'promoter.disable']);
@@ -241,20 +244,28 @@ describe('cadastro pelo link de convite', () => {
     expect(res.status).toBe(201);
     // O jogador não vê o vínculo na resposta pública (campos de promotor seguem null).
     expect(res.body).toMatchObject({ promoter: null, promoterName: null, promoterPhone: null });
-    expect(JSON.stringify(res.body)).not.toMatch(/inviteCode|referredBy/);
+    // Traz só o código de convite DELE (nunca o de quem indicou) e nada do vínculo.
+    expect(res.body.inviteCode).not.toBe(promoter.inviteCode);
+    expect(JSON.stringify(res.body)).not.toMatch(/referredBy/);
 
     expect((await detail(session, res.body.id)).referredBy).toEqual({
       id: promoter.id,
       displayId: promoter.displayId,
       name: promoter.name,
+      promoterCommissionBps: 1000,
     });
     const referrals = (await session.http.get(`/v1/admin/promoters/${promoter.id}/referrals`)).body;
     expect(referrals.total).toBe(1);
     expect((referrals.items as AdminUserListItem[]).map((item) => item.id)).toEqual([res.body.id]);
+    const ref = { id: promoter.id, displayId: promoter.displayId, name: promoter.name };
+    expect((referrals.items as AdminUserListItem[])[0]!.promoter).toEqual(ref);
+    const listed = (await session.http.get('/v1/admin/users')).body.items as AdminUserListItem[];
+    expect(listed.find((item) => item.id === res.body.id)!.promoter).toEqual(ref);
+    expect(listed.find((item) => item.id === promoter.id)!.promoter).toBeNull();
     expect((await session.http.get(`/v1/admin/promoters/${promoter.id}`)).body.referralsCount).toBe(1);
   });
 
-  it('código desconhecido, de quem não é promotor, de promotor bloqueado ou de outra banca: cadastro segue sem vínculo', async () => {
+  it('código desconhecido, de usuário bloqueado ou de outra banca: cadastro segue sem vínculo; jogador comum indica', async () => {
     const session = await loginOperator(app, 'aurora');
     const plain = await createUser(app, 'aurora');
     const blocked = await createUser(app, 'aurora');
@@ -264,15 +275,84 @@ describe('cadastro pelo link de convite', () => {
     const foreign = await createUser(app, 'boreal');
     await promote(boreal, foreign.id, 1000);
 
-    for (const code of ['999999999', String(plain.displayId), String(blocked.displayId), String(foreign.displayId)]) {
+    for (const code of ['999999999', String(blocked.displayId), String(foreign.displayId)]) {
       const res = await register(code);
       expect(res.status, code).toBe(201);
       expect((await detail(session, res.body.id)).referredBy, code).toBeNull();
     }
+    // Indicação comum: o jogador que não é promotor também indica (ganha só a % de indicação).
+    const byPlain = await register(String(plain.displayId));
+    expect((await detail(session, byPlain.body.id)).referredBy).toMatchObject({
+      id: plain.id,
+      promoterCommissionBps: null,
+    });
+  });
+
+  it('cada usuário tem um código de convite de 5 caracteres, único e sem ambíguos', async () => {
+    const people = await Promise.all(Array.from({ length: 30 }, () => createUser(app, 'aurora')));
+    const codes = people.map((p) => p.inviteCode);
+    expect(codes.every((code) => /^[A-HJ-NP-Z2-9]{5}$/.test(code))).toBe(true);
+    expect(new Set(codes).size).toBe(codes.length);
+    // Fixo: consultar de novo devolve o mesmo código; a API não deixa trocar.
+    const again = await api(app, 'aurora').get(`/v1/users/${people[0]!.id}`);
+    expect(again.body.inviteCode).toBe(people[0]!.inviteCode);
+    expect((await api(app, 'aurora').patch(`/v1/users/${people[0]!.id}`, { inviteCode: 'ABCDE' })).status).toBe(400);
+    await expect(
+      asTenant(runtimePool, auroraId, (c) =>
+        c.query("UPDATE users SET invite_code = 'ABCDE' WHERE id = $1", [people[0]!.id]),
+      ),
+    ).rejects.toMatchObject({ code: '42501' });
+    // O banco recusa código fora do formato e código repetido (único no sistema todo, entre bancas).
+    const foreign = await createUser(app, 'boreal');
+    await expect(
+      asTenant(migratorPool, auroraId, (c) =>
+        c.query('UPDATE users SET invite_code = $2 WHERE id = $1', [people[1]!.id, 'abcd0']),
+      ),
+    ).rejects.toThrow(/users_invite_code_format/);
+    await expect(
+      asTenant(migratorPool, auroraId, (c) =>
+        c.query('UPDATE users SET invite_code = $2 WHERE id = $1', [people[1]!.id, foreign.inviteCode]),
+      ),
+    ).rejects.toMatchObject({ code: '23505' });
+  });
+
+  it('o link usa o código (maiúsculas ou minúsculas); links antigos com o ID continuam valendo', async () => {
+    const session = await loginOperator(app, 'aurora');
+    const referrer = await createUser(app, 'aurora');
+    for (const code of [
+      referrer.inviteCode,
+      referrer.inviteCode.toLowerCase(),
+      ` ${referrer.inviteCode} `,
+      String(referrer.displayId),
+    ]) {
+      const res = await register(code);
+      expect(res.status, code).toBe(201);
+      expect((await detail(session, res.body.id)).referredBy?.id, code).toBe(referrer.id);
+    }
+    // O painel mostra o código no detalhe e acha o usuário por ele.
+    expect((await detail(session, referrer.id)).inviteCode).toBe(referrer.inviteCode);
+    const found = await session.http.get(`/v1/admin/users?search=${referrer.inviteCode.toLowerCase()}`);
+    expect(found.body.items.map((u: { id: string }) => u.id)).toEqual([referrer.id]);
   });
 
   it('formato inválido do código é 400 e não cria usuário', async () => {
-    for (const code of ['abc', '12a', '-1', '', '1'.repeat(11), '2147483648', ' 100000']) {
+    // 5 caracteres com ambíguos (O, 0, I, 1), tamanho errado, ID exibido curto demais ou fora do int4.
+    for (const code of [
+      'abc',
+      '12a',
+      '-1',
+      '',
+      'ABCD',
+      'ABCDEF',
+      'ABCD0',
+      'ABCDO',
+      'ABCD1',
+      'ABCDI',
+      '12345',
+      '1'.repeat(11),
+      '2147483648',
+      'AB-CD',
+    ]) {
       const res = await register(code);
       expect(res.status, code).toBe(400);
       expect(res.body.code).toBe('VALIDATION_ERROR');
@@ -332,9 +412,12 @@ describe('banco de dados', () => {
     expect(res.rowCount).toBe(1);
   });
 
-  it('o banco recusa comissão fora da faixa, auto-indicação e indicação por quem não é promotor', async () => {
+  it('o banco recusa comissão fora da faixa, auto-indicação e indicação por usuário bloqueado', async () => {
     const user = await createUser(app, 'aurora');
     const plain = await createUser(app, 'aurora');
+    await asTenant(migratorPool, auroraId, (c) =>
+      c.query("UPDATE users SET status = 'BLOCKED' WHERE id = $1", [plain.id]),
+    );
     const failing = (sql: string, params: unknown[]) => asTenant(migratorPool, auroraId, (c) => c.query(sql, params));
 
     for (const bps of [0, 10001, -1]) {
@@ -351,6 +434,6 @@ describe('banco de dados', () => {
          VALUES ($1, 'Indicado Invalido', '11900000001', $2, '1990-01-01', '$argon2id$x', $3, now())`,
         [auroraId, cpfFrom('123456780'), plain.id],
       ),
-    ).rejects.toThrow(/referrer must be an active promoter/);
+    ).rejects.toThrow(/referrer must be an active user/);
   });
 });

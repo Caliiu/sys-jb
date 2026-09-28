@@ -8,4 +8,8 @@ export const ADMIN_ROUTES = {
   user: (id: string) => `/usuarios/${id}`,
   promoters: '/promotores',
   promoter: (id: string) => `/promotores/${id}`,
+  audit: '/auditoria',
+  commissions: '/comissoes',
+  quotes: '/cotacoes',
+  draws: '/sorteios',
 } as const;

@@ -1,3 +1,4 @@
+import { parseInviteRef } from '@sysjb/contracts';
 import { redirect } from 'next/navigation';
 import { TenantUnavailable } from '@/components/ui/Notice';
 import { TenantProvider } from '@/components/tenant/TenantProvider';
@@ -6,10 +7,15 @@ import RegisterPage from '@/views/RegisterPage';
 
 export const dynamic = 'force-dynamic';
 
-/** Código do link de convite (`?convite=`): só dígitos; outro formato é ignorado (o cadastro segue sem convite). */
+/**
+ * Código do link de convite (`?convite=CDYGE`, ou o ID exibido dos links antigos). Formato inválido é
+ * ignorado: o cadastro segue sem convite.
+ */
 function parseInviteCode(raw: string | string[] | undefined): string | undefined {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return value && /^\d{1,10}$/.test(value) ? value : undefined;
+  const ref = value ? parseInviteRef(value) : null;
+  if (!ref) return undefined;
+  return 'code' in ref ? ref.code : String(ref.displayId);
 }
 
 export default async function Page({

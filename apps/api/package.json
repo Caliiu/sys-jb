@@ -9,6 +9,7 @@
     "dev": "tsx watch --env-file=../../.env src/main.ts",
     "start": "node --env-file=../../.env dist/main.js",
     "operator:create": "tsx --env-file=../../.env scripts/create-operator.ts",
+    "wallet:adjust": "tsx --env-file=../../.env scripts/wallet-adjust.ts",
     "test": "vitest run"
   },
   "dependencies": {

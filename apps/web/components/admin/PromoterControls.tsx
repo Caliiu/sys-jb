@@ -133,7 +133,7 @@ export default function PromoterControls({ userId, commissionBps, afterRemove = 
         title="Remover promotor"
         description={`Este usuário deixa de ser promotor (comissão de ${
           isPromoter ? formatCommission(commissionBps) : ''
-        }). Os jogadores já vinculados continuam vinculados, mas ninguém novo entra pelo link de convite dele.`}
+        }). Os jogadores indicados por ele continuam vinculados, e o link de convite continua valendo, mas daqui em diante ele ganha só a % de indicação.`}
         confirmLabel="Remover"
         tone="danger"
         pending={removing || refreshing}

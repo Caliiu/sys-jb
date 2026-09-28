@@ -31,7 +31,7 @@ export default function DashboardPage({ tenant, user, nextDraw = null }: Dashboa
 
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-[#EDEDED] font-body">
-      <InviteProvider inviteCode={code}>
+      <InviteProvider inviteCode={user.inviteCode}>
         <TopBar userName={user.name} unitId={code} />
 
         <main>

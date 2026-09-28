@@ -15,9 +15,9 @@ interface FooterLink {
 }
 
 const LINKS: FooterLink[] = [
-  { label: 'Loterias' },
+  { label: 'Loterias', to: ROUTES.lotteries },
   { label: 'Cassino' },
-  { label: 'Fazendinha' },
+  { label: 'Fazendinha', to: ROUTES.fazendinha },
   { label: 'Bingo' },
   { label: 'Raspadinha' },
   { label: 'Resultados', to: ROUTES.results },

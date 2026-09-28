@@ -1,3 +1,5 @@
+import { ROUTES } from './routes';
+
 export interface SectionMenuItem {
   label: string;
   /** Rota da página. Sem rota, o item avisa que a funcionalidade vem em breve. */
@@ -21,7 +23,7 @@ export const REPORTS_MENU: SectionMenu = {
     { label: 'Consultar saldo' },
     { label: 'Consultar pule' },
     { label: 'Movimento loterias' },
-    { label: 'Cotações' },
+    { label: 'Cotações', href: ROUTES.quotes },
     { label: 'Cotadas' },
   ],
 };

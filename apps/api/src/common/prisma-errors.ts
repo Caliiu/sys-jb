@@ -15,3 +15,8 @@ export function conflictingUserField(error: Prisma.PrismaClientKnownRequestError
   const meta = JSON.stringify(error.meta ?? {});
   return UNIQUE_FIELDS.find((field) => new RegExp(`\\b(users_tenant_id_${field}_key|${field})\\b`).test(meta)) ?? null;
 }
+
+/** SQLSTATE próprio (SJ001…) vindo de função/trigger: está nos metadados do erro; a mensagem não é usada. */
+export function hasSqlState(error: unknown, sqlState: string): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && JSON.stringify(error.meta ?? {}).includes(sqlState);
+}

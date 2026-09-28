@@ -14,7 +14,7 @@ interface SettingsPageProps {
 export default function SettingsPage({ tenant, user, version }: SettingsPageProps) {
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-[#F4F6F6] font-body">
-      <InviteProvider inviteCode={String(user.displayId)}>
+      <InviteProvider inviteCode={user.inviteCode}>
         <SettingsScreen userId={user.id} version={version} />
       </InviteProvider>
     </div>

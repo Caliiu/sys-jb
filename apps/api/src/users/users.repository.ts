@@ -1,3 +1,4 @@
+import type { InviteRef } from '@sysjb/contracts';
 import { Injectable } from '@nestjs/common';
 import type { User, UserStatus, Wallet } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
@@ -39,13 +40,20 @@ export class UsersRepository {
     });
   }
 
-  /** Promotor ativo da banca com este ID exibido (o código do link de convite), ou null. */
-  async findActivePromoterId(tx: TenantTx, tenantId: string, displayId: number): Promise<string | null> {
-    const promoter = await tx.user.findFirst({
-      where: { tenantId, displayId, status: 'ACTIVE', promoterCommissionBps: { not: null } },
+  /**
+   * Quem indica: usuário ATIVO da banca dono deste código de convite (ou, em links antigos, deste ID exibido), jogador comum
+   * ou promotor, ou null. Promotor ≠ indicação: o fechamento soma a % de promotor só se ele for promotor.
+   */
+  async findActiveReferrerId(tx: TenantTx, tenantId: string, ref: InviteRef): Promise<string | null> {
+    const referrer = await tx.user.findFirst({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        ...('code' in ref ? { inviteCode: ref.code } : { displayId: ref.displayId }),
+      },
       select: { id: true },
     });
-    return promoter?.id ?? null;
+    return referrer?.id ?? null;
   }
 
   /** Única leitura que traz o hash da senha; uso exclusivo do login. */

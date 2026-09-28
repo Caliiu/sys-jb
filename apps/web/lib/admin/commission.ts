@@ -27,3 +27,13 @@ export function parseCommission(text: string): number | null {
 }
 
 export const COMMISSION_HELP = 'Entre 0,01% e 100%, com até 2 casas decimais.';
+
+/** Como parseCommission, mas aceita 0% (desliga o "Indique e ganhe"). */
+export function parseReferralRate(text: string): number | null {
+  const match = INPUT.exec(text.trim().replace(/\s*%$/, ''));
+  if (!match) return null;
+  const bps = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
+  return bps <= MAX_COMMISSION_BPS ? bps : null;
+}
+
+export const REFERRAL_RATE_HELP = 'Entre 0% e 100%, com até 2 casas decimais (0% desliga).';

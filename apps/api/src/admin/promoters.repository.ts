@@ -3,18 +3,22 @@ import type { Prisma, User } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
 import { searchFilter } from './admin-users.repository.js';
 import type { ListPromotersQuery, ReferralsQuery } from './admin.schemas.js';
+import { ADMIN_LIST_SELECT } from './admin-user.mapper.js';
 
-export type PromoterRow = Pick<User, 'id' | 'displayId' | 'name' | 'phone' | 'status' | 'createdAt'> & {
+export type PromoterRow = Pick<User, 'id' | 'displayId' | 'name' | 'phone' | 'inviteCode' | 'status' | 'createdAt'> & {
   promoterCommissionBps: number;
   _count: { referrals: number };
 };
 
-export type ReferralRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'>;
+export type ReferralRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> & {
+  referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
+};
 
 const PROMOTER_SELECT = {
   id: true,
   displayId: true,
   name: true,
+  inviteCode: true,
   phone: true,
   status: true,
   createdAt: true,
@@ -75,7 +79,7 @@ export class PromotersRepository {
     const where: Prisma.UserWhereInput = { tenantId, referredByUserId: promoterId };
     const rows = await tx.user.findMany({
       where,
-      select: { id: true, displayId: true, name: true, document: true, phone: true, status: true, createdAt: true },
+      select: ADMIN_LIST_SELECT,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,

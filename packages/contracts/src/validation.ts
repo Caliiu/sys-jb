@@ -106,3 +106,25 @@ export function passwordProblem(
   }
   return null;
 }
+
+/**
+ * Código de convite: 5 caracteres de um alfabeto sem ambíguos (sem O, 0, I, 1), gerado pelo banco e
+ * único no sistema. Mesmo alfabeto do CHECK users_invite_code_format.
+ */
+export const INVITE_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{5}$/;
+
+/** Links antigos (`?convite=100008`): o ID exibido, que tem 6 ou mais dígitos (sequence a partir de 100000). */
+const LEGACY_INVITE = /^\d{6,10}$/;
+
+export type InviteRef = { code: string } | { displayId: number };
+
+/**
+ * Lê o `?convite=` do link: código novo (maiúsculas ou minúsculas, espaços nas pontas ignorados) ou o
+ * ID exibido dos links antigos. Qualquer outra coisa: null.
+ */
+export function parseInviteRef(raw: string): InviteRef | null {
+  const value = raw.trim().toUpperCase();
+  if (INVITE_CODE_PATTERN.test(value)) return { code: value };
+  if (LEGACY_INVITE.test(value) && Number(value) <= 2_147_483_647) return { displayId: Number(value) };
+  return null;
+}

@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { digitsOnly } from '@sysjb/contracts';
+import { digitsOnly, INVITE_CODE_PATTERN } from '@sysjb/contracts';
 import type { Prisma, User, UserStatus, Wallet } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
+import { ADMIN_LIST_SELECT } from './admin-user.mapper.js';
 import type { ListUsersQuery } from './admin.schemas.js';
 
-type ListRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'>;
+type ListRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> & {
+  referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
+};
 type DetailRow = Omit<User, 'passwordHash'> & {
   wallet: Wallet | null;
   sessions: Array<{ createdAt: Date }>;
-  referredBy: Pick<User, 'id' | 'displayId' | 'name'> | null;
+  referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
 };
 
 /** Texto de busca só com dígitos e pontuação de CPF/telefone (ex.: "529.982", "(11) 91234"). */
@@ -18,7 +21,7 @@ export const NUMERIC_SEARCH = /^[\d\s().\-/]+$/;
 const escapeLike = (value: string) => value.replace(/[\\%_]/g, (char) => `\\${char}`);
 
 /**
- * Busca por nome, CPF, telefone, e-mail (se tiver "@") ou ID exibido do usuário.
+ * Busca por nome, CPF, telefone, e-mail (se tiver "@"), ID exibido ou código de convite do usuário.
  * O texto do operador nunca vira curinga de LIKE.
  */
 export function searchFilter(search: string): Prisma.UserWhereInput {
@@ -28,6 +31,7 @@ export function searchFilter(search: string): Prisma.UserWhereInput {
     any.push({ document: { contains: digits } }, { phone: { contains: digits } });
   }
   if (/^\d{1,9}$/.test(search)) any.push({ displayId: Number(search) });
+  if (INVITE_CODE_PATTERN.test(search.toUpperCase())) any.push({ inviteCode: search.toUpperCase() });
   if (search.includes('@')) any.push({ email: { contains: escapeLike(search.toLowerCase()) } });
   return { OR: any };
 }
@@ -43,7 +47,7 @@ export class AdminUsersRepository {
     };
     const rows = await tx.user.findMany({
       where,
-      select: { id: true, displayId: true, name: true, document: true, phone: true, status: true, createdAt: true },
+      select: ADMIN_LIST_SELECT,
       // id desempata usuários criados no mesmo instante: a paginação nunca repete nem perde linhas.
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (query.page - 1) * query.pageSize,
@@ -60,7 +64,7 @@ export class AdminUsersRepository {
       include: {
         wallet: true,
         sessions: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
-        referredBy: { select: { id: true, displayId: true, name: true } },
+        referredBy: { select: { id: true, displayId: true, name: true, promoterCommissionBps: true } },
       },
     });
   }

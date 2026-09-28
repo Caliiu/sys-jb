@@ -39,6 +39,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       canChangeStatus={can(session.operator, 'users.status')}
       canReadPromoters={can(session.operator, 'promoters.read')}
       canManagePromoters={can(session.operator, 'promoters.manage')}
+      canReadAudit={can(session.operator, 'audit.read')}
+      canAdjustWallet={can(session.operator, 'wallet.adjust')}
     />
   );
 }

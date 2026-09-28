@@ -43,6 +43,8 @@ export interface PublicUser extends PublicPromoterFields {
   document: string;
   avatar: string | null;
   displayId: number;
+  /** Código do link de convite (`/cadastro?convite=CDYGE`): 5 caracteres, único e fixo. */
+  inviteCode: string;
   wallet: PublicWallet;
 }
 
@@ -80,7 +82,7 @@ export interface CreateUserRequest {
   password: string;
   email?: string | null;
   avatar?: string | null;
-  /** Código do link de convite (`?convite=`), o ID exibido de um promotor. Só dígitos; código inexistente ou de quem não é promotor é ignorado (o cadastro segue). */
+  /** Código do link de convite (`?convite=`) de quem indicou (jogador ou promotor): o código de 5 caracteres (ex.: CDYGE) ou, em links antigos, o ID exibido. Código inexistente ou de usuário bloqueado é ignorado (o cadastro segue). */
   inviteCode?: string;
 }
 
@@ -130,6 +132,11 @@ export type ApiErrorCode =
   | 'SESSION_INVALID'
   | 'TOO_MANY_ATTEMPTS'
   | 'PAYLOAD_TOO_LARGE'
+  | 'INSUFFICIENT_FUNDS'
+  | 'NUMBERS_UNAVAILABLE'
+  | 'DRAW_CLOSED'
+  | 'QUOTE_CHANGED'
+  | 'DRAW_HAS_BETS'
   | 'INTERNAL_ERROR';
 
 export interface ApiError {
@@ -141,4 +148,8 @@ export interface ApiError {
 }
 
 export * from './admin.js';
+export * from './fazendinha.js';
+export * from './quotes.js';
+export * from './lotteries.js';
+export * from './draws.js';
 export * from './validation.js';

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Permission } from '@sysjb/contracts';
-import { BadgePercent, LogOut, Menu, Users, X } from 'lucide-react';
+import { BadgePercent, CalendarClock, HandCoins, LogOut, Menu, ScrollText, Table2, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -20,6 +20,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: ADMIN_ROUTES.users, label: 'Usuários', icon: Users, permission: 'users.read' },
   { href: ADMIN_ROUTES.promoters, label: 'Promotores', icon: BadgePercent, permission: 'promoters.read' },
+  { href: ADMIN_ROUTES.commissions, label: 'Comissões', icon: HandCoins, permission: 'commissions.read' },
+  { href: ADMIN_ROUTES.quotes, label: 'Cotações', icon: Table2, permission: 'quotes.read' },
+  { href: ADMIN_ROUTES.draws, label: 'Sorteios', icon: CalendarClock, permission: 'draws.read' },
+  { href: ADMIN_ROUTES.audit, label: 'Auditoria', icon: ScrollText, permission: 'audit.read' },
 ];
 
 interface AdminSidebarProps {

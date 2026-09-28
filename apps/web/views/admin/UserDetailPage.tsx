@@ -1,11 +1,13 @@
 import type { AdminUserDetail } from '@sysjb/contracts';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import PromoterControls from '@/components/admin/PromoterControls';
 import StatusBadge from '@/components/admin/StatusBadge';
+import WalletCreditPanel from '@/components/admin/WalletCreditPanel';
 import UserProfileCard from '@/components/admin/UserProfileCard';
 import UserStatusActions from '@/components/admin/UserStatusActions';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
+import { auditHref } from '@/lib/admin/audit-query';
 import { formatCommission } from '@/lib/admin/commission';
 import { formatBirthDate, formatDateTime } from '@/lib/datetime';
 import { formatCents } from '@/lib/currency';
@@ -19,6 +21,10 @@ interface UserDetailPageProps {
   canReadPromoters?: boolean;
   /** Pode promover a promotor, alterar a comissão e remover. */
   canManagePromoters?: boolean;
+  /** Pode consultar a auditoria (atalho para o histórico deste usuário). */
+  canReadAudit?: boolean;
+  /** Pode creditar a carteira (Adicionar Saldo, Bônus ou Disponível em Games). */
+  canAdjustWallet?: boolean;
 }
 
 const labelClass = 'text-[11.5px] font-semibold uppercase tracking-wide text-admin-muted';
@@ -30,10 +36,13 @@ export default function UserDetailPage({
   canChangeStatus,
   canReadPromoters = false,
   canManagePromoters = false,
+  canReadAudit = false,
+  canAdjustWallet = false,
 }: UserDetailPageProps) {
   const wallet = balanceAmounts(user.wallet);
   const account: Array<{ label: string; value: string }> = [
     { label: 'ID', value: String(user.displayId) },
+    { label: 'Código de convite', value: user.inviteCode },
     { label: 'Data de nascimento', value: formatBirthDate(user.birthDate) },
     { label: 'Cadastrado em', value: formatDateTime(user.createdAt) },
     { label: 'Último acesso', value: user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Nunca' },
@@ -61,6 +70,15 @@ export default function UserDetailPage({
             <div className="mt-1">
               <StatusBadge status={user.status} />
             </div>
+            {canReadAudit && (
+              <Link
+                href={auditHref({ userId: user.id })}
+                className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-admin-accent hover:underline"
+              >
+                <ScrollText className="h-3.5 w-3.5" aria-hidden />
+                Ver histórico de alterações
+              </Link>
+            )}
           </div>
           {canChangeStatus && <UserStatusActions userId={user.id} status={user.status} />}
         </header>
@@ -93,7 +111,7 @@ export default function UserDetailPage({
         {(canReadPromoters || canManagePromoters || user.referredBy) && (
           <section aria-labelledby="promoter-title" className="rounded-xl bg-admin-surface p-5 shadow-admin">
             <h2 id="promoter-title" className="mb-4 text-[14px] font-bold text-admin-text">
-              Promotor
+              Indicação e promotor
             </h2>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               <div>
@@ -117,18 +135,31 @@ export default function UserDetailPage({
                 <dt className={labelClass}>Indicado por</dt>
                 <dd className="mt-0.5 text-[13.5px] text-admin-text">
                   {user.referredBy ? (
-                    canReadPromoters ? (
-                      <Link
-                        href={ADMIN_ROUTES.promoter(user.referredBy.id)}
-                        className="font-semibold text-admin-accent hover:underline"
-                      >
-                        {user.referredBy.name} (ID {user.referredBy.displayId})
-                      </Link>
-                    ) : (
-                      `${user.referredBy.name} (ID ${user.referredBy.displayId})`
-                    )
+                    <Link
+                      href={ADMIN_ROUTES.user(user.referredBy.id)}
+                      className="font-semibold text-admin-accent hover:underline"
+                    >
+                      {user.referredBy.name} (ID {user.referredBy.displayId})
+                    </Link>
                   ) : (
                     'Ninguém (cadastro sem convite)'
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className={labelClass}>Promotor do jogador</dt>
+                <dd className="mt-0.5 text-[13.5px] text-admin-text">
+                  {user.referredBy?.promoterCommissionBps == null ? (
+                    'Nenhum (quem indicou não é promotor)'
+                  ) : canReadPromoters ? (
+                    <Link
+                      href={ADMIN_ROUTES.promoter(user.referredBy.id)}
+                      className="font-semibold text-admin-accent hover:underline"
+                    >
+                      {user.referredBy.name} · comissão de {formatCommission(user.referredBy.promoterCommissionBps)}
+                    </Link>
+                  ) : (
+                    `${user.referredBy.name} · comissão de ${formatCommission(user.referredBy.promoterCommissionBps)}`
                   )}
                 </dd>
               </div>
@@ -153,6 +184,11 @@ export default function UserDetailPage({
               </div>
             ))}
           </dl>
+          {canAdjustWallet && (
+            <div className="mt-5 border-t border-admin-border pt-5">
+              <WalletCreditPanel userId={user.id} userName={user.name} />
+            </div>
+          )}
         </section>
       </div>
     </div>

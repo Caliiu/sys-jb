@@ -12,7 +12,7 @@ interface ProfilePageProps {
 export default function ProfilePage({ tenant, profile }: ProfilePageProps) {
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-[#F4F6F6] font-body">
-      <InviteProvider inviteCode={String(profile.displayId)}>
+      <InviteProvider inviteCode={profile.inviteCode}>
         <ProfileScreen profile={profile} />
       </InviteProvider>
     </div>

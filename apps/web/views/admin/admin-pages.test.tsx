@@ -1,4 +1,10 @@
-import type { AdminUserDetail, AdminUserListItem, Page, Permission } from '@sysjb/contracts';
+import {
+  type AdminUserDetail,
+  type AdminUserListItem,
+  type Page,
+  type Permission,
+  ROLE_PERMISSIONS,
+} from '@sysjb/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +38,8 @@ const item = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => ({
   document: '52998224725',
   phone: '11912345678',
   status: 'ACTIVE',
+  referredBy: null,
+  promoter: null,
   createdAt: '2026-09-25T17:30:00.000Z',
   ...over,
 });
@@ -51,6 +59,7 @@ const detail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   phone: '11912345678',
   document: '52998224725',
   birthDate: '1990-05-17',
+  inviteCode: 'CDYGE',
   status: 'ACTIVE',
   createdAt: '2026-09-25T17:30:00.000Z',
   lastLoginAt: null,
@@ -94,6 +103,27 @@ describe('lista de usuários', () => {
     expect(within(rows[0]!).getByText('25/09/2026')).toBeInTheDocument();
     expect(within(rows[0]!).getByText('Ativo')).toBeInTheDocument();
     expect(within(rows[1]!).getByText('Bloqueado')).toBeInTheDocument();
+  });
+
+  it('coluna Promotor: nome de quem indicou (link só com permissão de promotores) ou "—"', () => {
+    const promoter = { id: 'c'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', displayId: 100001, name: 'Paula Promotora' };
+    const items = [item({ promoter }), item({ id: 'd'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', promoter: null })];
+    const query = { page: 1, search: '', status: '' as const };
+
+    const { unmount } = renderWithProviders(<UsersPage query={query} result={page(items)} canReadPromoters />);
+    expect(screen.getByRole('columnheader', { name: 'Promotor' })).toBeInTheDocument();
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(within(rows[0]!).getByRole('link', { name: 'Paula Promotora' })).toHaveAttribute(
+      'href',
+      `/promotores/${promoter.id}`,
+    );
+    expect(within(rows[1]!).getByLabelText('Sem promotor')).toHaveTextContent('—');
+    unmount();
+
+    renderWithProviders(<UsersPage query={query} result={page(items)} />);
+    const [first] = screen.getAllByRole('row').slice(1);
+    expect(within(first!).getByText('Paula Promotora')).toBeInTheDocument();
+    expect(within(first!).queryByRole('link', { name: 'Paula Promotora' })).toBeNull();
   });
 
   it('sem resultados mostra o aviso', () => {
@@ -385,7 +415,10 @@ describe('login do painel', () => {
     const ui = userEvent.setup();
     renderWithProviders(<AdminLoginPage />);
     await fill(ui, 'op@example.test', 'segredo qualquer');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível entrar. Tente novamente.');
+    // Espera maior: com a suíte inteira rodando, a renderização do erro pode passar de 1 s.
+    expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toHaveTextContent(
+      'Não foi possível entrar. Tente novamente.',
+    );
   });
 });
 
@@ -412,6 +445,15 @@ describe('menu do painel', () => {
   it('sem permissão de consulta, o item não aparece', () => {
     renderSidebar([]);
     expect(screen.queryByRole('link', { name: 'Usuários' })).toBeNull();
+  });
+
+  it('Auditoria só aparece com a permissão de consultá-la', () => {
+    const { unmount } = renderSidebar(ROLE_PERMISSIONS.SUPPORT);
+    expect(screen.queryByRole('link', { name: 'Auditoria' })).toBeNull();
+    unmount();
+    renderSidebar(ROLE_PERMISSIONS.MANAGER);
+    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+    expect(within(nav).getByRole('link', { name: 'Auditoria' })).toHaveAttribute('href', '/auditoria');
   });
 
   it('Sair encerra a sessão e volta ao login', async () => {

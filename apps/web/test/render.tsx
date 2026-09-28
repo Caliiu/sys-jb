@@ -21,6 +21,7 @@ export const user: PublicUser = {
   document: '52998224725',
   avatar: null,
   displayId: 100042,
+  inviteCode: 'CDYGE',
   wallet: {
     balanceJb: 123456,
     bonusJb: 500,

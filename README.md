@@ -113,19 +113,22 @@ Se você já tinha um `.env` de antes do login, acrescente só `AUTH_SECRET` (ex
 
 Todas as rotas `/v1/*` exigem `Authorization: Bearer <chave da banca>` e resolvem a banca pelo header `Host`.
 
-| Método | Rota              | Comportamento                                                                   |
-| ------ | ----------------- | ------------------------------------------------------------------------------- |
-| POST   | `/v1/users`       | Cria usuário e carteira zerada na mesma transação. `201` com o contrato público |
-| GET    | `/v1/users/:id`   | Consulta só dentro da banca atual                                               |
-| PATCH  | `/v1/users/:id`   | Atualiza apenas `name`, `email`, `phone`, `document`, `avatar`                  |
-| POST   | `/v1/auth/login`  | Login por CPF + senha. `200` com `{ token, expiresAt, user }`                   |
-| GET    | `/v1/me`          | Usuário da sessão (header `X-Session-Token`)                                    |
-| POST   | `/v1/auth/logout` | Revoga a sessão do `X-Session-Token`. `204`, idempotente                        |
-| GET    | `/v1/me/profile`  | Perfil do usuário da sessão: contrato público + `birthDate` (só o dono recebe)  |
-| PATCH  | `/v1/me`          | O usuário altera o PRÓPRIO `email` e `phone` (sessão). `409` se já cadastrados  |
-| POST   | `/v1/me/password` | Define a nova senha do usuário da sessão. `204`; encerra as OUTRAS sessões      |
-| GET    | `/v1/tenant`      | Nome e cores da banca atual (usado pela interface)                              |
-| GET    | `/health`         | `{"status":"ok","database":"up"}`, sem credencial e sem expor segredos          |
+| Método | Rota                                      | Comportamento                                                                                    |
+| ------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| POST   | `/v1/users`                               | Cria usuário e carteira zerada na mesma transação. `201` com o contrato público                  |
+| GET    | `/v1/users/:id`                           | Consulta só dentro da banca atual                                                                |
+| PATCH  | `/v1/users/:id`                           | Atualiza apenas `name`, `email`, `phone`, `document`, `avatar`                                   |
+| POST   | `/v1/auth/login`                          | Login por CPF + senha. `200` com `{ token, expiresAt, user }`                                    |
+| GET    | `/v1/me`                                  | Usuário da sessão (header `X-Session-Token`)                                                     |
+| POST   | `/v1/auth/logout`                         | Revoga a sessão do `X-Session-Token`. `204`, idempotente                                         |
+| GET    | `/v1/me/profile`                          | Perfil do usuário da sessão: contrato público + `birthDate` (só o dono recebe)                   |
+| PATCH  | `/v1/me`                                  | O usuário altera o PRÓPRIO `email` e `phone` (sessão). `409` se já cadastrados                   |
+| POST   | `/v1/me/password`                         | Define a nova senha do usuário da sessão. `204`; encerra as OUTRAS sessões                       |
+| GET    | `/v1/tenant`                              | Nome e cores da banca atual (usado pela interface)                                               |
+| POST   | `/v1/fazendinha/bets`                     | Compra palpites da Fazendinha (sessão). `201` com o pule e a carteira debitada; ver "Fazendinha" |
+| GET    | `/v1/fazendinha/sold?drawDate=AAAA-MM-DD` | Números já vendidos no dia, por extração/modalidade/valor (sessão). Só números                   |
+| GET    | `/v1/draws`                               | Sorteios ativos da banca e exceções de data da janela de apostas (sessão); ver "Sorteios"        |
+| GET    | `/health`                                 | `{"status":"ok","database":"up"}`, sem credencial e sem expor segredos                           |
 
 Exemplos (dados sintéticos; `$AURORA_KEY` é a chave da Aurora no seu `.env`; o CPF `529.982.247-25` é um número de teste amplamente usado):
 
@@ -229,15 +232,15 @@ Os logs registram só método, caminho, status, duração e slug da banca. Nunca
 
 Adaptações ao que existe hoje no backend:
 
-| No original                                    | Aqui                                                                                                                                   |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Bolsas `LOTERIAS`, `BONUS`, `GAMES`            | **Saldo** = `balanceJb + prizesJb`, **BÔNUS** = `bonusJb`, **Disp. Games** = `totalAvailableGames` (centavos)                          |
-| Modalidades ativas vindas da API               | Lista fixa com as 5 modalidades, sem banner (`lib/modalities.ts`)                                                                      |
-| Logo fixo `logo.svg`                           | Logo da banca (`logoUrl`) ou a inicial do nome                                                                                         |
-| `unitId` fixo                                  | `displayId` do usuário                                                                                                                 |
-| Link de convite fixo e QR ilustrativo          | `<domínio da banca>/cadastro?convite=<displayId>` com QR real. O texto não promete recompensa: o crédito da indicação ainda não existe |
-| Botões sem destino (tiles, abas, menu, rodapé) | Avisam "disponível em breve" (toast), em vez de não fazer nada                                                                         |
-| Próximo sorteio com contador fixo              | Contador real (`nextDraw`); sem sorteio cadastrado, o banner não aparece                                                               |
+| No original                                    | Aqui                                                                                                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bolsas `LOTERIAS`, `BONUS`, `GAMES`            | **Saldo** = `balanceJb + prizesJb`, **BÔNUS** = `bonusJb`, **Disp. Games** = `totalAvailableGames` (centavos)                                                                         |
+| Modalidades ativas vindas da API               | Lista fixa com as 5 modalidades, sem banner (`lib/modalities.ts`)                                                                                                                     |
+| Logo fixo `logo.svg`                           | Logo da banca (`logoUrl`) ou a inicial do nome                                                                                                                                        |
+| `unitId` fixo                                  | `displayId` do usuário                                                                                                                                                                |
+| Link de convite fixo e QR ilustrativo          | `<domínio da banca>/cadastro?convite=<código>` (código de convite de 5 caracteres, ex.: `CDYGE`) com QR real. O texto não promete recompensa: o crédito da indicação ainda não existe |
+| Botões sem destino (tiles, abas, menu, rodapé) | Avisam "disponível em breve" (toast), em vez de não fazer nada                                                                                                                        |
+| Próximo sorteio com contador fixo              | Contador real (`nextDraw`); sem sorteio cadastrado, o banner não aparece                                                                                                              |
 
 O título da aba, o ícone (logo ou a inicial na cor da banca) e a cor da barra do navegador no celular vêm da banca. As ferramentas de desenvolvimento (consulta/edição por UUID) ficam em `/dev`, só em desenvolvimento.
 
@@ -382,13 +385,76 @@ Todas exigem a credencial do painel (`ADMIN_SERVICE_KEY`, no `Authorization: Bea
 - **Busca**: `%`, `_` e `\` do texto digitado são escapados (o Prisma não escapa curingas de `LIKE`).
 - **Dados pessoais**: a lista e o detalhe mostram CPF e telefone completos (decisão do produto: o operador identifica o usuário sem abrir cada um). Como a lista expõe esses dados em lote, o acesso ao painel deve ser restrito (rede, 2FA). Nenhuma resposta traz hash de senha.
 
+## Fazendinha
+
+Tela em `/fazendinha` (uma rota só; as etapas lista → palpites → comprovante trocam pelo estado da tela). Modalidades (grupo, dezena, centena) e valores de aposta ficam em `packages/contracts/src/fazendinha.ts`, usados pela tela e pela API; as extrações são os sorteios da banca marcados para a Fazendinha (ver "Sorteios").
+
+- **Compra** (`POST /v1/fazendinha/bets`): a API confere extração, valor, faixa dos palpites e horário (a venda fecha no **"Venda até"** do sorteio; até 6 dias à frente, em Brasília). O banco confere tudo de novo num trigger (`fazendinha_bets_draw_open` → `draw_for_sale`), então nem um bug na API aceita aposta de extração fechada, desativada ou fora do dia. Grava o pule e os números e chama `fazendinha_debit` **na mesma transação**. Cada palpite custa o valor da aposta; o total sai primeiro do saldo e depois dos prêmios (bônus não é usado).
+- **Cada número é vendido uma vez** por extração + modalidade + valor (UNIQUE no banco). Número já vendido: `409 NUMBERS_UNAVAILABLE` com os números em `details`; saldo insuficiente: `409 INSUFFICIENT_FUNDS`; extração encerrada: `409 DRAW_CLOSED`.
+- **Idempotência**: o web manda uma `idempotencyKey` por seleção. Reenviar a mesma chave devolve o mesmo pule sem cobrar de novo; a mesma chave com outra aposta é `409 CONFLICT`.
+- **Travas no banco**: a role de runtime continua sem `UPDATE` em `wallets`. `fazendinha_debit` (`SECURITY DEFINER`, sujeita ao RLS) só debita o total de um pule da banca corrente, uma vez, conferindo total = valor × números; um trigger adiado recusa o commit de pule sem débito; depois do débito o pule não aceita números novos; pule, números e movimentações são somente inclusão.
+- **Comprovante**: `VENDEDOR` é o `displayId` do próprio jogador; `COTAÇÃO` mostra o multiplicador da modalidade.
+- **Limitações**: não há apuração de resultado nem pagamento de prêmio, nem histórico de pules do jogador.
+
+## Loterias
+
+Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor → Loterias → Carrinho → Finalizar, e o recibo. Só o **Tradicional** está disponível; os outros tipos e "Repetir pule" avisam "em breve". Regras em `packages/contracts/src/lotteries.ts`, usadas pela tela e pela API.
+
+- **Modalidades**: as da tabela de cotações (Grupo, Dezena, Centena, Milhar, Unidade, Duque/Terno Dez, Terno Dez Seco, Duque/Terno/Quadra GP, Quina 8/5, Sena 10/6, Passe Vai/Vem) e as derivadas pela cotação da base: Centena/Milhar Invertida (valor dividido pelas permutações), Centena Esquerda/Inv Esq, Dezena Esq/Meio e Milhar e Centena (metade em cada). Modalidade com cotação 0 não aparece. Ficaram de fora "Palpitão" e "Centena 3X" (regra não definida).
+- **Colocação**: números aceitam 1º, 1/5, 1 e 1/5, 2º–5º, 1/2, 1/3, 1/4 (prêmio ÷ posições); combos têm colocação fixa (a cotação já considera).
+- **Valor**: "Todos" divide entre os palpites; "Cada" vale por palpite. Várias loterias = um pule por extração, com os mesmos itens.
+- **Compra** (`POST /v1/lotteries/tickets`): valida sorteios (cadastro da banca), palpites, horário limite (o banco confere de novo e grava o "Venda até" do cadastro no pule) e a **cotação que o jogador viu** (`QUOTE_CHANGED` se mudou). Grava os pules e debita cada um (`lottery_debit`, movimentação `LOTTERY_BET`) na mesma transação; mesma chave não compra de novo. Entra no cálculo das comissões (valor apostado).
+- **Limitações**: sem apuração de resultado nem pagamento de prêmio; o botão "Valendo" do carrinho não foi feito.
+
+## Sorteios
+
+Cadastro **por banca**, em **Sorteios** no painel (Gerente edita; Financeiro consulta; Suporte não vê). É **uma lista só** para Loterias e Fazendinha: cada sorteio diz para quais jogos vale. Banca nova já nasce com o cadastro padrão (72 sorteios: RIO/FEDERAL, MALUQUINHA, NACIONAL, LOOK/GOIAS, SAO-PAULO, LOTECE/LOTEP, BAHIA, CAPITAL, MINAS GERAIS; Federal e Maluq Federal às **quartas e domingos**). O horário do sorteio padrão é a hora cheia do nome, ou 2 minutos depois do "Venda até" quando ele passa da hora cheia: confira e ajuste no painel.
+
+- **Campos**: grupo, nome (no pule, único na banca), horário do sorteio, **venda até** (≤ horário do sorteio), dias da semana, jogos, situação (ativo/inativo) e ordem na lista. O pule guarda nome + hora do sorteio.
+- **Exceções de data**: "Sem sorteio" de um sorteio ou do **dia todo** (feriado) e "Sorteio extra" (corre num dia fora da semana dele). De hoje até um ano.
+- **Apostas vendidas travam o cadastro** (`409 DRAW_HAS_BETS`, SQLSTATE `SJ005`, conferido por trigger no banco): com aposta de hoje em diante, o sorteio não pode ser desativado, perder o jogo ou o dia da aposta, nem ganhar exceção que o cancele; com qualquer aposta já vendida, não pode ser renomeado, mudar de hora nem ser excluído. Horário de venda, grupo e ordem podem mudar. O estorno de apostas de sorteio cancelado fica para a apuração de resultados.
+- **Concorrência**: a venda trava a linha do sorteio (`FOR SHARE`) e a alteração do cadastro espera a compra terminar (e vice-versa), então a trava vê sempre a compra concorrente.
+- **Auditoria**: "Sorteio cadastrado/alterado/excluído" (com os campos alterados) e "Exceção de data criada/removida".
+
+| Método | Rota                             | Permissão      | Comportamento                                                               |
+| ------ | -------------------------------- | -------------- | --------------------------------------------------------------------------- |
+| GET    | `/v1/admin/draws`                | `draws.read`   | Todos os sorteios (ativos e inativos) e as exceções de hoje em diante       |
+| POST   | `/v1/admin/draws`                | `draws.manage` | Cadastra. `409 CONFLICT` se o nome já existe                                |
+| PUT    | `/v1/admin/draws/:id`            | `draws.manage` | Altera (cadastro completo). `409 DRAW_HAS_BETS` quando a trava acima impede |
+| DELETE | `/v1/admin/draws/:id`            | `draws.manage` | Exclui (só sem nenhuma aposta vendida)                                      |
+| POST   | `/v1/admin/draws/exceptions`     | `draws.manage` | `{ date, drawId \| null, kind: "CANCEL" \| "EXTRA", note? }`                |
+| DELETE | `/v1/admin/draws/exceptions/:id` | `draws.manage` | Remove a exceção (recusado se deixaria apostas de um extra sem sorteio)     |
+
+## Cotações
+
+Tabela de prêmios por banca, editada pelo Gerente em **Cotações** no painel (Financeiro só consulta; auditoria "Cotações alteradas"). Sem nada salvo valem os padrões de `packages/contracts/src/quotes.ts` (tabela de referência **800/1/8000**). Prêmio **R$ 0,00 desliga** a opção.
+
+- **Tradicional**: prêmio para cada R$ 1,00 por modalidade (Unidade, Grupo, Dezena, Centena, Milhar, Duque/Terno/Quadra GP, Quina 8/5, Sena 10/6, Duque Dez, Terno Dez Seco, Terno Dez, Palpitão, Passe Vai, Passe Vai Vem). O nome da tabela (`centena/1/milhar`) aparece nos recibos como "COTAÇÃO".
+- **Fazendinha**: prêmio de cada número por modalidade e valor de aposta (R$ 1 a R$ 100). A tela só oferece os valores com prêmio, e a compra usa a cotação da banca naquele momento: o prêmio fica gravado no pule (`fazendinha_bets.prize_cents`), então mudar a tabela depois não altera pules vendidos.
+- **Jogador**: Relatórios > Cotações mostra as tabelas (Tradicional e Fazendinha; os outros jogos ainda "em breve"), com Compartilhar.
+
+## Indicação e comissões
+
+Promotor ≠ Indicação. Todo jogador tem no máximo um "indicado por": o dono do link de convite (`?convite=CDYGE`) usado no cadastro, jogador comum ou promotor (usuário ativo da banca; código desconhecido ou de usuário bloqueado é ignorado). O vínculo nunca muda.
+
+- **Código de convite**: 5 caracteres de um alfabeto sem ambíguos (sem O/0/I/1), gerado pelo banco no cadastro, **único no sistema todo** (índice UNIQUE; em colisão o cadastro tenta de novo) e fixo (a API não altera). Aceito em maiúsculas ou minúsculas. Links antigos com o ID exibido (`?convite=100008`) continuam valendo. O painel mostra o código no detalhe do usuário e busca por ele.
+- **Indique e ganhe (X%)**: igual para a banca toda, definido pelo Gerente em **Comissões** no painel (`tenant_settings`, com auditoria). 0% desliga.
+- **Promotor (Y%)**: a comissão de cada promotor. Se quem indicou é promotor no fechamento, recebe **X% + Y%** (ex.: 3% + 7% = 10%).
+- **Base**: o valor apostado pelos indicados no mês (Brasília, pela data da aposta). Ganho arredondado para baixo no centavo.
+- **Fechamento mensal**: o Gerente vê a prévia e clica em "Fechar mês" (só meses encerrados; uma vez por mês). A função `commission_close_month` grava o fechamento e cada pagamento e **credita o Saldo** na mesma transação (movimentação `COMMISSION`). Quem indicou e está **bloqueado** não recebe (fica como "não recebeu"). Mês fechado fica congelado: mudar percentuais depois não altera o que foi pago.
+- **Perfis**: Gerente altera o X% e fecha; Financeiro só consulta; Suporte não vê. O banco confere de novo que quem fecha é Gerente ativo.
+- **Painel**: lista de usuários com as colunas "Indicado por" e "Promotor"; no detalhe, "Indicado por" e "Promotor do jogador" separados.
+
 ## Contrato monetário
 
 - **Todo valor monetário é um inteiro em centavos** (`1050` = R$ 10,50). No banco são `bigint`, com CHECK de não negatividade e de soma ≤ `Number.MAX_SAFE_INTEGER`.
 - `totalAvailableJb = balanceJb + bonusJb + prizesJb` e `totalAvailableGames = balanceGames + bonusGames + prizesGames`, calculados na leitura e não persistidos.
 - `withdrawable` é sempre `0`: não existe regra de saque nesta fase.
 - Os totais são só uma convenção de apresentação e **não** definem elegibilidade para apostas ou saques.
-- A carteira é só leitura: não há endpoint de alteração, a role de runtime não tem `UPDATE` em `wallets` e um trigger exige saldo zero na criação.
+- Não há endpoint de alteração de saldo e a role de runtime não tem `UPDATE` em `wallets`; um trigger exige saldo zero na criação.
+- **Saldo conciliado**: toda mudança de `balance_jb`, `prizes_jb` e `bonus_jb` precisa de uma movimentação em `wallet_entries` (somente inclusão, inclusive para a dona das tabelas). Ao fim de cada transação o banco confere saldo = soma das movimentações e recusa o commit se não bater. As bolsas de games não mudam (ainda não há movimentação delas).
+- Tipos de movimentação: `FAZENDINHA_BET` (débito da compra, pela função `fazendinha_debit`), `MANUAL_ADJUSTMENT` (crédito/estorno com motivo) e `OPENING_BALANCE` (saldos que existiam antes do registro, criados pela migration).
+- **Crédito/estorno manual** só pelo script, com a credencial de migração: `pnpm wallet:adjust --tenant trevo --user 100008 --amount 1000 --note "motivo"` (estorno: `--amount=-50,25`; `--bucket prizes|bonus` para outras bolsas). Carteira negativa é recusada.
 - `promoter`, `promoterName` e `promoterPhone` são sempre `null`. Estão centralizados no contrato (`PublicPromoterFields`) e no mapper (`promoterFields()`) para evolução futura.
 - Campos nullable sempre aparecem como `null`, nunca são omitidos. O objeto público não inclui `tenantId` nem timestamps.
 
@@ -402,11 +468,11 @@ Todas exigem a credencial do painel (`ADMIN_SERVICE_KEY`, no `Authorization: Bea
 
 ### Roles do PostgreSQL
 
-| Role             | Uso                                                           | Atributos                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ---------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `postgres`       | Só o init do container                                        | superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `sysjb_migrator` | Migrations, seed e setup dos testes (`DATABASE_MIGRATOR_URL`) | dona do schema e das tabelas; `CREATEDB` para o shadow DB do `prisma migrate dev`; sem superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `sysjb_app`      | Runtime da API (`DATABASE_URL`)                               | `NOSUPERUSER`, `NOBYPASSRLS`, não é dona de nada. `SELECT` em `tenants`; `SELECT`/`INSERT`/`UPDATE` (só colunas editáveis; `password_hash` também no UPDATE, para a troca de senha; nascimento só no INSERT) em `users`; `SELECT`/`INSERT` em `wallets`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `sessions`; `SELECT`/`INSERT`/`DELETE` em `login_failures`; `SELECT` em `operators`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `operator_sessions`; `SELECT`/`INSERT` (somente inclusão) em `audit_logs`; `UPDATE` também de `users.status`; sem `DELETE` nas demais; não pode escolher `id` nem `displayId` |
+| Role             | Uso                                                           | Atributos                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `postgres`       | Só o init do container                                        | superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `sysjb_migrator` | Migrations, seed e setup dos testes (`DATABASE_MIGRATOR_URL`) | dona do schema e das tabelas; `CREATEDB` para o shadow DB do `prisma migrate dev`; sem superuser                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `sysjb_app`      | Runtime da API (`DATABASE_URL`)                               | `NOSUPERUSER`, `NOBYPASSRLS`, não é dona de nada. `SELECT` em `tenants`; `SELECT`/`INSERT`/`UPDATE` (só colunas editáveis; `password_hash` também no UPDATE, para a troca de senha; nascimento só no INSERT) em `users`; `SELECT`/`INSERT` em `wallets`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `sessions`; `SELECT`/`INSERT`/`DELETE` em `login_failures`; `SELECT` em `operators`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `operator_sessions`; `SELECT`/`INSERT` (somente inclusão) em `audit_logs`; `UPDATE` também de `users.status`; `SELECT`/`INSERT` (somente inclusão) em `fazendinha_bets` e `fazendinha_bet_numbers`; `SELECT` em `wallet_entries`; `EXECUTE` em `fazendinha_debit`; sem `DELETE` nas demais; não pode escolher `id` nem `displayId` |
 
 `displayId` vem de uma sequence do PostgreSQL (começa em 100000). Aceita lacunas e é `int4`, portanto sempre um inteiro seguro em JSON.
 
@@ -452,6 +518,10 @@ Nada é publicado nem implantado automaticamente.
 | 8   | Cadastros concorrentes recebem displayIds distintos                                                                                                                                                    | `uniqueness.test.ts` |
 | 9   | Credencial de uma banca não autoriza outra (`tenancy.test.ts`); chaves e um canário ausentes do bundle do navegador (`apps/web/scripts/check-client-bundle.mjs`)                                       | ambos                |
 | —   | CPF com dígitos verificadores, maioridade, regras de senha, hash argon2id; login, resposta igual para CPF inexistente, bloqueio com `Retry-After`, sessão por banca, expiração, logout, RLS de sessões | `auth.test.ts`       |
+
+`fazendinha.test.ts` cobre a compra: pule + débito na mesma transação (saldo antes dos prêmios, bônus intocado), saldo insuficiente sem gravar nada, número já vendido (inclusive compras simultâneas: só uma leva), idempotência (reenvio e cliques simultâneos com a mesma chave = um pule e um débito), catálogo e janela de datas, números vendidos por banca, e as travas do banco (sem `UPDATE` em carteira, sem pule sem débito, sem débito duplo, total conferido, pule imutável).
+
+`draws.test.ts` cobre o cadastro de sorteios: leitura do jogador (padrão, Federal quarta/domingo), permissões, validação, auditoria, as travas de apostas vendidas (desativar, tirar jogo/dia, renomear, excluir, feriado, remover extra), exceções na venda (API e banco), isolamento entre bancas e a concorrência compra × alteração nos dois sentidos.
 
 `admin.test.ts` cobre o painel: login de operador (resposta única, bloqueio, cada operador na sua banca pelo mesmo endereço, e-mail único no sistema, banca inativa, credencial do painel × das bancas, painel desativado sem `ADMIN_SERVICE_KEY`), sessão (expirada, desativado, cliente × operador), perfis e permissões (matriz completa), lista (máscara, paginação estável, busca sem curingas, filtro), detalhe, edição com auditoria, bloqueio (sessões revogadas, login, `/v1/me`) e privilégios do banco (auditoria somente inclusão, operadores só leitura, usuário só nasce `ACTIVE`, leitura por chave antes de haver banca). `config.test.ts` cobre a validação da `ADMIN_SERVICE_KEY`.
 

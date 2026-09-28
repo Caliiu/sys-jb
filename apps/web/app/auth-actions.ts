@@ -1,6 +1,12 @@
 'use server';
 
-import type { ApiError as ApiErrorBody, ApiErrorCode, LoginResponse, PublicUser } from '@sysjb/contracts';
+import {
+  type ApiError as ApiErrorBody,
+  type ApiErrorCode,
+  type LoginResponse,
+  parseInviteRef,
+  type PublicUser,
+} from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { apiRequest } from '@/lib/api-client';
 import { hostnameOnly, serviceKeyFor } from '@/lib/server-env';
@@ -18,7 +24,7 @@ export interface RegisterInput {
   phone: string;
   birthDate: string;
   password: string;
-  /** Código do link de convite (`?convite=`). Só dígitos; qualquer outra coisa é descartada. */
+  /** Código do link de convite (`?convite=`): o de 5 caracteres ou o ID dos links antigos; outro formato é descartado. */
   inviteCode?: string;
 }
 
@@ -26,8 +32,6 @@ export interface LoginInput {
   cpf: string;
   password: string;
 }
-
-const INVITE_CODE = /^\d{1,10}$/;
 
 async function authHost(): Promise<string | null> {
   const hostname = hostnameOnly((await headers()).get('host'));
@@ -61,7 +65,7 @@ export async function registerAction(input: RegisterInput): Promise<AuthResult> 
     birthDate: input.birthDate,
     password: input.password,
     // Server action é endpoint público: o formato é conferido de novo aqui (a API também confere).
-    ...(typeof input.inviteCode === 'string' && INVITE_CODE.test(input.inviteCode)
+    ...(typeof input.inviteCode === 'string' && parseInviteRef(input.inviteCode)
       ? { inviteCode: input.inviteCode }
       : {}),
   });

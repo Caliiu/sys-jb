@@ -24,7 +24,7 @@ export default function PromoterDetailPage({ promoter, referrals, canManage }: P
   const facts: Array<{ label: string; value: string }> = [
     { label: 'Comissão', value: formatCommission(promoter.commissionBps) },
     { label: 'Jogadores indicados', value: String(promoter.referralsCount) },
-    { label: 'Código de convite', value: String(promoter.displayId) },
+    { label: 'Código de convite', value: promoter.inviteCode },
     { label: 'Telefone', value: maskPhoneInput(promoter.phone) },
     { label: 'Cadastrado em', value: formatDateTime(promoter.createdAt) },
   ];
@@ -85,6 +85,7 @@ export default function PromoterDetailPage({ promoter, referrals, canManage }: P
           </h2>
           <UsersTable
             items={referrals.items}
+            showPromoter={false}
             emptyMessage="Nenhum jogador se cadastrou pelo link deste promotor ainda."
           />
           <Pagination

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PublicUser } from '@sysjb/contracts';
+import { isUniqueViolation } from '../common/prisma-errors.js';
 import { Errors } from '../common/app-error.js';
 import { PasswordService } from '../auth/password.service.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -8,6 +9,11 @@ import { mapUniqueViolation } from './user-conflicts.js';
 import { toPublicUser } from './user.mapper.js';
 import type { CreateUserInput, UpdateUserInput } from './user.schemas.js';
 import { UsersRepository, WalletsRepository } from './users.repository.js';
+
+const INVITE_CODE_ATTEMPTS = 5;
+
+const isInviteCodeCollision = (error: unknown) =>
+  isUniqueViolation(error) && JSON.stringify(error.meta ?? {}).includes('invite_code');
 
 @Injectable()
 export class UsersService {
@@ -23,18 +29,20 @@ export class UsersService {
     // Hash fora da transação: o argon2 é deliberadamente lento e não deve segurar conexão do pool.
     const { password, inviteCode, ...data } = input;
     const passwordHash = await this.passwords.hash(password);
-    try {
-      return await this.db.withTenant(tenant.id, async (tx) => {
-        // Código inexistente ou de quem não é promotor é ignorado: o cadastro segue sem vínculo.
-        const referredByUserId = inviteCode
-          ? await this.users.findActivePromoterId(tx, tenant.id, Number(inviteCode))
-          : null;
-        const user = await this.users.create(tx, tenant.id, { ...data, passwordHash, referredByUserId });
-        const wallet = await this.wallets.createForUser(tx, tenant.id, user.id);
-        return toPublicUser(user, wallet);
-      });
-    } catch (error) {
-      mapUniqueViolation(error);
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await this.db.withTenant(tenant.id, async (tx) => {
+          // Código inexistente ou de usuário bloqueado é ignorado: o cadastro segue sem vínculo.
+          const referredByUserId = inviteCode ? await this.users.findActiveReferrerId(tx, tenant.id, inviteCode) : null;
+          const user = await this.users.create(tx, tenant.id, { ...data, passwordHash, referredByUserId });
+          const wallet = await this.wallets.createForUser(tx, tenant.id, user.id);
+          return toPublicUser(user, wallet);
+        });
+      } catch (error) {
+        // O banco sorteia o código de convite; se coincidir com um existente (chance ínfima), tenta de novo.
+        if (attempt < INVITE_CODE_ATTEMPTS && isInviteCodeCollision(error)) continue;
+        mapUniqueViolation(error);
+      }
     }
   }
 

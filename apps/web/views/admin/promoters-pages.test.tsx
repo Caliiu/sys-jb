@@ -36,6 +36,7 @@ const promoter = (over: Partial<AdminPromoterListItem> = {}): AdminPromoterListI
   displayId: 100002,
   name: 'Ana Souza Lima',
   phone: '11912345678',
+  inviteCode: 'P5R3M',
   status: 'ACTIVE',
   commissionBps: 1250,
   referralsCount: 3,
@@ -49,6 +50,8 @@ const userItem = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => (
   document: '52998224725',
   phone: '11987654321',
   status: 'ACTIVE',
+  referredBy: null,
+  promoter: null,
   createdAt: '2026-09-26T10:00:00.000Z',
   ...over,
 });
@@ -68,6 +71,7 @@ const userDetail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   phone: '11912345678',
   document: '52998224725',
   birthDate: '1990-05-17',
+  inviteCode: 'CDYGE',
   status: 'ACTIVE',
   createdAt: '2026-09-25T17:30:00.000Z',
   lastLoginAt: null,
@@ -236,7 +240,7 @@ describe('detalhe do promotor', () => {
     );
     expect(screen.getByRole('heading', { name: 'Ana Souza Lima' })).toBeInTheDocument();
     expect(screen.getByText('12,5%')).toBeInTheDocument();
-    expect(screen.getByText('100002')).toBeInTheDocument(); // código de convite
+    expect(screen.getByText('P5R3M')).toBeInTheDocument(); // código de convite
     expect(screen.getByRole('link', { name: 'Bruno Alves' })).toHaveAttribute('href', `/usuarios/${ID_BRUNO}`);
     expect(screen.getByRole('link', { name: 'Ver cadastro do usuário' })).toHaveAttribute(
       'href',
@@ -346,10 +350,16 @@ describe('promotor no detalhe do usuário', () => {
     expect(screen.getByRole('button', { name: 'Remover promotor' })).toBeInTheDocument();
   });
 
-  it('mostra quem indicou o usuário (link só para quem pode ver promotores)', () => {
-    const user = userDetail({ referredBy: { id: ID_BRUNO, displayId: 100003, name: 'Bruno Alves' } });
+  it('indicado por um promotor: "Indicado por" e "Promotor do jogador" separados (link do promotor só com permissão)', () => {
+    const user = userDetail({
+      referredBy: { id: ID_BRUNO, displayId: 100003, name: 'Bruno Alves', promoterCommissionBps: 700 },
+    });
     const { unmount } = renderUser(user, true, false);
     expect(screen.getByRole('link', { name: 'Bruno Alves (ID 100003)' })).toHaveAttribute(
+      'href',
+      `/usuarios/${ID_BRUNO}`,
+    );
+    expect(screen.getByRole('link', { name: 'Bruno Alves · comissão de 7%' })).toHaveAttribute(
       'href',
       `/promotores/${ID_BRUNO}`,
     );
@@ -357,13 +367,23 @@ describe('promotor no detalhe do usuário', () => {
     unmount();
 
     renderUser(user, false, false);
-    expect(screen.getByText('Bruno Alves (ID 100003)')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Bruno Alves/ })).toBeNull();
+    expect(screen.getByText('Bruno Alves · comissão de 7%')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /comissão de 7%/ })).toBeNull();
+  });
+
+  it('indicado por um jogador comum: só indicação, sem promotor', () => {
+    renderUser(
+      userDetail({ referredBy: { id: ID_BRUNO, displayId: 100003, name: 'Bruno Alves', promoterCommissionBps: null } }),
+      true,
+      false,
+    );
+    expect(screen.getByRole('link', { name: 'Bruno Alves (ID 100003)' })).toBeInTheDocument();
+    expect(screen.getByText('Nenhum (quem indicou não é promotor)')).toBeInTheDocument();
   });
 
   it('perfil sem acesso a promotores e usuário sem indicação: a seção nem aparece', () => {
     renderUser(userDetail(), false, false);
-    expect(screen.queryByRole('heading', { name: 'Promotor' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Indicação e promotor' })).toBeNull();
   });
 });
 

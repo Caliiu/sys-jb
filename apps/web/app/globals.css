@@ -33,8 +33,9 @@
   --color-admin-border: #e3e6ea;
   --color-admin-text: #1f2430;
   --color-admin-muted: #6b7280;
-  --color-admin-accent: #2e5aac;
-  --color-admin-accent-dark: #1f3e7a;
+  /* Destaque = a cor da marca do painel (faixa da logo no login); -dark é o estado pressionado. */
+  --color-admin-accent: #1f2430;
+  --color-admin-accent-dark: #11141b;
   --color-admin-danger: #c41e24;
   --color-admin-success: #1e7a4d;
 

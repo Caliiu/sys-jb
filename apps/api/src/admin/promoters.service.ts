@@ -14,6 +14,7 @@ const toPromoterItem = (row: PromoterRow): AdminPromoterListItem => ({
   displayId: row.displayId,
   name: row.name,
   phone: row.phone,
+  inviteCode: row.inviteCode,
   status: row.status,
   commissionBps: row.promoterCommissionBps,
   referralsCount: row._count.referrals,

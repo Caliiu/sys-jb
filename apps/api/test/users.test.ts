@@ -19,6 +19,7 @@ import {
 
 const CONTRACT_KEYS = [
   'id',
+  'inviteCode',
   'name',
   'email',
   'phone',

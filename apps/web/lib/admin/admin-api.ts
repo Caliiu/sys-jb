@@ -1,7 +1,24 @@
 import 'server-only';
-import type { AdminPromoterListItem, AdminUserDetail, AdminUserListItem, Page } from '@sysjb/contracts';
+import type {
+  AdminAuditEntry,
+  AdminCommissionClosing,
+  AdminCommissionMonth,
+  AdminCommissionSettings,
+  AdminDrawsResponse,
+  AdminPromoterListItem,
+  AdminUserDetail,
+  AdminUserListItem,
+  AdminWalletCreditRequest,
+  CreateDrawExceptionRequest,
+  Page,
+  PublicQuotes,
+  SaveDrawRequest,
+  SetFazendinhaQuotesRequest,
+  SetTraditionalQuotesRequest,
+} from '@sysjb/contracts';
 import { apiRequest } from '../api-client';
 import type { AdminSession } from './admin-context';
+import { AUDIT_PAGE_SIZE, type AuditQuery } from './audit-query';
 import { PROMOTERS_PAGE_SIZE, type PromotersQuery } from './promoters-query';
 import { USERS_PAGE_SIZE, type UsersQuery } from './users-query';
 
@@ -51,4 +68,54 @@ export const adminApi = {
 
   removePromoter: (session: Caller, id: string) =>
     call<null>(session, 'DELETE', `/v1/admin/promoters/${encodeURIComponent(id)}`),
+
+  creditWallet: (session: Caller, id: string, body: AdminWalletCreditRequest) =>
+    call<AdminUserDetail>(session, 'POST', `/v1/admin/users/${encodeURIComponent(id)}/wallet/credits`, body),
+
+  getCommissionSettings: (session: Caller) =>
+    call<AdminCommissionSettings>(session, 'GET', '/v1/admin/commissions/settings'),
+
+  setCommissionSettings: (session: Caller, referralCommissionBps: number) =>
+    call<AdminCommissionSettings>(session, 'PUT', '/v1/admin/commissions/settings', { referralCommissionBps }),
+
+  getCommissionMonth: (session: Caller, month: string) =>
+    call<AdminCommissionMonth>(session, 'GET', `/v1/admin/commissions/months/${encodeURIComponent(month)}`),
+
+  closeCommissionMonth: (session: Caller, month: string) =>
+    call<AdminCommissionMonth>(session, 'POST', `/v1/admin/commissions/months/${encodeURIComponent(month)}/close`, {}),
+
+  listCommissionClosings: (session: Caller) =>
+    call<AdminCommissionClosing[]>(session, 'GET', '/v1/admin/commissions/closings'),
+
+  getQuotes: (session: Caller) => call<PublicQuotes>(session, 'GET', '/v1/admin/quotes'),
+
+  setTraditionalQuotes: (session: Caller, body: SetTraditionalQuotesRequest) =>
+    call<PublicQuotes>(session, 'PUT', '/v1/admin/quotes/tradicional', body),
+
+  setFazendinhaQuotes: (session: Caller, body: SetFazendinhaQuotesRequest) =>
+    call<PublicQuotes>(session, 'PUT', '/v1/admin/quotes/fazendinha', body),
+
+  listDraws: (session: Caller) => call<AdminDrawsResponse>(session, 'GET', '/v1/admin/draws'),
+
+  createDraw: (session: Caller, body: SaveDrawRequest) =>
+    call<AdminDrawsResponse>(session, 'POST', '/v1/admin/draws', body),
+
+  updateDraw: (session: Caller, id: string, body: SaveDrawRequest) =>
+    call<AdminDrawsResponse>(session, 'PUT', `/v1/admin/draws/${encodeURIComponent(id)}`, body),
+
+  deleteDraw: (session: Caller, id: string) =>
+    call<AdminDrawsResponse>(session, 'DELETE', `/v1/admin/draws/${encodeURIComponent(id)}`),
+
+  createDrawException: (session: Caller, body: CreateDrawExceptionRequest) =>
+    call<AdminDrawsResponse>(session, 'POST', '/v1/admin/draws/exceptions', body),
+
+  deleteDrawException: (session: Caller, id: string) =>
+    call<AdminDrawsResponse>(session, 'DELETE', `/v1/admin/draws/exceptions/${encodeURIComponent(id)}`),
+
+  listAudit(session: Caller, query: AuditQuery) {
+    const params = new URLSearchParams({ page: String(query.page), pageSize: String(AUDIT_PAGE_SIZE) });
+    if (query.action) params.set('action', query.action);
+    if (query.userId) params.set('userId', query.userId);
+    return call<Page<AdminAuditEntry>>(session, 'GET', `/v1/admin/audit?${params}`);
+  },
 };

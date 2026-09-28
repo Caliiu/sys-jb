@@ -15,7 +15,7 @@ interface WithdrawalsPageProps {
 export default function WithdrawalsPage({ tenant, user, items = [] }: WithdrawalsPageProps) {
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-[#F4F6F6] font-body">
-      <InviteProvider inviteCode={String(user.displayId)}>
+      <InviteProvider inviteCode={user.inviteCode}>
         <WithdrawalsScreen
           userId={user.id}
           items={items}

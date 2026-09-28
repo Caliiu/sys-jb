@@ -5,16 +5,34 @@ import { formatDate } from '@/lib/datetime';
 import { maskCpfInput, maskPhoneInput } from '@/lib/masks';
 import StatusBadge from './StatusBadge';
 
-const HEADERS = ['ID', 'Nome', 'CPF', 'Telefone', 'Status', 'Cadastro'];
+interface UsersTableProps {
+  items: AdminUserListItem[];
+  emptyMessage?: string;
+  /**
+   * Colunas "Indicado por" (quem indicou, jogador ou promotor) e "Promotor" (o mesmo, só se for promotor).
+   * Desligadas na lista de indicados do próprio promotor.
+   */
+  showPromoter?: boolean;
+  /** O nome do promotor vira link para a página dele (perfil com promoters.read). */
+  canReadPromoters?: boolean;
+}
 
 /** Tabela de usuários. CPF e telefone chegam só com dígitos e são formatados aqui. */
 export default function UsersTable({
   items,
   emptyMessage = 'Nenhum usuário encontrado.',
-}: {
-  items: AdminUserListItem[];
-  emptyMessage?: string;
-}) {
+  showPromoter = true,
+  canReadPromoters = false,
+}: UsersTableProps) {
+  const HEADERS = [
+    'ID',
+    'Nome',
+    'CPF',
+    'Telefone',
+    ...(showPromoter ? ['Indicado por', 'Promotor'] : []),
+    'Status',
+    'Cadastro',
+  ];
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-[13px]">
@@ -46,6 +64,34 @@ export default function UsersTable({
               </td>
               <td className="whitespace-nowrap px-4 py-3 tabular-nums">{maskCpfInput(user.document)}</td>
               <td className="whitespace-nowrap px-4 py-3 tabular-nums">{maskPhoneInput(user.phone)}</td>
+              {showPromoter && (
+                <td className="px-4 py-3">
+                  {user.referredBy ? (
+                    <Link href={ADMIN_ROUTES.user(user.referredBy.id)} className="text-admin-accent hover:underline">
+                      {user.referredBy.name}
+                    </Link>
+                  ) : (
+                    <span className="text-admin-muted" aria-label="Sem indicação">
+                      —
+                    </span>
+                  )}
+                </td>
+              )}
+              {showPromoter && (
+                <td className="px-4 py-3">
+                  {!user.promoter ? (
+                    <span className="text-admin-muted" aria-label="Sem promotor">
+                      —
+                    </span>
+                  ) : canReadPromoters ? (
+                    <Link href={ADMIN_ROUTES.promoter(user.promoter.id)} className="text-admin-accent hover:underline">
+                      {user.promoter.name}
+                    </Link>
+                  ) : (
+                    user.promoter.name
+                  )}
+                </td>
+              )}
               <td className="px-4 py-3">
                 <StatusBadge status={user.status} />
               </td>
