@@ -21,7 +21,9 @@ export function useOverlay(open: boolean, onClose: () => void, panelRef: RefObje
     if (!open) return;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    // preventScroll: o painel ainda está entrando (fora da tela); sem isso o navegador rola para mostrar o
+    // item focado e a tela "treme" no meio da animação.
+    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -37,7 +39,7 @@ export function useOverlay(open: boolean, onClose: () => void, panelRef: RefObje
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus?.();
+      previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [open, panelRef]);
 }

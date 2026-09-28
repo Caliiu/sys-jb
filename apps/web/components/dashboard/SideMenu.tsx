@@ -90,7 +90,7 @@ export default function SideMenu({ id, open, onClose }: SideMenuProps) {
       <div
         onClick={onClose}
         aria-hidden
-        className={`absolute inset-0 bg-black/40 transition-opacity ${open ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ease-out ${open ? 'opacity-100' : 'opacity-0'}`}
       />
       <aside
         id={id}
@@ -98,8 +98,8 @@ export default function SideMenu({ id, open, onClose }: SideMenuProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        className={`absolute top-0 right-0 h-full w-[72%] max-w-[320px] bg-white shadow-2xl transition-transform duration-300 overflow-y-auto overscroll-contain ${
-          open ? 'translate-x-0' : 'translate-x-full'
+        className={`absolute top-0 right-0 h-full w-[72%] max-w-[320px] bg-white overflow-y-auto overscroll-contain will-change-transform transition-[transform,box-shadow] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
+          open ? 'translate-x-0 shadow-2xl' : 'translate-x-full shadow-none'
         }`}
       >
         <nav className="pt-4 pb-4" aria-label="Menu principal">

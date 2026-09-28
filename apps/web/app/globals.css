@@ -44,6 +44,11 @@
   --radius-xl2: 14px;
 }
 
+/* Reserva o espaço da barra de rolagem: travar a rolagem ao abrir menus e folhas não desloca a página. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   --brand-primary: #df2120;
   --brand-primary-dark: color-mix(in srgb, var(--brand-primary) 60%, black);
