@@ -5,6 +5,9 @@ import type {
   AdminCommissionMonth,
   AdminCommissionSettings,
   AdminDrawsResponse,
+  AdminBranding,
+  HomeLayout,
+  AdminMural,
   AdminPromoterListItem,
   AdminUserDetail,
   AdminUserListItem,
@@ -13,10 +16,12 @@ import type {
   Page,
   PublicQuotes,
   SaveDrawRequest,
+  SaveBrandingRequest,
+  SaveMuralRequest,
   SetFazendinhaQuotesRequest,
   SetTraditionalQuotesRequest,
 } from '@sysjb/contracts';
-import { apiRequest } from '../api-client';
+import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import { AUDIT_PAGE_SIZE, type AuditQuery } from './audit-query';
 import { PROMOTERS_PAGE_SIZE, type PromotersQuery } from './promoters-query';
@@ -111,6 +116,35 @@ export const adminApi = {
 
   deleteDrawException: (session: Caller, id: string) =>
     call<AdminDrawsResponse>(session, 'DELETE', `/v1/admin/draws/exceptions/${encodeURIComponent(id)}`),
+
+  listMurals: (session: Caller) => call<AdminMural[]>(session, 'GET', '/v1/admin/murals'),
+
+  createMural: (session: Caller, body: SaveMuralRequest) =>
+    call<AdminMural[]>(session, 'POST', '/v1/admin/murals', body),
+
+  updateMural: (session: Caller, id: string, body: SaveMuralRequest) =>
+    call<AdminMural[]>(session, 'PUT', `/v1/admin/murals/${encodeURIComponent(id)}`, body),
+
+  deleteMural: (session: Caller, id: string) =>
+    call<AdminMural[]>(session, 'DELETE', `/v1/admin/murals/${encodeURIComponent(id)}`),
+
+  muralImage: (session: Caller, id: string) =>
+    apiRequestImage(session.hostname, `/v1/admin/murals/${encodeURIComponent(id)}/image`, {
+      operatorToken: session.token,
+    }),
+
+  getBranding: (session: Caller) => call<AdminBranding>(session, 'GET', '/v1/admin/branding'),
+
+  saveBranding: (session: Caller, body: SaveBrandingRequest) =>
+    call<AdminBranding>(session, 'PUT', '/v1/admin/branding', body),
+
+  getHomeLayout: (session: Caller) => call<HomeLayout>(session, 'GET', '/v1/admin/branding/home'),
+
+  saveHomeLayout: (session: Caller, body: HomeLayout) =>
+    call<HomeLayout>(session, 'PUT', '/v1/admin/branding/home', body),
+
+  brandingLogo: (session: Caller) =>
+    apiRequestImage(session.hostname, '/v1/admin/branding/logo', { operatorToken: session.token }),
 
   listAudit(session: Caller, query: AuditQuery) {
     const params = new URLSearchParams({ page: String(query.page), pageSize: String(AUDIT_PAGE_SIZE) });

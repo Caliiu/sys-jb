@@ -1,16 +1,17 @@
 'use client';
 
 import { ArrowRight } from 'lucide-react';
+import { useOpenSupport } from '@/hooks/useOpenSupport';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
-import { useToast } from '../ui/Toast';
 
+/** Atendimento: abre o WhatsApp do promotor vinculado ou, sem ele, o da banca. */
 export default function SupportBanner() {
-  const toast = useToast();
+  const openSupport = useOpenSupport();
 
   return (
     <button
       type="button"
-      onClick={() => toast.comingSoon('Atendimento')}
+      onClick={openSupport}
       className="w-[calc(100%-2rem)] mx-4 mt-1 flex items-center justify-between bg-gradient-to-r from-brand-teal to-brand-tealDark rounded-xl2 px-4 py-3 shadow-card active:scale-[0.98] transition-transform"
     >
       <span className="flex items-center gap-3">

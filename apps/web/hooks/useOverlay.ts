@@ -7,11 +7,17 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabi
 /**
  * Comportamento padrão de menus e modais sobrepostos:
  * - Esc fecha;
- * - ao abrir, o foco vai para o primeiro elemento do painel; ao fechar, volta para quem abriu;
+ * - ao abrir, o foco vai para o primeiro elemento do painel (ou para o painel); ao fechar, volta para quem abriu;
  * - a página por trás não rola enquanto estiver aberto.
  * O painel fechado deve receber `inert` (fora do Tab e dos leitores de tela).
  */
-export function useOverlay(open: boolean, onClose: () => void, panelRef: RefObject<HTMLElement | null>) {
+export function useOverlay(
+  open: boolean,
+  onClose: () => void,
+  panelRef: RefObject<HTMLElement | null>,
+  /** 'panel': o foco vai para o próprio painel (tabIndex={-1}), sem destacar nenhum botão ao abrir. */
+  initialFocus: 'first' | 'panel' = 'first',
+) {
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -23,7 +29,9 @@ export function useOverlay(open: boolean, onClose: () => void, panelRef: RefObje
     const previouslyFocused = document.activeElement as HTMLElement | null;
     // preventScroll: o painel ainda está entrando (fora da tela); sem isso o navegador rola para mostrar o
     // item focado e a tela "treme" no meio da animação.
-    panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
+    const target =
+      initialFocus === 'panel' ? panelRef.current : panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    target?.focus({ preventScroll: true });
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -41,5 +49,5 @@ export function useOverlay(open: boolean, onClose: () => void, panelRef: RefObje
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, [open, panelRef]);
+  }, [open, panelRef, initialFocus]);
 }

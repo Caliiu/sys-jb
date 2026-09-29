@@ -7,7 +7,7 @@ import { renderWithProviders, router, user } from '@/test/render';
 
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/loterias' }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ logout: vi.fn() }) }));
-vi.mock('@/app/lottery-actions', () => ({ placeLotteryTicketsAction: vi.fn() }));
+vi.mock('@/app/lottery-actions', () => ({ placeLotteryTicketsAction: vi.fn(), repeatLotteryTicketAction: vi.fn() }));
 
 const { placeLotteryTicketsAction } = await import('@/app/lottery-actions');
 const { default: LotteriesScreen } = await import('./LotteriesScreen');
@@ -64,8 +64,11 @@ describe('Loterias', () => {
     expect(screen.getByRole('list', { name: 'Etapa 1 de 9' })).toBeInTheDocument();
     await click(/Quininha/);
     expect(screen.getByRole('status')).toHaveTextContent('Quininha: disponível em breve.');
+    // Repetir pule abre o próprio fluxo (RepeatPuleFlow.test.tsx) e volta para cá.
     await click(/Repetir pule/);
-    expect(screen.getByRole('status')).toHaveTextContent('Repetir pule: disponível em breve.');
+    expect(heading()).toBe('Repetir pule');
+    await click('Voltar às loterias');
+    expect(heading()).toBe('Nova aposta');
     const tools = within(screen.getByRole('navigation', { name: 'Ferramentas' }));
     // Prêmio abre o simulador; as outras ainda são "em breve".
     expect(tools.getByRole('link', { name: 'Prêmio' })).toHaveAttribute('href', '/loterias/calcular');

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useOverlay } from '@/hooks/useOverlay';
+import { useOpenSupport } from '@/hooks/useOpenSupport';
 import PixIcon from '../icons/PixIcon';
 import { ROUTES } from '@/lib/routes';
 import { useToast } from '../ui/Toast';
@@ -63,6 +64,7 @@ export default function SideMenu({ id, open, onClose }: SideMenuProps) {
   const router = useRouter();
   const { logout } = useAuth();
   const toast = useToast();
+  const openSupport = useOpenSupport();
   const panelRef = useRef<HTMLElement>(null);
 
   useOverlay(open, onClose, panelRef);
@@ -130,7 +132,10 @@ export default function SideMenu({ id, open, onClose }: SideMenuProps) {
             <li>
               <button
                 type="button"
-                onClick={() => handleItem({ label: 'Suporte', icon: Headphones })}
+                onClick={() => {
+                  onClose();
+                  void openSupport();
+                }}
                 className={`${itemClass} text-gray-700`}
               >
                 <Headphones className="w-4.5 h-4.5 text-brand-primary" size={18} aria-hidden />

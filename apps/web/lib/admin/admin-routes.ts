@@ -12,4 +12,9 @@ export const ADMIN_ROUTES = {
   commissions: '/comissoes',
   quotes: '/cotacoes',
   draws: '/sorteios',
+  branding: '/identidade-visual',
+  homeLayout: '/cards-inicio',
+  murals: '/mural',
+  /** Imagem do mural (a versão muda a cada alteração, para o navegador não usar a do cache). */
+  muralImage: (id: string, version: string) => `/mural/${id}/imagem?v=${version}`,
 } as const;

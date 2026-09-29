@@ -17,13 +17,17 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 }
 
 const parser = express.json({ limit: '16kb', strict: true });
+// Mural e logo da banca: a imagem (até 3 MB, ~4 MB em base64) vai no JSON. Só nas alterações do painel.
+const imageParser = express.json({ limit: '5mb', strict: true });
+const IMAGE_SAVE_PATH = /^\/v1\/admin\/(murals(\/[^/]+)?|branding)$/;
 
 /**
  * Body parser JSON com erros no formato padrão. Sem isso, JSON malformado cairia
  * no handler padrão do Express, que expõe stack trace fora de produção.
  */
 export function jsonBody(req: Request, res: Response, next: NextFunction): void {
-  parser(req, res, (err?: unknown) => {
+  const isImageSave = (req.method === 'POST' || req.method === 'PUT') && IMAGE_SAVE_PATH.test(req.path);
+  (isImageSave ? imageParser : parser)(req, res, (err?: unknown) => {
     if (!err) {
       next();
       return;

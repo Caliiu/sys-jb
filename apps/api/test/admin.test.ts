@@ -223,6 +223,9 @@ describe('sessão do operador', () => {
         logoUrl: expect.toBeOneOf([null, expect.any(String)]),
         primaryColor: expect.stringMatching(/^#[0-9a-fA-F]{6}$/),
         secondaryColor: expect.stringMatching(/^#[0-9a-fA-F]{6}$/),
+        inviteBarText: 'Indique um amigo e ganhe bônus',
+        inviteBarEnabled: true,
+        supportPhone: null,
       },
     });
     expect(JSON.stringify(res.body.tenant)).not.toMatch(/"(id|domain)"/);

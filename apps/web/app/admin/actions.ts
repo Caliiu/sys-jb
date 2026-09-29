@@ -4,6 +4,9 @@ import type {
   AdminCommissionMonth,
   AdminCommissionSettings,
   AdminDrawsResponse,
+  AdminBranding,
+  HomeLayout,
+  AdminMural,
   AdminPromoterListItem,
   PublicQuotes,
   SetFazendinhaQuotesRequest,
@@ -18,6 +21,10 @@ import {
   DRAW_LIMITS,
   MAX_COMMISSION_BPS,
   MAX_WALLET_CREDIT_CENTS,
+  MURAL_DISPLAY_MODES,
+  MURAL_LIMITS,
+  BRANDING_LIMITS,
+  HOME_BLOCK_IDS,
   MIN_COMMISSION_BPS,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
@@ -299,6 +306,148 @@ export async function removeDrawExceptionAction(id: unknown): Promise<AdminActio
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.deleteDrawException(caller, exceptionId.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+// Mural: só o formato; datas, conteúdo da imagem e permissão são da API.
+const muralIdSchema = z.uuid();
+const saveMuralSchema = z.strictObject({
+  id: muralIdSchema.optional(),
+  name: z.string().max(MURAL_LIMITS.nameMax + 10),
+  startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  displayMode: z.enum(MURAL_DISPLAY_MODES),
+});
+
+const muralFailure = (status: number, error: Parameters<typeof toAdminFailure>[1]): AdminFailure =>
+  error.code === 'NOT_FOUND'
+    ? { ok: false, code: 'NOT_FOUND', message: 'Mural não encontrado. Atualize a página.' }
+    : toAdminFailure(status, error);
+
+/**
+ * Cadastra (sem id) ou altera um mural. Vem como FormData por causa da imagem (campo `image`, opcional na
+ * alteração: sem ela, mantém a atual). A API confere a permissão, as datas e o conteúdo da imagem, e audita.
+ */
+export async function saveMuralAction(form: unknown): Promise<AdminActionResult<AdminMural[]>> {
+  if (!(form instanceof FormData)) return invalidInput;
+  const text = (key: string) => {
+    const value = form.get(key);
+    return typeof value === 'string' ? value : undefined;
+  };
+  const body = saveMuralSchema.safeParse({
+    ...(text('id') ? { id: text('id') } : {}),
+    name: text('name'),
+    startsOn: text('startsOn'),
+    endsOn: text('endsOn'),
+    displayMode: text('displayMode'),
+  });
+  if (!body.success) return invalidInput;
+
+  const file = form.get('image');
+  let image: string | undefined;
+  if (file instanceof File && file.size > 0) {
+    if (file.size > MURAL_LIMITS.imageMaxBytes) {
+      return {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Corrija os campos destacados.',
+        fieldErrors: { image: 'Imagem acima de 3 MB.' },
+      };
+    }
+    image = Buffer.from(await file.arrayBuffer()).toString('base64');
+  }
+
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const { id, ...mural } = body.data;
+  const request = { ...mural, ...(image ? { image } : {}) };
+  const res = id ? await adminApi.updateMural(caller, id, request) : await adminApi.createMural(caller, request);
+  return res.ok ? { ok: true, data: res.data } : muralFailure(res.status, res.error);
+}
+
+export async function deleteMuralAction(id: unknown): Promise<AdminActionResult<AdminMural[]>> {
+  const muralId = muralIdSchema.safeParse(id);
+  if (!muralId.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.deleteMural(caller, muralId.data);
+  return res.ok ? { ok: true, data: res.data } : muralFailure(res.status, res.error);
+}
+
+// Identidade visual: só o formato; regras (tamanhos, cores, conteúdo da logo) e permissão são da API.
+const saveBrandingSchema = z.strictObject({
+  name: z.string().max(BRANDING_LIMITS.nameMax + 10),
+  primaryColor: z.string().max(7),
+  secondaryColor: z.string().max(7),
+  inviteBarText: z.string().max(BRANDING_LIMITS.inviteBarMax + 10),
+  inviteBarEnabled: z.enum(['0', '1']).transform((value) => value === '1'),
+  supportPhone: z.string().max(32),
+});
+
+/**
+ * Altera a identidade visual da banca do operador. FormData por causa da logo (campo `logo`, opcional;
+ * `removeLogo=1` volta à logo padrão). A API confere a permissão e o conteúdo da logo, e audita.
+ */
+export async function saveBrandingAction(form: unknown): Promise<AdminActionResult<AdminBranding>> {
+  if (!(form instanceof FormData)) return invalidInput;
+  const text = (key: string) => {
+    const value = form.get(key);
+    return typeof value === 'string' ? value : undefined;
+  };
+  const body = saveBrandingSchema.safeParse({
+    name: text('name'),
+    primaryColor: text('primaryColor'),
+    secondaryColor: text('secondaryColor'),
+    inviteBarText: text('inviteBarText'),
+    inviteBarEnabled: text('inviteBarEnabled'),
+    supportPhone: text('supportPhone') ?? '',
+  });
+  if (!body.success) return invalidInput;
+
+  const file = form.get('logo');
+  let logo: string | null | undefined = text('removeLogo') === '1' ? null : undefined;
+  if (file instanceof File && file.size > 0) {
+    if (file.size > BRANDING_LIMITS.logoMaxBytes) {
+      return {
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Corrija os campos destacados.',
+        fieldErrors: { logo: 'Logo acima de 1 MB.' },
+      };
+    }
+    logo = Buffer.from(await file.arrayBuffer()).toString('base64');
+  }
+
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.saveBranding(caller, { ...body.data, ...(logo !== undefined ? { logo } : {}) });
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+// Cards do início: só o formato; a API confere que o layout está completo (todos os blocos e cards) e a permissão.
+const homeLayoutSchema = z.strictObject({
+  blocks: z
+    .array(
+      z.strictObject({
+        id: z.enum(HOME_BLOCK_IDS),
+        visible: z.boolean(),
+        cards: z.array(z.strictObject({ id: z.string().max(40), visible: z.boolean() })).max(10),
+      }),
+    )
+    .max(HOME_BLOCK_IDS.length),
+});
+
+/** Salva a ordem e a visibilidade dos blocos e cards do início. A API valida e audita. */
+export async function saveHomeLayoutAction(input: unknown): Promise<AdminActionResult<HomeLayout>> {
+  const body = homeLayoutSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.saveHomeLayout(caller, body.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

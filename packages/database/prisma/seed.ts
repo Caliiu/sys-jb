@@ -43,12 +43,10 @@ try {
     await prisma.tenant.upsert({
       where: { slug: t.slug },
       create: { ...t, active: true },
+      // Nome e cores só na criação: depois são do Gerente (Personalização no painel).
       update: {
-        name: t.name,
         domain: t.domain,
         logoUrl: t.logoUrl,
-        primaryColor: t.primaryColor,
-        secondaryColor: t.secondaryColor,
       },
     });
     console.log(`banca ok: ${t.slug} (${t.domain})`);

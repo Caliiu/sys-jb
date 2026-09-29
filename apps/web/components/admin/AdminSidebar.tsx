@@ -1,7 +1,20 @@
 'use client';
 
 import type { Permission } from '@sysjb/contracts';
-import { BadgePercent, CalendarClock, HandCoins, LogOut, Menu, ScrollText, Table2, Users, X } from 'lucide-react';
+import {
+  BadgePercent,
+  CalendarClock,
+  HandCoins,
+  LayoutGrid,
+  LogOut,
+  Megaphone,
+  Menu,
+  Palette,
+  ScrollText,
+  Table2,
+  Users,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -17,12 +30,26 @@ interface NavItem {
   permission: Permission;
 }
 
-const NAV_ITEMS: NavItem[] = [
+/** Grupo do menu (ex.: Personalização): título e itens. Sem nenhum item permitido, o grupo não aparece. */
+interface NavGroup {
+  group: string;
+  items: NavItem[];
+}
+
+const NAV: Array<NavItem | NavGroup> = [
   { href: ADMIN_ROUTES.users, label: 'Usuários', icon: Users, permission: 'users.read' },
   { href: ADMIN_ROUTES.promoters, label: 'Promotores', icon: BadgePercent, permission: 'promoters.read' },
   { href: ADMIN_ROUTES.commissions, label: 'Comissões', icon: HandCoins, permission: 'commissions.read' },
   { href: ADMIN_ROUTES.quotes, label: 'Cotações', icon: Table2, permission: 'quotes.read' },
   { href: ADMIN_ROUTES.draws, label: 'Sorteios', icon: CalendarClock, permission: 'draws.read' },
+  {
+    group: 'Personalização',
+    items: [
+      { href: ADMIN_ROUTES.branding, label: 'Identidade visual', icon: Palette, permission: 'branding.read' },
+      { href: ADMIN_ROUTES.homeLayout, label: 'Cards do início', icon: LayoutGrid, permission: 'branding.read' },
+      { href: ADMIN_ROUTES.murals, label: 'Mural', icon: Megaphone, permission: 'murals.read' },
+    ],
+  },
   { href: ADMIN_ROUTES.audit, label: 'Auditoria', icon: ScrollText, permission: 'audit.read' },
 ];
 
@@ -58,6 +85,26 @@ export default function AdminSidebar({ tenantName, operatorName, roleLabel, perm
     }
   }
 
+  function navLink({ href, label, icon: Icon }: NavItem) {
+    const active = pathname === href || pathname.startsWith(`${href}/`);
+    return (
+      <Link
+        key={href}
+        href={href}
+        onClick={() => setOpen(false)}
+        aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] font-medium ${
+          active
+            ? 'border-r-2 border-admin-accent bg-admin-accent/10 text-admin-accent'
+            : 'text-admin-text hover:bg-admin-bg'
+        }`}
+      >
+        <Icon size={18} aria-hidden />
+        {label}
+      </Link>
+    );
+  }
+
   const content = (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-admin-border px-5 py-5">
@@ -69,23 +116,21 @@ export default function AdminSidebar({ tenantName, operatorName, roleLabel, perm
       </div>
 
       <nav aria-label="Menu do painel" className="flex-1 py-3">
-        {NAV_ITEMS.filter((item) => permissions.includes(item.permission)).map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
+        {NAV.map((entry) => {
+          if (!('group' in entry)) return permissions.includes(entry.permission) ? navLink(entry) : null;
+          const items = entry.items.filter((item) => permissions.includes(item.permission));
+          if (items.length === 0) return null;
+          const headingId = `nav-${entry.group}`;
           return (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setOpen(false)}
-              aria-current={active ? 'page' : undefined}
-              className={`flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] font-medium ${
-                active
-                  ? 'border-r-2 border-admin-accent bg-admin-accent/10 text-admin-accent'
-                  : 'text-admin-text hover:bg-admin-bg'
-              }`}
-            >
-              <Icon size={18} aria-hidden />
-              {label}
-            </Link>
+            <div key={entry.group} role="group" aria-labelledby={headingId} className="mt-3">
+              <p
+                id={headingId}
+                className="px-5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-admin-muted"
+              >
+                {entry.group}
+              </p>
+              {items.map(navLink)}
+            </div>
           );
         })}
       </nav>

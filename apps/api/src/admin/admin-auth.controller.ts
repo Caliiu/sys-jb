@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Header, Headers, HttpCode, Inject, Post, UseGuards } from '@nestjs/common';
 import type { OperatorLoginResponse, OperatorMeResponse } from '@sysjb/contracts';
+import { RateLimitIp } from '../rate-limit/rate-limit.interceptor.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
+import { toPublicTenant } from '../tenancy/tenant-mapper.js';
 import { CurrentTenant } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { type OperatorLoginInput, operatorLoginSchema } from './admin.schemas.js';
@@ -16,6 +18,7 @@ export class AdminAuthController {
   constructor(@Inject(OperatorAuthService) private readonly auth: OperatorAuthService) {}
 
   @Post('auth/login')
+  @RateLimitIp('login_ip')
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
   login(@Body(new ZodValidationPipe(operatorLoginSchema)) body: OperatorLoginInput): Promise<OperatorLoginResponse> {
@@ -28,13 +31,7 @@ export class AdminAuthController {
   me(@CurrentOperator() operator: AuthenticatedOperator, @CurrentTenant() tenant: ResolvedTenant): OperatorMeResponse {
     return {
       operator: toPublicOperator(operator),
-      tenant: {
-        name: tenant.name,
-        slug: tenant.slug,
-        logoUrl: tenant.logoUrl,
-        primaryColor: tenant.primaryColor,
-        secondaryColor: tenant.secondaryColor,
-      },
+      tenant: toPublicTenant(tenant),
     };
   }
 

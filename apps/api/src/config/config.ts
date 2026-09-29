@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+import { type RateLimitConfig, loadRateLimitConfig } from '../rate-limit/rate-limit.rules.js';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
 
@@ -19,8 +20,10 @@ export interface AppConfig {
   serviceKeys: ServiceKeyEntry[];
   /** SHA-256 da credencial do painel administrativo (admin.<domínio>); null = painel desativado. */
   adminKeyDigest: Buffer | null;
-  /** Chave HMAC para pseudonimizar o CPF no controle de tentativas de login. */
+  /** Chave HMAC para pseudonimizar o CPF no controle de tentativas de login (e o IP no limite de requisições). */
   authSecret: string;
+  /** Limite de requisições (RATE_LIMIT_ENABLED e RATE_LIMIT_<REGRA>). */
+  rateLimit: RateLimitConfig;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -111,5 +114,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     serviceKeys,
     adminKeyDigest: parseAdminKey(e.ADMIN_SERVICE_KEY, serviceKeys),
     authSecret: e.AUTH_SECRET,
+    rateLimit: loadRateLimitConfig(env),
   };
 }

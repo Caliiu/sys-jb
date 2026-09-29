@@ -1,5 +1,5 @@
 import { type DynamicModule, Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminAuthController } from './admin/admin-auth.controller.js';
 import { AdminUsersController } from './admin/admin-users.controller.js';
 import { AuditController } from './admin/audit.controller.js';
@@ -8,6 +8,12 @@ import { CommissionsController } from './admin/commissions.controller.js';
 import { CommissionsService } from './admin/commissions.service.js';
 import { QuotesAdminController } from './admin/quotes-admin.controller.js';
 import { DrawsAdminController } from './admin/draws-admin.controller.js';
+import { MuralsAdminController } from './admin/murals-admin.controller.js';
+import { BrandingAdminController } from './admin/branding-admin.controller.js';
+import { BrandingService } from './branding/branding.service.js';
+import { HomeLayoutService } from './branding/home-layout.service.js';
+import { MuralsController } from './murals/murals.controller.js';
+import { MuralsService } from './murals/murals.service.js';
 import { DrawsController } from './draws/draws.controller.js';
 import { DrawsService } from './draws/draws.service.js';
 import { LotteriesController } from './lotteries/lotteries.controller.js';
@@ -34,6 +40,8 @@ import { SessionGuard } from './auth/session.guard.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { DatabaseService } from './database/database.service.js';
+import { RateLimitInterceptor } from './rate-limit/rate-limit.interceptor.js';
+import { RateLimitService } from './rate-limit/rate-limit.service.js';
 import { FazendinhaController } from './fazendinha/fazendinha.controller.js';
 import { FazendinhaService } from './fazendinha/fazendinha.service.js';
 import { HealthController } from './health/health.controller.js';
@@ -64,6 +72,9 @@ export class AppModule {
         CommissionsController,
         QuotesAdminController,
         DrawsAdminController,
+        MuralsAdminController,
+        BrandingAdminController,
+        MuralsController,
         DrawsController,
         QuotesController,
         PrizesController,
@@ -76,6 +87,8 @@ export class AppModule {
       providers: [
         { provide: APP_CONFIG, useValue: config },
         { provide: APP_FILTER, useClass: AllExceptionsFilter },
+        { provide: APP_INTERCEPTOR, useClass: RateLimitInterceptor },
+        RateLimitService,
         DatabaseService,
         TenantResolverService,
         TenantGuard,
@@ -98,6 +111,9 @@ export class AppModule {
         PrizesService,
         ReportsService,
         DrawsService,
+        MuralsService,
+        BrandingService,
+        HomeLayoutService,
         LotteriesService,
         SessionGuard,
         ProfileService,

@@ -261,7 +261,8 @@ describe('Configurações: baixar aplicativo', () => {
     expect(within(sheet).queryByText(/Safari/)).toBeNull();
 
     await ui.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: 'Adicionar à tela inicial' })).toBeNull();
+    // A folha desce deslizando antes de sair.
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Adicionar à tela inicial' })).toBeNull());
   });
 
   it('no iPhone, o passo a passo fala do Compartilhar do Safari', async () => {

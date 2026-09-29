@@ -1,6 +1,6 @@
 'use client';
 
-import { type PointerEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { createContext, type PointerEvent, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { useOverlay } from '@/hooks/useOverlay';
 
 interface BottomSheetProps {
@@ -10,11 +10,17 @@ interface BottomSheetProps {
   titleId: string;
   /** false: Esc, toque fora e arrastar não fecham (ex.: enquanto um envio está em andamento). */
   dismissible?: boolean;
+  /** 'panel': foca a folha em vez do primeiro botão (sem contorno de foco num botão ao abrir). */
+  initialFocus?: 'first' | 'panel';
   children: ReactNode;
 }
 
-/** Duração da animação de saída / volta (ms). */
-const ANIMATION_MS = 200;
+/** Fecha a folha com a animação de saída (para botões dentro dela, ex.: "Fechar"). */
+const SheetCloseContext = createContext<() => void>(() => {});
+export const useSheetClose = () => useContext(SheetCloseContext);
+
+/** Duração da animação de saída / volta (ms). A entrada fica no CSS (animate-sheet-up, 320 ms). */
+const ANIMATION_MS = 250;
 /** Fecha se arrastar mais que isto (px) ou que 25% da altura da folha, o que for menor. */
 const CLOSE_DISTANCE = 120;
 /** ...ou se soltar num movimento rápido para baixo (px/ms). */
@@ -22,9 +28,17 @@ const CLOSE_VELOCITY = 0.6;
 
 /**
  * Folha inferior acessível: Esc fecha, o foco entra no painel e volta para quem abriu, a página não rola.
+ * Entra deslizando de baixo e sai deslizando para baixo (Esc, toque fora, arrastar ou useSheetClose).
  * Arrastar a barrinha do topo para baixo fecha (com o dedo ou o mouse); soltar antes do limite volta.
  */
-export default function BottomSheet({ open, onClose, titleId, dismissible = true, children }: BottomSheetProps) {
+export default function BottomSheet({
+  open,
+  onClose,
+  titleId,
+  dismissible = true,
+  initialFocus = 'first',
+  children,
+}: BottomSheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ startY: number; startTime: number } | null>(null);
   const [offset, setOffset] = useState(0);
@@ -35,14 +49,16 @@ export default function BottomSheet({ open, onClose, titleId, dismissible = true
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   const close = () => {
-    if (dismissible) onClose();
+    if (dismissible) animateClose();
   };
-  useOverlay(open, close, panelRef);
+  useOverlay(open, close, panelRef, initialFocus);
 
   /** Desce a folha até sair da tela e só então fecha (o estado volta ao normal para a próxima abertura). */
   function animateClose() {
+    if (closeTimer.current !== undefined) return;
     setClosing(true);
     closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = undefined;
       setClosing(false);
       setOffset(0);
       onClose();
@@ -84,12 +100,12 @@ export default function BottomSheet({ open, onClose, titleId, dismissible = true
   if (!open) return null;
 
   const transform = closing ? 'translateY(100%)' : `translateY(${offset}px)`;
-  const transition = dragging ? 'none' : `transform ${ANIMATION_MS}ms ease-out`;
+  const transition = dragging ? 'none' : `transform ${ANIMATION_MS}ms cubic-bezier(0.4, 0, 1, 1)`;
 
   return (
     <div
       onClick={close}
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 transition-opacity"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 transition-opacity motion-safe:animate-backdrop-in"
       style={{ opacity: closing ? 0 : 1, transitionDuration: `${ANIMATION_MS}ms` }}
     >
       <div
@@ -97,9 +113,10 @@ export default function BottomSheet({ open, onClose, titleId, dismissible = true
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
         style={{ transform, transition }}
-        className="w-full max-w-[480px] rounded-t-2xl bg-white px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="w-full max-w-[480px] rounded-t-2xl bg-white px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] outline-none motion-safe:animate-sheet-up"
       >
         {/* Área de arrastar: a faixa toda do topo, não só a barrinha (mais fácil de pegar no celular). */}
         <div
@@ -115,7 +132,7 @@ export default function BottomSheet({ open, onClose, titleId, dismissible = true
         >
           <span className="block h-1 w-10 rounded-full bg-gray-300" />
         </div>
-        {children}
+        <SheetCloseContext value={close}>{children}</SheetCloseContext>
       </div>
     </div>
   );

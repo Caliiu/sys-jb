@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { NextConfig } from 'next';
+import { staticSecurityHeaders } from './lib/security-headers';
 
 // O .env fica na raiz do monorepo (o Next só lê o de apps/web).
 const rootEnv = new URL('../../.env', import.meta.url);
@@ -14,6 +15,10 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['trevo.localhost', 'aurora.localhost', 'boreal.localhost', adminHostname],
   // O indicador do Next (só em dev) cobria o botão "Sair" do menu lateral do painel, no canto inferior esquerdo.
   devIndicators: { position: 'bottom-right' },
+  // A CSP (com nonce) é montada por requisição no proxy.ts.
+  async headers() {
+    return [{ source: '/:path*', headers: staticSecurityHeaders(process.env.NODE_ENV === 'development') }];
+  },
   // No host do painel (admin.<domínio>) os caminhos são curtos (/login, /usuarios) e as páginas vivem em
   // app/admin. O prefixo /admin digitado direto não funciona em host nenhum (o layout do painel dá 404).
   async rewrites() {
@@ -31,6 +36,8 @@ const nextConfig: NextConfig = {
       fallback: [],
     };
   },
+  // Imagem do mural (até 3 MB) enviada pelo painel numa server action. Padrão do Next: 1 MB.
+  experimental: { serverActions: { bodySizeLimit: '4mb' } },
   // Importante: não usar `env` aqui. Ele embute valores no bundle do navegador.
 };
 

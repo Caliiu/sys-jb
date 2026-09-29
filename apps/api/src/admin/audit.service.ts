@@ -69,5 +69,6 @@ function toDetails(raw: Prisma.JsonValue): AuditDetails {
     ...(typeof raw.month === 'string' ? { month: raw.month } : {}),
     ...(typeof raw.draw === 'string' ? { draw: raw.draw } : {}),
     ...(typeof raw.date === 'string' ? { date: raw.date } : {}),
+    ...(typeof raw.mural === 'string' ? { mural: raw.mural } : {}),
   };
 }

@@ -118,6 +118,12 @@ export interface PublicTenant {
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
+  /** Texto da barra "Indique um amigo" do topo do app. */
+  inviteBarText: string;
+  /** Barra ligada: aparece no topo de todas as telas do jogador. */
+  inviteBarEnabled: boolean;
+  /** WhatsApp do suporte da banca (só dígitos); null = não configurado. */
+  supportPhone: string | null;
 }
 
 export type ApiErrorCode =
@@ -154,4 +160,7 @@ export * from './lotteries.js';
 export * from './draws.js';
 export * from './prizes.js';
 export * from './reports.js';
+export * from './murals.js';
+export * from './branding.js';
+export * from './home-layout.js';
 export * from './validation.js';

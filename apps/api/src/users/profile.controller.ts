@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Header, HttpCode, Inject, Patch, Post, UseGuards } from '@nestjs/common';
-import type { PublicProfile } from '@sysjb/contracts';
+import type { PublicProfile, SupportContact } from '@sysjb/contracts';
 import { CurrentSession, SessionGuard } from '../auth/session.guard.js';
 import type { UserSession } from '../auth/session.types.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -26,6 +26,13 @@ export class ProfileController {
   @Header('Cache-Control', 'no-store')
   get(@CurrentTenant() tenant: ResolvedTenant, @CurrentSession() session: UserSession): Promise<PublicProfile> {
     return this.profile.get(tenant, session.userId);
+  }
+
+  /** WhatsApp do atendimento (promotor vinculado ou, sem ele, a banca). */
+  @Get('support')
+  @Header('Cache-Control', 'no-store')
+  support(@CurrentTenant() tenant: ResolvedTenant, @CurrentSession() session: UserSession): Promise<SupportContact> {
+    return this.profile.support(tenant, session.userId);
   }
 
   @Patch()

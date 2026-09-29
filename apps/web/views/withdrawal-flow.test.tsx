@@ -67,7 +67,8 @@ describe('Confirmar saque', () => {
 
     await ui.click(screen.getByRole('button', { name: 'Avançar' }));
     await ui.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: 'Confirmar saque' })).toBeNull();
+    // A folha desce deslizando antes de sair.
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Confirmar saque' })).toBeNull());
     expect(requestWithdrawalAction).not.toHaveBeenCalled();
   });
 
@@ -272,7 +273,8 @@ describe('Meus saques: lista e detalhes', () => {
     await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 123,45, 12:00' }));
     expect(screen.getByText('ana@example.com')).toBeInTheDocument();
     await ui.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: 'Detalhes do resgate' })).toBeNull();
+    // A folha desce deslizando antes de sair.
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Detalhes do resgate' })).toBeNull());
   });
 
   it('o detalhe do celular mostra a máscara', async () => {

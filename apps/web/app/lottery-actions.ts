@@ -1,6 +1,6 @@
 'use server';
 
-import type { ApiErrorCode, PlaceLotteryTicketsResponse } from '@sysjb/contracts';
+import { type ApiErrorCode, MAX_PULE_NUMBER, type PlaceLotteryTicketsResponse } from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { apiRequest } from '@/lib/api-client';
@@ -45,20 +45,40 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   DRAW_CLOSED: 'Uma das loterias escolhidas já encerrou. Escolha outra.',
   QUOTE_CHANGED: 'A cotação mudou. Confira os prêmios antes de apostar.',
   SESSION_INVALID: 'Sessão encerrada. Entre novamente.',
+  TOO_MANY_ATTEMPTS: 'Muitas tentativas seguidas. Aguarde um pouco e tente novamente.',
   VALIDATION_ERROR: 'Confira as apostas: há algum dado inválido.',
 };
 
-export async function placeLotteryTicketsAction(input: unknown): Promise<PlaceLotteryResult> {
-  const body = purchaseSchema.safeParse(input);
-  if (!body.success) return { ok: false, code: 'VALIDATION_ERROR', message: 'Aposta inválida.' };
+const repeatSchema = z.strictObject({
+  idempotencyKey: z.uuid(),
+  puleNumber: z.number().int().min(1).max(MAX_PULE_NUMBER),
+  drawDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  draws: purchaseSchema.shape.draws,
+});
+
+const sessionEnded: PlaceLotteryResult = {
+  ok: false,
+  code: 'SESSION_INVALID',
+  message: 'Sessão encerrada. Entre novamente.',
+};
+
+/** Banca (hostname) e sessão (cookie HttpOnly) da requisição; null = sem sessão utilizável. */
+async function caller(): Promise<{ hostname: string; sessionToken: string } | null> {
   const hostname = hostnameOnly((await headers()).get('host'));
   const sessionToken = await readSessionToken();
-  if (!hostname || !serviceKeyFor(hostname) || !sessionToken) {
-    return { ok: false, code: 'SESSION_INVALID', message: 'Sessão encerrada. Entre novamente.' };
-  }
+  return hostname && serviceKeyFor(hostname) && sessionToken ? { hostname, sessionToken } : null;
+}
 
-  const res = await apiRequest<PlaceLotteryTicketsResponse>(hostname, 'POST', '/v1/lotteries/tickets', body.data, {
-    sessionToken,
+/** Envia a compra à API e traduz a falha para a tela. `extra`: mensagens próprias da operação. */
+async function send(
+  path: string,
+  body: unknown,
+  extra: Partial<Record<ApiErrorCode, string>> = {},
+): Promise<PlaceLotteryResult> {
+  const session = await caller();
+  if (!session) return sessionEnded;
+  const res = await apiRequest<PlaceLotteryTicketsResponse>(session.hostname, 'POST', path, body, {
+    sessionToken: session.sessionToken,
   });
   if (res.ok) return { ok: true, data: res.data };
   const { code } = res.error;
@@ -66,7 +86,29 @@ export async function placeLotteryTicketsAction(input: unknown): Promise<PlaceLo
     ok: false,
     code,
     message:
+      extra[code] ??
       MESSAGES[code] ??
+      // Conflitos têm mensagem própria da API, pronta para a tela e sem dados pessoais.
+      (code === 'CONFLICT' ? res.error.message : undefined) ??
       (res.status >= 500 ? 'Serviço indisponível. Tente novamente.' : 'Não foi possível concluir a aposta.'),
   };
+}
+
+export async function placeLotteryTicketsAction(input: unknown): Promise<PlaceLotteryResult> {
+  const body = purchaseSchema.safeParse(input);
+  if (!body.success) return { ok: false, code: 'VALIDATION_ERROR', message: 'Aposta inválida.' };
+  return send('/v1/lotteries/tickets', body.data);
+}
+
+/**
+ * Repetir pule: as apostas vêm da pule (a API só aceita pule do próprio jogador); aqui vão o número, a data e as
+ * loterias escolhidas.
+ */
+export async function repeatLotteryTicketAction(input: unknown): Promise<PlaceLotteryResult> {
+  const body = repeatSchema.safeParse(input);
+  if (!body.success) return { ok: false, code: 'VALIDATION_ERROR', message: 'Pule inválida' };
+  return send('/v1/lotteries/tickets/repeat', body.data, {
+    NOT_FOUND: 'Pule inválida',
+    VALIDATION_ERROR: 'Confira a data e as loterias escolhidas.',
+  });
 }

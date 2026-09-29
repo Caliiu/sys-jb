@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import type { PublicUser } from '@sysjb/contracts';
+import { RateLimitIp } from '../rate-limit/rate-limit.interceptor.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
@@ -18,6 +19,7 @@ export class UsersController {
   constructor(@Inject(UsersService) private readonly users: UsersService) {}
 
   @Post()
+  @RateLimitIp('signup_ip')
   @HttpCode(201)
   create(
     @CurrentTenant() tenant: ResolvedTenant,

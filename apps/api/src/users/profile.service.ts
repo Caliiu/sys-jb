@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type PublicProfile, passwordProblem } from '@sysjb/contracts';
+import { type PublicProfile, type SupportContact, passwordProblem, supportMessage } from '@sysjb/contracts';
 import { PasswordService } from '../auth/password.service.js';
 import type { UserSession } from '../auth/session.types.js';
 import { AppError, Errors } from '../common/app-error.js';
@@ -21,6 +21,28 @@ export class ProfileService {
 
   get(tenant: ResolvedTenant, userId: string): Promise<PublicProfile> {
     return this.db.withTenant(tenant.id, (tx) => this.load(tx, tenant.id, userId));
+  }
+
+  /**
+   * WhatsApp do atendimento: o do promotor que indicou o jogador, se ainda for promotor ativo; senão o da banca. A
+   * mensagem vem pronta, com o código de unidade (displayId) e, para o promotor, o nome dele.
+   */
+  support(tenant: ResolvedTenant, userId: string): Promise<SupportContact> {
+    return this.db.withTenant(tenant.id, async (tx) => {
+      const user = await tx.user.findFirst({
+        where: { tenantId: tenant.id, id: userId },
+        select: {
+          displayId: true,
+          referredBy: { select: { name: true, phone: true, status: true, promoterCommissionBps: true } },
+        },
+      });
+      const unitCode = user?.displayId ?? null;
+      const promoter = user?.referredBy;
+      if (promoter && promoter.status === 'ACTIVE' && promoter.promoterCommissionBps !== null) {
+        return { phone: promoter.phone, message: supportMessage({ promoterName: promoter.name, unitCode }) };
+      }
+      return { phone: tenant.supportPhone, message: supportMessage({ promoterName: null, unitCode }) };
+    });
   }
 
   /** Só e-mail e telefone. CPF, nome e data de nascimento não mudam por aqui. */

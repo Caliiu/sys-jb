@@ -7,6 +7,7 @@ import PixIcon from '../icons/PixIcon';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import TenantLogo from '../tenant/TenantLogo';
 import { useToast } from '../ui/Toast';
+import { useOpenSupport } from '@/hooks/useOpenSupport';
 
 interface FooterLink {
   label: string;
@@ -34,6 +35,7 @@ interface FooterProps {
 
 export default function Footer({ version }: FooterProps) {
   const toast = useToast();
+  const openSupport = useOpenSupport();
 
   return (
     <footer className="px-4 pt-6 pb-28 text-center">
@@ -64,7 +66,7 @@ export default function Footer({ version }: FooterProps) {
         </button>
         <button
           type="button"
-          onClick={() => toast.comingSoon('Atendimento')}
+          onClick={openSupport}
           className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700"
         >
           <WhatsAppIcon className="w-4 h-4" aria-hidden />

@@ -1,11 +1,13 @@
 import { Body, Controller, Get, Header, Headers, HttpCode, Inject, Post, UseGuards } from '@nestjs/common';
 import type { LoginResponse, PublicUser } from '@sysjb/contracts';
+import { RateLimitIp } from '../rate-limit/rate-limit.interceptor.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { type LoginInput, loginSchema } from '../users/user.schemas.js';
 import { AuthService } from './auth.service.js';
-import { SESSION_HEADER } from './session.guard.js';
+import { CurrentSession, SESSION_HEADER, SessionGuard } from './session.guard.js';
+import type { UserSession } from './session.types.js';
 
 @Controller('v1')
 @UseGuards(TenantGuard)
@@ -13,6 +15,7 @@ export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 
   @Post('auth/login')
+  @RateLimitIp('login_ip')
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
   login(
@@ -23,9 +26,10 @@ export class AuthController {
   }
 
   @Get('me')
+  @UseGuards(SessionGuard)
   @Header('Cache-Control', 'no-store')
-  me(@CurrentTenant() tenant: ResolvedTenant, @Headers(SESSION_HEADER) token?: string): Promise<PublicUser> {
-    return this.auth.me(tenant, token);
+  me(@CurrentTenant() tenant: ResolvedTenant, @CurrentSession() session: UserSession): Promise<PublicUser> {
+    return this.auth.me(tenant, session.userId);
   }
 
   @Post('auth/logout')

@@ -411,13 +411,22 @@ Tela em `/fazendinha` (uma rota só; as etapas lista → palpites → comprovant
 
 ## Loterias
 
-Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor → Loterias → Carrinho → Finalizar, e o recibo. Só o **Tradicional** está disponível; os outros tipos e "Repetir pule" avisam "em breve". Regras em `packages/contracts/src/lotteries.ts`, usadas pela tela e pela API.
+Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor → Loterias → Carrinho → Finalizar, e o recibo. Só o **Tradicional** está disponível; os outros tipos avisam "em breve". "Repetir pule" tem fluxo próprio (abaixo). Regras em `packages/contracts/src/lotteries.ts`, usadas pela tela e pela API.
 
 - **Modalidades**: as da tabela de cotações (Grupo, Dezena, Centena, Milhar, Unidade, Duque/Terno Dez, Terno Dez Seco, Duque/Terno/Quadra GP, Quina 8/5, Sena 10/6, Passe Vai/Vem) e as derivadas pela cotação da base: Centena/Milhar Invertida (valor dividido pelas permutações), Centena Esquerda/Inv Esq, Dezena Esq/Meio e Milhar e Centena (metade em cada). Modalidade com cotação 0 não aparece. Ficaram de fora "Palpitão" e "Centena 3X" (regra não definida).
 - **Colocação**: números aceitam 1º, 1/5, 1 e 1/5, 2º–5º, 1/2, 1/3, 1/4 (prêmio ÷ posições); combos têm colocação fixa (a cotação já considera).
 - **Valor**: "Todos" divide entre os palpites; "Cada" vale por palpite. Várias loterias = um pule por extração, com os mesmos itens.
 - **Compra** (`POST /v1/lotteries/tickets`): valida sorteios (cadastro da banca), palpites, horário limite (o banco confere de novo e grava o "Venda até" do cadastro no pule) e a **cotação que o jogador viu** (`QUOTE_CHANGED` se mudou). Grava os pules e debita cada um (`lottery_debit`, movimentação `LOTTERY_BET`) na mesma transação; mesma chave não compra de novo. Entra no cálculo das comissões (valor apostado).
 - **Limitações**: sem apuração de resultado nem pagamento de prêmio; o botão "Valendo" do carrinho não foi feito.
+
+### Repetir pule
+
+Na primeira tela das Loterias, "Repetir pule" abre um fluxo próprio na mesma rota (`RepeatPuleFlow`, layout de `PRINTS/Repetir Pule/`): **modalidade** (só o Tradicional; os outros tipos avisam "em breve") → **data** (hoje e os próximos 6 dias) → **loterias** (a mesma lista da compra, com favoritas) → **código da pule** (resumo do que foi escolhido; só dígitos, "Colar" pega os dígitos da área de transferência) → "Pule repetida com sucesso! Direcionando ao recibo…" → **recibo** (Compartilhar e Menu). Falha: "Não foi possível repetir" com o motivo e "Tentar novamente".
+
+- **API** (`POST /v1/lotteries/tickets/repeat`, sessão): `{ idempotencyKey, puleNumber, drawDate, draws }`. As apostas (modalidade, colocação, palpites, valor e divisão) vêm da pule; a compra passa pela **mesma venda** das Loterias (sorteios do cadastro, horário, saldo, débito na mesma transação e idempotência) e usa a **cotação de agora**. Responde como a compra.
+- **Segurança**: só pule de Loterias do **próprio jogador**. O número é sequencial e as apostas não são públicas, então pule inexistente, de outro jogador, de outra banca ou da Fazendinha têm a mesma resposta (`404 NOT_FOUND`, "Pule inválida"), sem revelar nada e sem cobrar. Modalidade que foi desligada na cotação: `409` ("Esta pule tem uma modalidade que não está mais disponível.").
+- **Idempotência**: a tela gera uma chave por pedido (pule + data + loterias). "Tentar novamente" reusa a chave (nunca compra duas vezes); mudar o código, a data ou as loterias gera outra.
+- Testes: `lottery-repeat.test.ts` (API) e `RepeatPuleFlow.test.tsx` (web).
 
 ## Sorteios
 
@@ -438,6 +447,87 @@ Cadastro **por banca**, em **Sorteios** no painel (Gerente edita; Financeiro con
 | DELETE | `/v1/admin/draws/:id`            | `draws.manage` | Exclui (só sem nenhuma aposta vendida)                                      |
 | POST   | `/v1/admin/draws/exceptions`     | `draws.manage` | `{ date, drawId \| null, kind: "CANCEL" \| "EXTRA", note? }`                |
 | DELETE | `/v1/admin/draws/exceptions/:id` | `draws.manage` | Remove a exceção (recusado se deixaria apostas de um extra sem sorteio)     |
+
+## Personalização
+
+Grupo do menu do painel com **Identidade visual**, **Cards do início** e **Mural**. Só o Gerente vê e altera (`branding.read`/`branding.manage`, `murals.read`/`murals.manage`).
+
+### Identidade visual
+
+O Gerente altera, com pré-visualização (aba do navegador, login e início): **nome da banca** (2 a 40), **logo** (PNG, JPG ou WebP até 1 MB, conferido pelo conteúdo; SVG não, porque pode conter script), **cor principal** (`#RRGGBB`) e a **barra "Indique um amigo"**: liga/desliga e texto (até 60). Ligada, aparece no topo de todas as telas do jogador (início, telas internas, Loterias e Recarga Pix); desligada, em nenhuma. Vale na hora: a API lê a banca a cada requisição.
+
+- **Logo**: guardada no banco (`tenant_logos`, com RLS) e servida pelo web em `/marca/logo?v=<versão>`, no app da banca (pública, aparece no login) e no painel. Sem logo enviada vale a logo padrão da banca (`tenants.logo_url`); sem nenhuma, a inicial do nome. "Remover a logo enviada" volta à padrão.
+- **Cor secundária**: existe no cadastro, mas nenhuma tela a usa ainda; por isso a página não a oferece.
+- **WhatsApp do suporte** (opcional, mesmo formato do telefone do jogador): usado pelos botões de atendimento (ver abaixo).
+
+### Atendimento (WhatsApp)
+
+"Atendimento" (início), "Suporte" (rodapé e menu lateral) e "Fale com o suporte" (login e cadastro) abrem o WhatsApp (`https://api.whatsapp.com/send?phone=+55<número>&text=<mensagem>`). A mensagem é montada pela API (`supportMessage` em `@sysjb/contracts`):
+
+- para o promotor: "Olá Promotor <nome do promotor>, preciso de ajuda, meu código de unidade é: <código>."
+- para a banca: "Olá, preciso de ajuda, meu código de unidade é: <código>."
+- no login/cadastro (sem sessão, sem código): "Olá, preciso de ajuda."
+
+O código de unidade é o `displayId` do jogador. Quem fala:
+
+- **Jogador com promotor vinculado** (quem o indicou é promotor ativo): o telefone do **promotor**. Indicado por jogador comum, por promotor removido ou bloqueado: vale o da banca.
+- **Sem promotor** (e no login/cadastro, sem sessão): o **WhatsApp do suporte da banca**, definido em Personalização > Identidade visual. Sem número configurado, a tela avisa "Atendimento indisponível no momento".
+- `GET /v1/me/support` (sessão) devolve `{ phone, message }`, escolhidos pela API a partir da sessão: o jogador só recebe o número e o nome do **próprio** promotor (o nome vai na mensagem), e ninguém consegue os dados de outro promotor. O número da banca também sai em `GET /v1/tenant` (`supportPhone`), porque aparece antes do login.
+- A aba é aberta já no toque e recebe o endereço depois da consulta (aberta só depois, o navegador a bloquearia como pop-up), sem acesso de volta ao app (`opener = null`).
+- Testes: `support.test.ts` (API) e `SupportBanner.test.tsx` (web).
+- **Banco**: `tenants` ganhou RLS só para alteração (`tenants_update_own`: só a banca do contexto; a leitura continua livre, porque a banca é resolvida pelo hostname antes do contexto). A role de runtime só pode alterar `name`, `primary_color`, `secondary_color`, `invite_bar_text` e `logo_updated_at`; slug, domínio, logo padrão e situação continuam fora do alcance dela.
+- **Seed**: `pnpm db:seed` não sobrescreve mais nome e cores de bancas existentes (só na criação).
+- **Auditoria**: "Identidade visual alterada", com os campos alterados.
+
+| Método | Rota                      | Permissão / credencial | Comportamento                                                                       |
+| ------ | ------------------------- | ---------------------- | ----------------------------------------------------------------------------------- |
+| GET    | `/v1/admin/branding`      | `branding.read`        | Nome, cores, texto da barra, logo em uso e se há logo enviada                       |
+| PUT    | `/v1/admin/branding`      | `branding.manage`      | `{ name, primaryColor, secondaryColor, inviteBarText, logo? }`; `logo: null` remove |
+| GET    | `/v1/admin/branding/logo` | sessão do operador     | Logo enviada (binário)                                                              |
+| GET    | `/v1/tenant/logo`         | credencial da banca    | Logo enviada (binário). Sem logo enviada: `404`                                     |
+
+`branding.test.ts` (API) e `BrandingEditor.test.tsx` (web) cobrem leitura, alteração com auditoria, remoção da logo, validação, permissões, isolamento entre bancas e as travas do banco.
+
+### Cards do início
+
+O Gerente define a **ordem dos blocos** do início do app (Próximo sorteio, Loterias e Fazendinha, Atalhos, Cassino, Raspadinha e Bingo, Atendimento), a **ordem dos cards dentro de cada bloco** e o que **aparece** (interruptor por bloco e por card), com pré-visualização. Arrastar pela alça ou ↑/↓ (teclado e toque). Os cards nunca mudam de bloco.
+
+- **Guardado** em `tenant_settings.home_layout` (JSON, com RLS). Sem nada salvo vale a ordem do app original. A API só aceita o layout completo (todos os blocos, cada um com exatamente os seus cards); ao ler, `normalizeHomeLayout` (`@sysjb/contracts`) descarta o que saiu do catálogo e acrescenta no fim, visível, o que entrou depois.
+- **No app**: bloco oculto ou sem nenhum card visível não aparece; nos atalhos, os que sobram ocupam a linha; em Loterias/Fazendinha e Raspadinha/Bingo, um card sozinho ocupa a largura toda. Sem resposta da API, o início abre na ordem padrão.
+- **Auditoria**: "Cards do início alterados", com o que mudou ("Ordem dos blocos", "Ordem em Atalhos", "Sonhos oculto"…).
+
+| Método | Rota                      | Permissão / credencial | Comportamento                          |
+| ------ | ------------------------- | ---------------------- | -------------------------------------- |
+| GET    | `/v1/admin/branding/home` | `branding.read`        | Layout atual (sempre completo)         |
+| PUT    | `/v1/admin/branding/home` | `branding.manage`      | `{ blocks: [{ id, visible, cards }] }` |
+| GET    | `/v1/tenant/home-layout`  | credencial da banca    | Layout para o app do jogador           |
+
+`home-layout.test.ts` (API), `HomeLayoutEditor.test.tsx` e `home-cards.test.tsx` (web).
+
+## Mural
+
+Aviso com imagem que aparece para o jogador logado ao abrir o app (folha inferior do Dashboard, com "Fechar", layout de `PRINTS/Mural.png`). Cadastrado **por banca** em **Personalização > Mural** no painel (só o Gerente: `murals.read`/`murals.manage`), com pré-visualização de como o jogador vê.
+
+- **Campos**: nome (até 60), vigência (data inicial e final, dias inteiros de Brasília, inclusivos), tipo de exibição e imagem (PNG, JPG ou WebP até **3 MB**; o formato é conferido pelo conteúdo do arquivo, na API e por CHECK no banco). Na alteração, sem imagem nova a atual continua; a data final no passado só é recusada quando é alterada.
+- **Apenas uma vez**: cada jogador vê uma vez só, em qualquer aparelho. Fica registrado no servidor (`mural_views`) assim que o mural aparece. A coluna "Já viram" do painel mostra quantos.
+- **Sempre**: aparece a cada abertura do app. Depois de fechado não volta nas idas e vindas ao Dashboard na mesma aba (fica no `sessionStorage`, apagado quando a aba fecha).
+- **Mais de um no ar**: o jogador vê um depois do outro, do mais recente (data inicial) para o mais antigo, até 10.
+- **Imagem**: guardada no banco (`bytea`) e servida pelo web em `/mural/:id/imagem?v=<versão>` (jogador, só murais no ar) e no painel na mesma rota do host do painel. A versão muda a cada alteração, então o navegador não mostra imagem antiga.
+- **Upload**: a server action do painel aceita até 4 MB (`experimental.serverActions.bodySizeLimit` no `next.config.ts`, que vale para todas as actions); a API aceita corpo JSON de até 5 MB (a imagem vai em base64) só em `POST`/`PUT /v1/admin/murals` (o resto continua com 16 KB).
+- **Auditoria**: "Mural cadastrado/alterado/excluído", com o nome do mural e os campos alterados. Excluir apaga também o registro de quem viu.
+
+| Método | Rota                         | Permissão / sessão | Comportamento                                                        |
+| ------ | ---------------------------- | ------------------ | -------------------------------------------------------------------- |
+| GET    | `/v1/admin/murals`           | `murals.read`      | Todos os murais da banca (sem a imagem), com "já viram"              |
+| GET    | `/v1/admin/murals/:id/image` | `murals.read`      | A imagem (binário)                                                   |
+| POST   | `/v1/admin/murals`           | `murals.manage`    | `{ name, startsOn, endsOn, displayMode: "ONCE" \| "ALWAYS", image }` |
+| PUT    | `/v1/admin/murals/:id`       | `murals.manage`    | Mesmo corpo; `image` opcional                                        |
+| DELETE | `/v1/admin/murals/:id`       | `murals.manage`    | Exclui o mural e o registro de quem viu                              |
+| GET    | `/v1/murals`                 | sessão do jogador  | Murais no ar que o jogador deve ver agora, na ordem                  |
+| GET    | `/v1/murals/:id/image`       | sessão do jogador  | Imagem de mural no ar (agendado ou encerrado: `404`)                 |
+| POST   | `/v1/murals/:id/seen`        | sessão do jogador  | Registra que viu ("Apenas uma vez"). `204`, idempotente              |
+
+`murals.test.ts` (API) cobre cadastro, alteração e exclusão com auditoria, validação (imagem ausente, formato, tamanho, datas, campos extras), permissões, isolamento entre bancas, a lista do jogador (vigência, "Apenas uma vez" × "Sempre", idempotência) e os privilégios do banco. No web, `MuralSheet.test.tsx` e `MuralsManager.test.tsx`.
 
 ## Cotações
 
@@ -489,6 +579,27 @@ Promotor ≠ Indicação. Todo jogador tem no máximo um "indicado por": o dono 
 | `sysjb_app`      | Runtime da API (`DATABASE_URL`)                               | `NOSUPERUSER`, `NOBYPASSRLS`, não é dona de nada. `SELECT` em `tenants`; `SELECT`/`INSERT`/`UPDATE` (só colunas editáveis; `password_hash` também no UPDATE, para a troca de senha; nascimento só no INSERT) em `users`; `SELECT`/`INSERT` em `wallets`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `sessions`; `SELECT`/`INSERT`/`DELETE` em `login_failures`; `SELECT` em `operators`; `SELECT`/`INSERT` e `UPDATE` só de `revoked_at` em `operator_sessions`; `SELECT`/`INSERT` (somente inclusão) em `audit_logs`; `UPDATE` também de `users.status`; `SELECT`/`INSERT` (somente inclusão) em `fazendinha_bets` e `fazendinha_bet_numbers`; `SELECT` em `wallet_entries`; `EXECUTE` em `fazendinha_debit`; sem `DELETE` nas demais; não pode escolher `id` nem `displayId` |
 
 `displayId` vem de uma sequence do PostgreSQL (começa em 100000). Aceita lacunas e é `int4`, portanto sempre um inteiro seguro em JSON.
+
+## Limite de requisições
+
+Todas as rotas `/v1` passam por um limite de requisições na API (`RateLimitInterceptor`). Estourou: `429 TOO_MANY_ATTEMPTS` com `Retry-After`, e a tela mostra "Muitas requisições/tentativas. Aguarde um pouco…". Toda tentativa conta, inclusive as recusadas.
+
+| Regra (`.env`)              | Sujeito           | Padrão            | Vale para                                                      |
+| --------------------------- | ----------------- | ----------------- | -------------------------------------------------------------- |
+| `RATE_LIMIT_LOGIN_IP`       | IP                | 20/min e 100/hora | Login do jogador e do painel (além do bloqueio por CPF/e-mail) |
+| `RATE_LIMIT_SIGNUP_IP`      | IP                | 10/hora e 30/dia  | Cadastro de jogador                                            |
+| `RATE_LIMIT_REQUESTS_IP`    | IP                | 600/min           | Qualquer rota (rajadas)                                        |
+| `RATE_LIMIT_USER_WRITE`     | jogador da sessão | 30/min            | Compras, Repetir pule, perfil, senha… (tudo que grava)         |
+| `RATE_LIMIT_USER_READ`      | jogador da sessão | 180/min           | Consultas                                                      |
+| `RATE_LIMIT_OPERATOR_WRITE` | operador          | 60/min            | Alterações do painel (cadastros, uploads, edição…)             |
+| `RATE_LIMIT_OPERATOR_READ`  | operador          | 300/min           | Consultas do painel                                            |
+
+- **Formato**: `limite/segundos`, várias janelas separadas por vírgula (ex.: `RATE_LIMIT_LOGIN_IP=20/60,100/3600`). Valor inválido impede a API de subir. `RATE_LIMIT_ENABLED=false` desliga tudo (não use em produção).
+- **Contagem no PostgreSQL** (`rate_limit_counters`, janelas fixas alinhadas ao relógio do banco): vale para todas as instâncias da API, sem Redis. Uma ida ao banco por requisição conta todas as regras; contadores vencidos são apagados pela própria API (no máximo uma vez por minuto por instância).
+- **IP do visitante**: a API só é chamada pelo servidor do web, que repassa o IP no cabeçalho `X-Client-IP` (a API só aceita um IP válido, e só em rotas que já passaram pela credencial de serviço). O web lê o IP do `X-Forwarded-For` contando **a partir do fim** o número de proxies confiáveis (`WEB_TRUSTED_PROXY_HOPS`, padrão 1 = um nginx na frente): o que o visitante mandar à esquerda é ignorado, então não dá para forjar outro IP. Sem IP confiável, valem só os limites por sessão.
+- **LGPD**: o IP nunca é gravado em texto, só o HMAC dele (`AUTH_SECRET`), como o CPF no bloqueio de login. Jogador e operador entram pelo id (UUID).
+- **Produção**: o nginx precisa acrescentar o IP real (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Com CDN + nginx, use `WEB_TRUSTED_PROXY_HOPS=2`.
+- Testes: `rate-limit.test.ts` (API: login e cadastro por IP, jogador e operador, ação recusada não executada, IP inválido ignorado, IP só como HMAC, health fora, configuração) e `client-ip.test.ts` (web: proxies, IP forjado ignorado, IPv6 e porta). Nas demais suítes da API o limite fica desligado.
 
 ## Limitação de autorização (importante)
 
@@ -562,7 +673,7 @@ Nada é publicado nem implantado automaticamente.
 - Painel: só a página de usuários existe. Não há cadastro/edição de operadores pela interface (só o script `operator:create`), troca ou recuperação de senha de operador, nem tela para consultar a auditoria (os registros ficam em `audit_logs`).
 - A busca de usuários usa `ILIKE` sem índice de trigrama: adequada para milhares de usuários por banca; com centenas de milhares, criar índice `pg_trgm`.
 - Troca de senha só logado (sem exigir a senha atual, ver "Perfil"); sem recuperação de senha ("esqueci") e sem listar/encerrar sessões avulsas do cliente.
-- O bloqueio de login é por CPF; não há limite por IP, porque todo tráfego chega pelo servidor do web. Um atacante pode bloquear temporariamente o login de um CPF conhecido (efeito colateral aceito do bloqueio por conta).
+- O bloqueio de 5 falhas é por CPF (ou e-mail do operador): um atacante pode bloquear temporariamente o login de um CPF conhecido (efeito colateral aceito do bloqueio por conta). O limite por IP (ver "Limite de requisições") depende de o proxy na frente do web preencher o X-Forwarded-For corretamente; redes móveis com IP compartilhado dividem o mesmo limite por IP (por isso os limites por IP são generosos e os limites finos são por sessão).
 - Linhas antigas de `sessions` não são apagadas (só expiram); falhas de login antigas são limpas a cada falha nova.
 - Redis e BullMQ só previstos; não há filas nem dependências instaladas.
 - Resolução de banca consulta o banco a cada requisição (sem cache).

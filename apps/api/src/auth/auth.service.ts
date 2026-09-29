@@ -63,23 +63,18 @@ export class AuthService {
   }
 
   /** Usuário da sessão. Sessão de outra banca, expirada, revogada ou de usuário bloqueado é tratada como inexistente. */
-  async me(tenant: ResolvedTenant, token: string | undefined): Promise<PublicUser> {
-    const tokenHash = this.tokenHash(token);
-    const session = await this.db.withTenant(tenant.id, (tx) =>
-      tx.session.findFirst({
-        where: {
-          tenantId: tenant.id,
-          tokenHash,
-          revokedAt: null,
-          expiresAt: { gt: new Date() },
-          user: { status: 'ACTIVE' },
-        },
-        include: { user: { omit: { passwordHash: true }, include: { wallet: true } } },
+  /** Usuário da sessão (já validada pelo SessionGuard). Bloqueado entre a validação e a leitura: sessão inválida. */
+  async me(tenant: ResolvedTenant, userId: string): Promise<PublicUser> {
+    const user = await this.db.withTenant(tenant.id, (tx) =>
+      tx.user.findFirst({
+        where: { tenantId: tenant.id, id: userId, status: 'ACTIVE' },
+        omit: { passwordHash: true },
+        include: { wallet: true },
       }),
     );
-    if (!session) throw Errors.sessionInvalid();
-    if (!session.user.wallet) throw Errors.internal();
-    return toPublicUser(session.user, session.user.wallet);
+    if (!user) throw Errors.sessionInvalid();
+    if (!user.wallet) throw Errors.internal();
+    return toPublicUser(user, user.wallet);
   }
 
   /** Sessão do cliente válida (mesma regra do /me), sem carregar o usuário. Usada pelo SessionGuard. */

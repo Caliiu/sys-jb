@@ -1,3 +1,4 @@
+import type { HomeLayoutCard } from '@sysjb/contracts';
 import type { CSSProperties } from 'react';
 import type { GameModalityResponse } from '@/lib/modalities';
 
@@ -14,6 +15,18 @@ export function visibleTiles<T extends { slug: string }>(
   isLoading: boolean,
 ): T[] {
   return tiles.filter((tile) => isLoading || modalities.some((m) => m.slug === tile.slug));
+}
+
+/**
+ * Cards na ordem e com a visibilidade definidas pelo Gerente (Personalização > Cards do início). Sem layout,
+ * mantém a ordem padrão.
+ */
+export function arrangeCards<T>(items: T[], idOf: (item: T) => string, cards?: HomeLayoutCard[]): T[] {
+  if (!cards) return items;
+  return cards
+    .filter((card) => card.visible)
+    .map((card) => items.find((item) => idOf(item) === card.id))
+    .filter((item): item is T => item !== undefined);
 }
 
 export function bannerStyle(bannerUrl: string | null | undefined): CSSProperties | undefined {

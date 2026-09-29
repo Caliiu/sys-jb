@@ -43,6 +43,32 @@
   --shadow-admin: 0 1px 3px rgba(15, 23, 42, 0.08);
   --radius-xl2: 14px;
 
+  /* Folha inferior: sobe deslizando de baixo e o fundo escurece junto (components/ui/BottomSheet). */
+  --animate-sheet-up: sheet-up 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-backdrop-in: backdrop-in 320ms ease-out;
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  /* Só o fundo escurece aos poucos (a folha entra sólida). */
+  @keyframes backdrop-in {
+    from {
+      background-color: transparent;
+    }
+  }
+
+  /* Barra que enche no aviso "Direcionando ao recibo…" (Repetir pule). */
+  --animate-fill: fill var(--fill-duration, 1500ms) linear forwards;
+  @keyframes fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
   /* Piscar do indicador "ao vivo" (banner do próximo sorteio). */
   --animate-blink: blink 1s ease-in-out infinite;
   @keyframes blink {

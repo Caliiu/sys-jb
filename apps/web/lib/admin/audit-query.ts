@@ -54,6 +54,11 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'draw.delete': 'Sorteio excluído',
   'draw.exception.create': 'Exceção de data criada',
   'draw.exception.delete': 'Exceção de data removida',
+  'mural.create': 'Mural cadastrado',
+  'mural.update': 'Mural alterado',
+  'mural.delete': 'Mural excluído',
+  'branding.update': 'Identidade visual alterada',
+  'home.layout.update': 'Cards do início alterados',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -84,6 +89,7 @@ export function describeAuditDetails(entry: AdminAuditEntry): string {
     return `${kind} em ${day}/${month}/${year}: ${draw}`;
   }
   if (details.draw) return details.fields.length ? `${details.draw}: ${details.fields.join(', ')}` : details.draw;
+  if (details.mural) return details.fields.length ? `${details.mural}: ${details.fields.join(', ')}` : details.mural;
   if (details.fields.includes('referralCommissionBps')) {
     return `Indique e ganhe de ${commission(details.from)} para ${commission(details.to)}`;
   }

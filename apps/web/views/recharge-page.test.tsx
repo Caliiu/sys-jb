@@ -60,6 +60,9 @@ describe('RechargePage: valor e destino', () => {
   it('começa zerada, com o saldo atual e as etapas', () => {
     renderWithProviders(<RechargePage tenant={tenant} user={user} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Recarga Pix' })).toBeInTheDocument();
+    // Topo como no dashboard: nome e ID do jogador.
+    expect(screen.getByText(`Olá, ${user.name}`)).toBeInTheDocument();
+    expect(screen.getByText(String(user.displayId))).toBeInTheDocument();
     expect(amount()).toHaveValue('R$ 0,00');
     expect(screen.getByText('Saldo atual:').parentElement).toHaveTextContent('Saldo atual: R$ 1.235,00');
     expect(screen.getByRole('img', { name: 'Etapa 1 de 2' })).toBeInTheDocument();

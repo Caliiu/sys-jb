@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useTopBarHeight } from '@/hooks/useTopBarHeight';
 import { formatCents } from '@/lib/currency';
 import SideMenu, { SIDE_MENU_ID } from '../dashboard/SideMenu';
+import TopBanner from '../dashboard/TopBanner';
 import TenantLogo from '../tenant/TenantLogo';
 import BackButton, { type BackAction } from '../ui/BackButton';
 import MenuButton from '../ui/MenuButton';
@@ -18,9 +19,12 @@ interface RechargeBarProps {
   balanceCents: number;
   balanceVisible: boolean;
   onToggleBalance: () => void;
+  /** Nome e ID do jogador, como no cabeçalho do dashboard. */
+  userName: string;
+  displayId: number;
 }
 
-/** Barra superior da recarga: logo, saldo (com ocultar), menu, título e indicador de etapas. */
+/** Barra superior da recarga: convite, logo, nome e ID do jogador, saldo (com ocultar), menu, título e etapas. */
 export default function RechargeBar({
   title,
   step,
@@ -28,6 +32,8 @@ export default function RechargeBar({
   balanceCents,
   balanceVisible,
   onToggleBalance,
+  userName,
+  displayId,
 }: RechargeBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -37,9 +43,13 @@ export default function RechargeBar({
   return (
     <>
       <div ref={barRef} className="sticky top-0 z-30 bg-brand-primary">
+        <TopBanner />
         <div className="flex items-center gap-3 px-4 py-3">
-          <TenantLogo size={36} className="w-9 h-9 shrink-0" />
-          <div className="flex-1" />
+          <TenantLogo size={36} className="w-9 h-9 shrink-0" decorative />
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-[13px] font-bold leading-tight truncate">Olá, {userName}</p>
+            <p className="text-white/75 text-[11px] leading-tight">{displayId}</p>
+          </div>
           <div className="flex items-center gap-1.5" aria-live="polite">
             <span className="text-[14px] font-bold text-white tabular-nums">
               R$ {balanceVisible ? formatCents(balanceCents) : '••••'}

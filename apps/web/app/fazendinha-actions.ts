@@ -69,6 +69,8 @@ export async function placeFazendinhaBetAction(input: unknown): Promise<PlaceBet
       return { ok: false, code, message: 'Extração encerrada. Escolha outra.' };
     case 'SESSION_INVALID':
       return { ok: false, code, message: 'Sessão encerrada. Entre novamente.' };
+    case 'TOO_MANY_ATTEMPTS':
+      return { ok: false, code, message: 'Muitas tentativas seguidas. Aguarde um pouco e tente novamente.' };
     default:
       return {
         ok: false,

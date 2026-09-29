@@ -14,6 +14,8 @@ interface RechargeScreenProps {
   /** Titular exibido na etapa de pagamento (o Pix só é aceito desse CPF). */
   holderName: string;
   holderDocument: string;
+  /** ID do jogador, no topo junto do nome (como no dashboard). */
+  displayId: number;
 }
 
 /**
@@ -21,7 +23,7 @@ interface RechargeScreenProps {
  * O formulário fica montado (só oculto) durante a etapa 2, para voltar sem perder o que foi digitado.
  * O "ocultar saldo" vale para a barra e para o "Saldo atual".
  */
-export default function RechargeScreen({ wallet, holderName, holderDocument }: RechargeScreenProps) {
+export default function RechargeScreen({ wallet, holderName, holderDocument, displayId }: RechargeScreenProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [charge, setCharge] = useState<PixCharge | null>(null);
   const balanceCents = balanceAmounts(wallet).main;
@@ -40,6 +42,8 @@ export default function RechargeScreen({ wallet, holderName, holderDocument }: R
         balanceCents={balanceCents}
         balanceVisible={balanceVisible}
         onToggleBalance={() => setBalanceVisible((v) => !v)}
+        userName={holderName}
+        displayId={displayId}
       />
       <main>
         <div hidden={charge !== null}>

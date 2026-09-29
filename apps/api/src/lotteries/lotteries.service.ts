@@ -23,11 +23,15 @@ import { DrawsService } from '../draws/draws.service.js';
 import { QuotesService } from '../quotes/quotes.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { toPublicWallet } from '../users/user.mapper.js';
-import type { PlaceLotteryTicketsInput } from './lotteries.schemas.js';
+import type { PlaceLotteryTicketsInput, RepeatLotteryTicketInput } from './lotteries.schemas.js';
 
 const invalid = (field: string, message: string) =>
   new AppError(400, 'VALIDATION_ERROR', 'Payload inválido.', [{ field, message }]);
 const drawClosed = () => new AppError(409, 'DRAW_CLOSED', 'Extração encerrada. Escolha outra.');
+/** Pule inexistente, de outro jogador, de outra banca ou da Fazendinha: mesma resposta (não revela nada). */
+const invalidPule = () => new AppError(404, 'NOT_FOUND', 'Pule inválida.');
+const modalityUnavailable = () =>
+  new AppError(409, 'CONFLICT', 'Esta pule tem uma modalidade que não está mais disponível.');
 
 const toDate = (drawDate: string) => new Date(`${drawDate}T00:00:00Z`);
 /** Horário limite no dia da extração, em Brasília (sem horário de verão: sempre -03:00). O trigger grava o do cadastro. */
@@ -144,6 +148,50 @@ export class LotteriesService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Repetir pule: as apostas (modalidade, colocação, palpites, valor e divisão) vêm de uma pule de Loterias do
+   * PRÓPRIO jogador; a compra passa pela mesma venda (sorteios, horário, saldo, débito e idempotência), com a
+   * cotação de agora. Pule de outro jogador nunca é lida: o número é sequencial e as apostas não são públicas.
+   */
+  async repeat(
+    tenant: ResolvedTenant,
+    session: UserSession,
+    input: RepeatLotteryTicketInput,
+  ): Promise<PlaceLotteryTicketsResponse> {
+    const items = await this.db.withTenant(tenant.id, async (tx) => {
+      const original = await tx.lotteryTicket.findFirst({
+        where: { tenantId: tenant.id, userId: session.userId, puleNumber: input.puleNumber },
+        select: {
+          items: {
+            orderBy: { position: 'asc' },
+            select: { modality: true, placement: true, guesses: true, amountCents: true, split: true },
+          },
+        },
+      });
+      if (!original || original.items.length === 0) throw invalidPule();
+      const quotes = await this.quotes.loadForSale(tx, tenant.id);
+      return original.items.map((item) => {
+        const modality = findLotteryModality(item.modality);
+        const quoteCents = modality ? lotteryQuoteCents(modality, quotes) : 0;
+        if (quoteCents <= 0) throw modalityUnavailable();
+        return {
+          modality: item.modality,
+          placement: item.placement,
+          guesses: item.guesses,
+          amountCents: Number(item.amountCents),
+          split: item.split === 'each' ? ('each' as const) : ('total' as const),
+          quoteCents,
+        };
+      });
+    });
+    return this.place(tenant, session, {
+      idempotencyKey: input.idempotencyKey,
+      drawDate: input.drawDate,
+      draws: input.draws,
+      items,
+    });
   }
 
   private findByKey(tenantId: string, userId: string, purchaseKey: string): Promise<TicketWithItems[]> {

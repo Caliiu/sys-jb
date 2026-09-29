@@ -7,6 +7,7 @@ import type { App } from 'supertest/types.js';
 import { createApp } from '../src/app.factory.js';
 import { PasswordService } from '../src/auth/password.service.js';
 import { type AppConfig, digestKey, parseServiceKeys } from '../src/config/config.js';
+import { DEFAULT_RATE_LIMIT_RULES } from '../src/rate-limit/rate-limit.rules.js';
 import { TEST_APP_URL, TEST_MIGRATOR_URL, TEST_TENANTS } from './env.js';
 
 type TenantSlug = keyof typeof TEST_TENANTS;
@@ -36,6 +37,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     ),
     adminKeyDigest: digestKey(ADMIN_KEY),
     authSecret: randomBytes(24).toString('hex'),
+    rateLimit: { enabled: false, rules: DEFAULT_RATE_LIMIT_RULES },
     ...overrides,
   };
 }
@@ -131,7 +133,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
  */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
   await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
 }

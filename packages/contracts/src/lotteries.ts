@@ -294,6 +294,23 @@ export interface PlaceLotteryTicketsRequest {
   items: LotteryItemRequest[];
 }
 
+/**
+ * POST /v1/lotteries/tickets/repeat: compra de novo as apostas de uma pule do próprio jogador (mesmos palpites,
+ * valores e divisão), na data e nas loterias escolhidas, com a cotação de agora. Responde como a compra.
+ */
+export interface RepeatLotteryTicketRequest {
+  /** UUID por tentativa: repetir a mesma chave não compra de novo. */
+  idempotencyKey: string;
+  /** Número da pule a repetir (Loterias; tem de ser do jogador da sessão). */
+  puleNumber: number;
+  /** YYYY-MM-DD (Brasília). */
+  drawDate: string;
+  draws: Array<{ name: string; hour: number }>;
+}
+
+/** Maior número de pule aceito na busca (int4 do banco). */
+export const MAX_PULE_NUMBER = 2_147_483_647;
+
 export interface PublicLotteryItem {
   modality: string;
   modalityLabel: string;

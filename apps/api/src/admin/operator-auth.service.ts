@@ -5,6 +5,7 @@ import { PasswordService } from '../auth/password.service.js';
 import { newSessionToken, sha256 } from '../auth/session-tokens.js';
 import { Errors } from '../common/app-error.js';
 import { DatabaseService, enterTenant } from '../database/database.service.js';
+import { TENANT_SELECT, toResolvedTenant } from '../tenancy/tenant-mapper.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { type OperatorLoginInput, operatorTokenSchema } from './admin.schemas.js';
 import type { AuthenticatedOperator } from './operator.types.js';
@@ -14,17 +15,6 @@ export const OPERATOR_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 
 /** Espaço de nomes do controle de tentativas do painel (não há banca antes do login). */
 const THROTTLE_SCOPE = 'console';
-
-const TENANT_SELECT = {
-  id: true,
-  name: true,
-  slug: true,
-  domain: true,
-  logoUrl: true,
-  primaryColor: true,
-  secondaryColor: true,
-  active: true,
-} as const;
 
 export function toPublicOperator(operator: AuthenticatedOperator): PublicOperator {
   return {
@@ -127,8 +117,7 @@ export class OperatorAuthService {
     if (!found?.tenant.active) throw Errors.sessionInvalid();
 
     const { tenant, ...operator } = found;
-    const { active: _active, ...resolved } = tenant;
-    return { operator, tenant: resolved };
+    return { operator, tenant: toResolvedTenant(tenant) };
   }
 
   /** Idempotente: sessão inexistente ou já encerrada também resulta em sucesso. */

@@ -32,3 +32,6 @@ export const pulesOfDate = (date: string) => `${ROUTES.puleByDate}/${date}`;
 /** Recibo de uma pule; `listDate` = veio da lista desse dia (o voltar leva de volta a ela). */
 export const puleReceipt = (puleNumber: number, listDate?: string) =>
   `${ROUTES.puleLookup}/${puleNumber}${listDate ? `?lista=${listDate}` : ''}`;
+
+/** Imagem de um mural (a versão muda a cada alteração, para o navegador não usar a do cache). */
+export const muralImage = (id: string, version: string) => `/mural/${id}/imagem?v=${version}`;

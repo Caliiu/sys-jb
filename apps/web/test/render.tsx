@@ -11,6 +11,9 @@ export const tenant: PublicTenant = {
   logoUrl: null,
   primaryColor: '#DF2120',
   secondaryColor: '#F4F1EA',
+  inviteBarText: 'Indique um amigo e ganhe bônus',
+  inviteBarEnabled: true,
+  supportPhone: null,
 };
 
 export const user: PublicUser = {

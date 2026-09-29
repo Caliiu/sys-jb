@@ -15,7 +15,6 @@ import {
   lotteryQuoteCents,
   placementsFor,
 } from '@sysjb/contracts';
-import { FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 import { placeLotteryTicketsAction } from '@/app/lottery-actions';
@@ -41,13 +40,26 @@ import CartStep from './CartStep';
 import DrawsStep from './DrawsStep';
 import { AmountStep, GuessesStep } from './EntrySteps';
 import LotteryBar from './LotteryBar';
+import LotteryReceipt from './LotteryReceipt';
 import { DateStep, ModalityStep, PlacementStep, SummaryCard, TypeStep } from './PickSteps';
+import RepeatPuleFlow from './RepeatPuleFlow';
 import SuccessDialog from './SuccessDialog';
 import TicketCard from './TicketCard';
 
-type Step = 'type' | 'date' | 'modality' | 'placement' | 'guesses' | 'amount' | 'draws' | 'cart' | 'review' | 'receipt';
+type Step =
+  | 'type'
+  | 'date'
+  | 'modality'
+  | 'placement'
+  | 'guesses'
+  | 'amount'
+  | 'draws'
+  | 'cart'
+  | 'review'
+  | 'receipt'
+  | 'repeat';
 
-const STEPS: Record<Exclude<Step, 'review' | 'receipt'>, { n: number; title: string }> = {
+const STEPS: Record<Exclude<Step, 'review' | 'receipt' | 'repeat'>, { n: number; title: string }> = {
   type: { n: 1, title: 'Nova aposta' },
   date: { n: 2, title: 'Data' },
   modality: { n: 3, title: 'Modalidade' },
@@ -83,6 +95,7 @@ interface LotteriesScreenProps {
 /**
  * Loterias (Tradicional) numa rota só: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor →
  * Loterias → Carrinho → Finalizar, e o recibo. "Mais apostas" volta à Modalidade mantendo data e loterias.
+ * "Repetir pule" (primeira tela) abre o próprio fluxo (RepeatPuleFlow) na mesma rota.
  */
 export default function LotteriesScreen({
   nowIso,
@@ -233,28 +246,6 @@ export default function LotteriesScreen({
     }
   }
 
-  async function share() {
-    if (!receipt) return;
-    const text = receipt.tickets
-      .map((t) =>
-        [
-          `${t.lottery} #${t.puleNumber}`,
-          ...t.items.map(
-            (i) => `${i.modalityLabel} ${i.placementLabel}: ${i.guesses.join(' ')} (${formatBrl(i.totalCents)})`,
-          ),
-          `TOTAL: ${formatBrl(t.totalCents)}`,
-        ].join('\n'),
-      )
-      .join('\n\n');
-    try {
-      if (navigator.share) return void (await navigator.share({ title: 'Recibo da aposta', text }));
-      await navigator.clipboard.writeText(text);
-      toast.show('Recibo copiado.');
-    } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError')) toast.show('Não foi possível compartilhar.');
-    }
-  }
-
   const errorDialog = (
     <ErrorDialog
       message={error?.message ?? null}
@@ -265,57 +256,30 @@ export default function LotteriesScreen({
     />
   );
 
+  // ---------------- Repetir pule ----------------
+  if (step === 'repeat') {
+    return (
+      <RepeatPuleFlow
+        now={now}
+        clock={clock}
+        refresh={refresh}
+        days={days}
+        schedule={schedule}
+        wallet={wallet}
+        onWallet={setWallet}
+        userName={userName}
+        sellerId={sellerId}
+        onExit={() => go('type')}
+      />
+    );
+  }
+
   // ---------------- Recibo ----------------
   if (step === 'receipt' && receipt) {
     return (
-      <>
-        <SectionBar
-          title="Sucesso"
-          tone="success"
-          back={{ onClick: reset, label: 'Nova aposta' }}
-          trailing={<BalancePill wallet={wallet} />}
-        />
-        <main className="px-2 py-3 pb-40 space-y-3">
-          {receipt.tickets.map((t) => (
-            <TicketCard
-              key={t.puleNumber}
-              heading="RECIBO DA APOSTA"
-              sellerId={t.sellerId}
-              stampIso={t.createdAt}
-              drawDate={t.drawDate}
-              quoteTable={t.quoteTable}
-              lottery={t.lottery}
-              puleNumber={t.puleNumber}
-              items={t.items.map((i) => ({
-                title: `${i.modalityLabel} ${i.placementLabel}`,
-                guesses: i.guesses,
-                amountCents: i.amountCents,
-                splitLabel: splitLabel(i.split),
-                possiblePrizeCents: i.possiblePrizeCents,
-              }))}
-              totalCents={t.totalCents}
-            />
-          ))}
-        </main>
-        <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-[480px] space-y-2 bg-[#F4F6F6] px-2 pt-3 pb-3">
-          <button
-            type="button"
-            onClick={share}
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand-green text-[17px] font-bold text-white"
-          >
-            <FileText className="w-5 h-5" aria-hidden />
-            Compartilhar
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="h-14 w-full rounded-xl bg-brand-orange text-[17px] font-bold text-white"
-          >
-            Nova aposta
-          </button>
-        </div>
+      <LotteryReceipt receipt={receipt} wallet={wallet} exitLabel="Nova aposta" onExit={reset}>
         <SuccessDialog open={showSuccess} onClose={() => setShowSuccess(false)} />
-      </>
+      </LotteryReceipt>
     );
   }
 
@@ -427,7 +391,13 @@ export default function LotteriesScreen({
         displayId={sellerId}
         step={current.n}
       />
-      {step === 'type' && <TypeStep onPick={() => go('date')} onComingSoon={(label) => toast.comingSoon(label)} />}
+      {step === 'type' && (
+        <TypeStep
+          onPick={() => go('date')}
+          onRepeat={() => go('repeat')}
+          onComingSoon={(label) => toast.comingSoon(label)}
+        />
+      )}
       {step === 'date' && (
         <>
           <DateStep

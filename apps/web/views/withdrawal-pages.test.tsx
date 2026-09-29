@@ -257,7 +257,8 @@ describe('Novo saque: valor do resgate', () => {
     expect(within(dialog).getByText(/1º Saldo livre/)).toBeInTheDocument();
 
     await ui.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog', { name: EXPLAIN_TITLE })).toBeNull();
+    // A folha desce deslizando antes de sair.
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: EXPLAIN_TITLE })).toBeNull());
 
     await ui.click(screen.getByRole('button', { name: 'Entenda' }));
     await ui.click(screen.getByRole('button', { name: 'Entendi' }));

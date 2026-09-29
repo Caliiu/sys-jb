@@ -27,7 +27,18 @@ const TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
 const cardClass = 'rounded-xl bg-white shadow-card';
 
 /** Cartão fixo no rodapé: o que já foi escolhido e a etapa ("4/9"). */
-export function SummaryCard({ title, subtitle, step }: { title: string; subtitle: string; step: number }) {
+export function SummaryCard({
+  title,
+  subtitle,
+  step,
+  total = LOTTERY_STEP_COUNT,
+}: {
+  title: string;
+  subtitle: string;
+  step: number;
+  /** Quantidade de etapas do fluxo (Repetir pule tem 7). */
+  total?: number;
+}) {
   return (
     <div className={`${cardClass} flex items-center gap-3 px-3 py-3`}>
       <span className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
@@ -38,7 +49,7 @@ export function SummaryCard({ title, subtitle, step }: { title: string; subtitle
         <span className="block text-[13px] text-gray-500 truncate">{subtitle}</span>
       </span>
       <span className="rounded-full bg-brand-primary px-2.5 py-0.5 text-[12px] font-bold text-white tabular-nums">
-        {step}/{LOTTERY_STEP_COUNT}
+        {step}/{total}
       </span>
     </div>
   );
@@ -77,7 +88,15 @@ function SearchBox({ label, value, onChange }: { label: string; value: string; o
 }
 
 /** Etapa 1: tipo de jogo (só o Tradicional por enquanto) e "Repetir pule". */
-export function TypeStep({ onPick, onComingSoon }: { onPick: () => void; onComingSoon: (label: string) => void }) {
+export function TypeStep({
+  onPick,
+  onRepeat,
+  onComingSoon,
+}: {
+  onPick: () => void;
+  onRepeat: () => void;
+  onComingSoon: (label: string) => void;
+}) {
   return (
     <main className="px-3 py-3 pb-28">
       <ul aria-label="Tipos de jogo" className="grid grid-cols-2 gap-3">
@@ -102,7 +121,7 @@ export function TypeStep({ onPick, onComingSoon }: { onPick: () => void; onComin
       </ul>
       <button
         type="button"
-        onClick={() => onComingSoon('Repetir pule')}
+        onClick={onRepeat}
         className={`${cardClass} mt-3 w-full flex items-center gap-3 px-3 py-3.5 text-left`}
       >
         <span className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">

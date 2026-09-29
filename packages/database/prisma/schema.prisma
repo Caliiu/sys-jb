@@ -29,16 +29,24 @@ enum OperatorRole {
 }
 
 model Tenant {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String
-  slug           String   @unique
-  domain         String   @unique
-  logoUrl        String?  @map("logo_url")
-  primaryColor   String   @map("primary_color")
-  secondaryColor String   @map("secondary_color")
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  slug             String    @unique
+  domain           String    @unique
+  logoUrl          String?   @map("logo_url")
+  primaryColor     String    @map("primary_color")
+  secondaryColor   String    @map("secondary_color")
+  // Texto da barra "Indique um amigo" do app do jogador (editável pelo painel).
+  inviteBarText    String    @default("Indique um amigo e ganhe bônus") @map("invite_bar_text")
+  // Barra ligada: aparece no topo de todas as telas do jogador.
+  inviteBarEnabled Boolean   @default(true) @map("invite_bar_enabled")
+  // WhatsApp do suporte (só dígitos, DDD + número). Usado quando o jogador não tem promotor vinculado.
+  supportPhone     String?   @map("support_phone")
+  // Quando a logo enviada pelo painel (tenant_logos) mudou; null = sem logo enviada (vale logo_url).
+  logoUpdatedAt    DateTime? @map("logo_updated_at") @db.Timestamptz(3)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   users                User[]
   wallets              Wallet[]
@@ -59,6 +67,9 @@ model Tenant {
   commissionPayouts    CommissionPayout[]
   draws                Draw[]
   drawExceptions       DrawException[]
+  murals               Mural[]
+  muralViews           MuralView[]
+  logo                 TenantLogo?
 
   @@map("tenants")
 }
@@ -96,6 +107,7 @@ model User {
   lotteryTickets    LotteryTicket[]
   walletEntries     WalletEntry[]
   commissionPayouts CommissionPayout[]
+  muralViews        MuralView[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -344,6 +356,8 @@ model TenantSettings {
   tenantId              String   @id @map("tenant_id") @db.Uuid
   // "Indique e ganhe": % (centésimos) do valor apostado pelos indicados, pago a quem indicou no fechamento.
   referralCommissionBps Int      @default(0) @map("referral_commission_bps")
+  // Ordem e visibilidade dos blocos/cards do início do app (@sysjb/contracts, home-layout). Null = padrão.
+  homeLayout            Json?    @map("home_layout")
   updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -540,4 +554,68 @@ model DrawException {
 
   @@index([tenantId, date])
   @@map("draw_exceptions")
+}
+
+// Mural: aviso com imagem mostrado ao jogador ao abrir o app, dentro da vigência (dias de Brasília,
+// inclusivos). A imagem fica no próprio banco (PNG/JPEG/WebP até 3 MB, conferidos por CHECK).
+model Mural {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String
+  startsOn    DateTime @map("starts_on") @db.Date
+  endsOn      DateTime @map("ends_on") @db.Date
+  // ONCE (cada jogador vê uma vez, registrado em mural_views) ou ALWAYS (a cada abertura do app).
+  displayMode String   @map("display_mode")
+  image       Bytes
+  imageType   String   @map("image_type")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  views  MuralView[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, endsOn])
+  @@map("murals")
+}
+
+// Jogador que já viu o mural (vale para "Apenas uma vez"). Um registro por mural e jogador.
+model MuralView {
+  tenantId String   @map("tenant_id") @db.Uuid
+  muralId  String   @map("mural_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  seenAt   DateTime @default(now()) @map("seen_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  mural  Mural  @relation(fields: [tenantId, muralId], references: [tenantId, id], onDelete: Restrict)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([muralId, userId])
+  @@index([tenantId, userId])
+  @@map("mural_views")
+}
+
+// Logo enviada pelo painel (PNG/JPEG/WebP até 1 MB, conferidos por CHECK). Uma por banca.
+model TenantLogo {
+  tenantId  String   @id @map("tenant_id") @db.Uuid
+  image     Bytes
+  imageType String   @map("image_type")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("tenant_logos")
+}
+
+// Contador de requisições por janela fixa (rate limiting da API). Sem banca: vale antes de haver sessão.
+// A chave nunca traz IP em texto (só HMAC). Linhas vencidas são apagadas pela API.
+model RateLimitCounter {
+  key         String
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
+  hits        Int      @default(1)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counters")
 }

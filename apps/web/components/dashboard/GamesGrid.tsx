@@ -1,9 +1,10 @@
 'use client';
 
 import { Ticket, Dice5, Flame } from 'lucide-react';
+import type { HomeLayoutCard } from '@sysjb/contracts';
 import type { GameModalityResponse } from '@/lib/modalities';
 import { useToast } from '../ui/Toast';
-import { bannerStyle, findModality, titleCase, visibleTiles } from './modality-tiles';
+import { arrangeCards, bannerStyle, findModality, titleCase, visibleTiles } from './modality-tiles';
 
 interface TileConfig {
   slug: string;
@@ -35,11 +36,13 @@ const TILES: TileConfig[] = [
 interface GamesGridProps {
   modalities: GameModalityResponse[];
   isLoading: boolean;
+  /** Ordem e visibilidade dos cards (Raspadinha, Bingo) definidas pelo Gerente. */
+  cards?: HomeLayoutCard[];
 }
 
-export default function GamesGrid({ modalities, isLoading }: GamesGridProps) {
+export default function GamesGrid({ modalities, isLoading, cards }: GamesGridProps) {
   const toast = useToast();
-  const visible = visibleTiles(TILES, modalities, isLoading);
+  const visible = arrangeCards(visibleTiles(TILES, modalities, isLoading), (tile) => tile.slug, cards);
   if (visible.length === 0) return null;
 
   return (

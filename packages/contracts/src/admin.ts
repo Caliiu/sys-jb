@@ -24,6 +24,10 @@ export const PERMISSIONS = [
   'quotes.manage',
   'draws.read',
   'draws.manage',
+  'murals.read',
+  'murals.manage',
+  'branding.read',
+  'branding.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -37,6 +41,8 @@ export type Permission = (typeof PERMISSIONS)[number];
  * Cotações: `quotes.manage` edita a tabela de prêmios da banca (Tradicional e Fazendinha).
  * Sorteios: `draws.manage` cadastra/altera sorteios e exceções de data (o banco recusa o que deixaria apostas
  * vendidas sem sorteio).
+ * Identidade visual: `branding.manage` altera nome, logo, cores e o texto da barra de convite (só o Gerente).
+ * Mural: `murals.manage` cadastra/altera/exclui os avisos com imagem do app do jogador (só o Gerente).
  * Comissões: `commissions.manage` define a % do "Indique e ganhe" e fecha o mês (o banco confere o perfil
  * MANAGER de novo no fechamento).
  */
@@ -55,6 +61,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'quotes.manage',
     'draws.read',
     'draws.manage',
+    'murals.read',
+    'murals.manage',
+    'branding.read',
+    'branding.manage',
   ],
   SUPPORT: ['users.read', 'users.update'],
   FINANCE: ['users.read', 'promoters.read', 'commissions.read', 'quotes.read', 'draws.read'],
@@ -192,6 +202,11 @@ export const AUDIT_ACTIONS = [
   'draw.delete',
   'draw.exception.create',
   'draw.exception.delete',
+  'mural.create',
+  'mural.update',
+  'mural.delete',
+  'branding.update',
+  'home.layout.update',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -215,7 +230,8 @@ export interface AdminAuditEntry {
 
 /**
  * Metadados da ação (nunca valores pessoais): nomes dos campos alterados; na comissão, antes/depois em
- * centésimos de %; no crédito de carteira, o valor em centavos; nos sorteios, o nome do sorteio e a data.
+ * centésimos de %; no crédito de carteira, o valor em centavos; nos sorteios, o nome do sorteio e a data; no
+ * mural, o nome do mural.
  */
 export type AuditDetails = {
   fields: string[];
@@ -225,6 +241,8 @@ export type AuditDetails = {
   month?: string;
   draw?: string;
   date?: string;
+  /** Nome do mural. */
+  mural?: string;
 };
 
 /** GET /v1/admin/audit: mais recentes primeiro; filtros opcionais por ação e por usuário afetado. */

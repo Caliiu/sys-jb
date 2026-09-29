@@ -1,4 +1,5 @@
 import type { PublicTenant, PublicUser } from '@sysjb/contracts';
+import { InviteProvider } from '@/components/dashboard/InviteProvider';
 import RechargeScreen from '@/components/recharge/RechargeScreen';
 import { brandStyle } from '@/lib/brand-style';
 
@@ -11,7 +12,14 @@ interface RechargePageProps {
 export default function RechargePage({ tenant, user }: RechargePageProps) {
   return (
     <div style={brandStyle(tenant)} className="app-shell bg-slate-50 font-body">
-      <RechargeScreen wallet={user.wallet} holderName={user.name} holderDocument={user.document} />
+      <InviteProvider inviteCode={user.inviteCode}>
+        <RechargeScreen
+          wallet={user.wallet}
+          holderName={user.name}
+          holderDocument={user.document}
+          displayId={user.displayId}
+        />
+      </InviteProvider>
     </div>
   );
 }
