@@ -31,11 +31,33 @@ export const formatTime = (iso: string): string => TIME.format(new Date(iso));
 /** ISO 8601 -> "26/09/26 11:10" */
 export const formatShortDateTime = (iso: string): string => SHORT_DATE_TIME.format(new Date(iso)).replace(', ', ' ');
 
+const DATE_TIME_SECONDS = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/** ISO 8601 -> "28/09/2026 20:18:40" (cabeçalho dos comprovantes) */
+export const formatDateTimeSeconds = (iso: string): string =>
+  DATE_TIME_SECONDS.format(new Date(iso)).replace(', ', ' ');
+
 /** ISO 8601 -> "25/09/2026 14:30" */
 export const formatDateTime = (iso: string): string => DATE_TIME.format(new Date(iso)).replace(', ', ' ');
 
 /** "1990-05-17" (data de calendário, sem fuso) -> "17/05/1990" */
-export function formatBirthDate(isoDate: string): string {
+export function formatCalendarDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-');
   return `${day}/${month}/${year}`;
+}
+
+export const formatBirthDate = formatCalendarDate;
+
+/** "2026-09-28" (data de calendário, sem fuso) -> "28/09/26" */
+export function formatShortCalendarDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-');
+  return `${day}/${month}/${year!.slice(-2)}`;
 }

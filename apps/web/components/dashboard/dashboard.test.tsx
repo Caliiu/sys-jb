@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { DrawSchedule } from '@sysjb/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, router, user } from '@/test/render';
 
@@ -184,21 +185,53 @@ describe('BalanceCard', () => {
 });
 
 describe('SorteioBanner', () => {
-  it('sem sorteio cadastrado, não aparece', () => {
-    const { container } = renderWithProviders(<SorteioBanner draw={null} />);
+  const schedule: DrawSchedule = {
+    draws: [
+      {
+        id: 'a',
+        group: 'CAPITAL',
+        name: 'LT CAPITAL 20HS',
+        hour: 20,
+        drawTime: '20:00',
+        closesAt: '19:40',
+        weekdays: [0, 1, 2, 3, 4, 5, 6],
+        games: ['lotteries'],
+      },
+      {
+        id: 'b',
+        group: 'CAPITAL',
+        name: 'LT CAPITAL 21HS',
+        hour: 21,
+        drawTime: '21:00',
+        closesAt: '20:40',
+        weekdays: [0, 1, 2, 3, 4, 5, 6],
+        games: ['fazendinha'],
+      },
+    ],
+    exceptions: [],
+  };
+
+  it('sem o cadastro de sorteios, não aparece', () => {
+    const { container } = renderWithProviders(<SorteioBanner schedule={null} nowIso="2026-09-28T22:50:00Z" />);
     expect(container.querySelector('time')).toBeNull();
   });
 
-  it('com sorteio, conta regressivamente em tempo real', () => {
+  it('conta até o horário do sorteio e, quando ele chega, passa para o seguinte', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-09-25T12:00:00Z'));
-    renderWithProviders(<SorteioBanner draw={{ label: 'LT TESTE 13HS', startsAt: '2026-09-25T13:00:00Z' }} />);
-    expect(screen.getByText('LT TESTE 13HS')).toBeInTheDocument();
-    expect(screen.getByText('01:00:00')).toBeInTheDocument();
+    // 19:50 em Brasília: faltam 10 minutos para o das 20h.
+    vi.setSystemTime(new Date('2026-09-28T22:50:00Z'));
+    renderWithProviders(<SorteioBanner schedule={schedule} nowIso="2026-09-28T22:50:00Z" />);
+    expect(screen.getByText('LT CAPITAL 20HS')).toBeInTheDocument();
+    expect(screen.getByText('00 : 10 : 00')).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(3000);
     });
-    expect(screen.getByText('00:59:57')).toBeInTheDocument();
+    expect(screen.getByText('00 : 09 : 57')).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(10 * 60 * 1000);
+    });
+    expect(screen.getByText('LT CAPITAL 21HS')).toBeInTheDocument();
+    expect(screen.getByText('00 : 59 : 57')).toBeInTheDocument();
     vi.useRealTimers();
   });
 });

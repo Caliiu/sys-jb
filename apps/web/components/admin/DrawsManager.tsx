@@ -59,6 +59,7 @@ interface DrawDraft extends SaveDrawRequest {
 const emptyDraft = (sortOrder: number): DrawDraft => ({
   group: '',
   name: '',
+  code: '',
   drawTime: '',
   closesAt: '',
   weekdays: [0, 1, 2, 3, 4, 5, 6],
@@ -71,6 +72,7 @@ const draftOf = (draw: AdminDraw): DrawDraft => ({
   id: draw.id,
   group: draw.group,
   name: draw.name,
+  code: draw.code,
   drawTime: draw.drawTime,
   closesAt: draw.closesAt,
   weekdays: draw.weekdays,
@@ -199,6 +201,19 @@ function DrawForm({
               onChange={(e) => set('name', e.target.value.toUpperCase())}
               placeholder="Ex.: LT PT RIO 09HS"
               className={inputClass}
+            />
+          )}
+        </Field>
+        <Field label="Código (relatórios)" error={fieldError('code')}>
+          {(id) => (
+            <input
+              id={id}
+              value={form.code}
+              maxLength={DRAW_LIMITS.codeMax}
+              onChange={(e) => set('code', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              placeholder="Vazio = gerado do nome"
+              autoComplete="off"
+              className={`${inputClass} uppercase`}
             />
           )}
         </Field>
@@ -537,11 +552,14 @@ export default function DrawsManager({
           )}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-[13px]">
+          <table className="w-full min-w-[860px] text-left text-[13px]">
             <thead>
               <tr className="border-y border-admin-border">
                 <th scope="col" className={thClass}>
                   Sorteio
+                </th>
+                <th scope="col" className={thClass}>
+                  Código
                 </th>
                 <th scope="col" className={thClass}>
                   Horário
@@ -570,7 +588,7 @@ export default function DrawsManager({
                 <tr className="bg-admin-bg">
                   <th
                     scope="colgroup"
-                    colSpan={canManage ? 7 : 6}
+                    colSpan={canManage ? 8 : 7}
                     className="px-4 py-2 text-[12px] font-bold tracking-wide text-admin-text"
                   >
                     {g.label}
@@ -581,6 +599,7 @@ export default function DrawsManager({
                     <th scope="row" className="px-4 py-2 font-medium">
                       {d.name}
                     </th>
+                    <td className="px-4 py-2 font-mono text-[12px]">{d.code}</td>
                     <td className="px-4 py-2 tabular-nums">{d.drawTime}</td>
                     <td className="px-4 py-2 tabular-nums">{d.closesAt}</td>
                     <td className="px-4 py-2">{weekdaysLabel(d.weekdays)}</td>

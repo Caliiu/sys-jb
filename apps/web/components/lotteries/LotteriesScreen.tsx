@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo, useRef, useState } from 'react';
 import { placeLotteryTicketsAction } from '@/app/lottery-actions';
 import { formatBrl } from '@/lib/currency';
+import { splitLabel } from '@/lib/report-receipts';
 import {
   type CartItem,
   type LotteryDay,
@@ -66,7 +67,6 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = { modality: null, placement: null, guesses: [], amountCents: 0, split: 'total' };
-const splitLabel = (split: LotterySplit) => (split === 'total' ? 'TODOS' : 'CADA');
 
 interface LotteriesScreenProps {
   nowIso: string;

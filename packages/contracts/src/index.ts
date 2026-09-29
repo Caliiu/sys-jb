@@ -152,4 +152,6 @@ export * from './fazendinha.js';
 export * from './quotes.js';
 export * from './lotteries.js';
 export * from './draws.js';
+export * from './prizes.js';
+export * from './reports.js';
 export * from './validation.js';

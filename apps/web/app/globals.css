@@ -42,6 +42,14 @@
   --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.15);
   --shadow-admin: 0 1px 3px rgba(15, 23, 42, 0.08);
   --radius-xl2: 14px;
+
+  /* Piscar do indicador "ao vivo" (banner do próximo sorteio). */
+  --animate-blink: blink 1s ease-in-out infinite;
+  @keyframes blink {
+    50% {
+      opacity: 0.15;
+    }
+  }
 }
 
 /* Reserva o espaço da barra de rolagem: travar a rolagem ao abrir menus e folhas não desloca a página. */

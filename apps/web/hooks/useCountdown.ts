@@ -12,9 +12,14 @@ const nowInSeconds = () => Math.floor(Date.now() / 1000);
 // No servidor não há relógio "ao vivo": o contador aparece só no navegador (sem divergência de hidratação).
 const serverSnapshot = () => null;
 
+/** Agora, em segundos inteiros (epoch), atualizado a cada segundo. null durante a renderização no servidor. */
+export function useNowSeconds(): number | null {
+  return useSyncExternalStore(subscribeToClock, nowInSeconds, serverSnapshot);
+}
+
 /** Segundos inteiros até `target` (ISO 8601), atualizado a cada segundo. null durante a renderização no servidor. */
 export function useSecondsUntil(target: string): number | null {
-  const now = useSyncExternalStore(subscribeToClock, nowInSeconds, serverSnapshot);
+  const now = useNowSeconds();
   if (now === null) return null;
   return Math.max(0, Math.floor((new Date(target).getTime() - now * 1000) / 1000));
 }

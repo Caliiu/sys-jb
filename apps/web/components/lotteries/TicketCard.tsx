@@ -2,7 +2,7 @@
 
 import { ChevronRight } from 'lucide-react';
 import { formatBrl, formatCents } from '@/lib/currency';
-import { formatBirthDate } from '@/lib/datetime';
+import { formatBirthDate, formatShortCalendarDate } from '@/lib/datetime';
 import TenantLogo from '../tenant/TenantLogo';
 
 // Data e hora no fuso de Brasília: "28/09/26 12:04:53".
@@ -22,7 +22,8 @@ export interface TicketCardItem {
   guesses: string[];
   amountCents: number;
   splitLabel: string;
-  possiblePrizeCents: number;
+  /** Ausente: a linha de possível prêmio não aparece (comprovante da Fazendinha). */
+  possiblePrizeCents?: number;
 }
 
 interface TicketCardProps {
@@ -36,13 +37,15 @@ interface TicketCardProps {
   puleNumber?: number;
   items: TicketCardItem[];
   totalCents: number;
+  /** Formato de Relatórios > Consultar pule: vale com ano curto (29/09/26) e valor com "R$". */
+  lookup?: boolean;
 }
 
 const row = 'border-b border-dashed border-gray-300 py-3';
 
 /** Pule no formato do comprovante (resumo antes de finalizar; recibo depois, com o número). */
 export default function TicketCard(props: TicketCardProps) {
-  const { heading, sellerId, stampIso, drawDate, quoteTable, lottery, puleNumber, items, totalCents } = props;
+  const { heading, sellerId, stampIso, drawDate, quoteTable, lottery, puleNumber, items, totalCents, lookup } = props;
   return (
     <article
       aria-label={`${heading === 'RECIBO DA APOSTA' ? 'Recibo' : 'Resumo'} ${lottery}`}
@@ -62,7 +65,9 @@ export default function TicketCard(props: TicketCardProps) {
         <dl className={`${row} space-y-1`}>
           <div className="flex justify-between">
             <dt>Vale</dt>
-            <dd className="font-bold tabular-nums">{formatBirthDate(drawDate)}</dd>
+            <dd className="font-bold tabular-nums">
+              {lookup ? formatShortCalendarDate(drawDate) : formatBirthDate(drawDate)}
+            </dd>
           </div>
           <div className="flex justify-between">
             <dt>Cotação</dt>
@@ -85,12 +90,14 @@ export default function TicketCard(props: TicketCardProps) {
             </ul>
             <p className="flex items-center gap-1 font-bold tabular-nums">
               <ChevronRight className="w-4 h-4" aria-hidden />
-              {formatCents(item.amountCents)} / {item.splitLabel}
+              {lookup ? formatBrl(item.amountCents) : formatCents(item.amountCents)} / {item.splitLabel}
             </p>
-            <p className="flex items-center gap-1 text-gray-600 tabular-nums">
-              <ChevronRight className="w-4 h-4" aria-hidden />
-              Possível prêmio: {formatBrl(item.possiblePrizeCents)}
-            </p>
+            {item.possiblePrizeCents !== undefined && (
+              <p className="flex items-center gap-1 text-gray-600 tabular-nums">
+                <ChevronRight className="w-4 h-4" aria-hidden />
+                Possível prêmio: {formatBrl(item.possiblePrizeCents)}
+              </p>
+            )}
           </div>
         ))}
         <p className={`${row} flex justify-between`}>

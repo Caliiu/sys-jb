@@ -241,6 +241,7 @@ const saveDrawSchema = z.strictObject({
   draw: z.strictObject({
     group: z.string().max(DRAW_LIMITS.groupMax + 10),
     name: z.string().max(DRAW_LIMITS.nameMax + 10),
+    code: z.string().max(DRAW_LIMITS.codeMax + 10),
     drawTime: z.string().max(5),
     closesAt: z.string().max(5),
     weekdays: z.array(z.number().int()).max(7),

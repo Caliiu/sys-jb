@@ -25,6 +25,7 @@ const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 const DRAWS: AdminDraw[] = TEST_SCHEDULE.draws.map((d, i) => ({
   ...d,
   id: ID(i + 1),
+  code: d.name.replace(/^LT /, '').replace(/\s|HS$/g, ''),
   active: true,
   sortOrder: i * 10,
 }));
@@ -37,12 +38,14 @@ const renderManager = (canManage = true, data = DATA) =>
   renderWithProviders(<DrawsManager initial={data} canManage={canManage} today={TODAY} />);
 
 describe('Sorteios no painel', () => {
-  it('lista por grupo com horário, venda até, dias, jogos e situação', () => {
+  it('lista por grupo com código, horário, venda até, dias, jogos e situação', () => {
     renderManager();
     expect(screen.getByRole('heading', { name: 'Sorteios (12)' })).toBeInTheDocument();
     const rio = screen.getByRole('rowgroup', { name: 'RIO/FEDERAL' });
     const federal = within(rio).getByRole('row', { name: /LT FEDERAL/ });
-    expect(federal).toHaveTextContent(/LT FEDERAL\s*20:00\s*19:58\s*Qua, Dom\s*Loterias · Fazendinha\s*Ativo/);
+    expect(federal).toHaveTextContent(
+      /LT FEDERAL\s*FEDERAL\s*20:00\s*19:58\s*Qua, Dom\s*Loterias · Fazendinha\s*Ativo/,
+    );
     expect(screen.getByRole('row', { name: /LT CAPITAL 13HS/ })).toHaveTextContent(/Todos os dias\s*Loterias\s*Ativo/);
   });
 
@@ -60,6 +63,8 @@ describe('Sorteios no painel', () => {
     const form = screen.getByRole('form', { name: 'Novo sorteio' });
     await userEvent.type(within(form).getByLabelText('Grupo'), 'minas gerais');
     await userEvent.type(within(form).getByLabelText('Nome (no pule)'), 'lt minas dia 15hs');
+    // Só letras e números, em maiúsculas.
+    await userEvent.type(within(form).getByLabelText('Código (relatórios)'), 'mg-dia 15');
     await userEvent.type(within(form).getByLabelText('Horário do sorteio'), '15:00');
     await userEvent.type(within(form).getByLabelText('Venda até'), '14:55');
     await userEvent.click(within(form).getByRole('checkbox', { name: 'Dom' }));
@@ -70,6 +75,7 @@ describe('Sorteios no painel', () => {
       draw: {
         group: 'MINAS GERAIS',
         name: 'LT MINAS DIA 15HS',
+        code: 'MGDIA15',
         drawTime: '15:00',
         closesAt: '14:55',
         weekdays: [1, 2, 3, 4, 5, 6],

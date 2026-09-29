@@ -220,7 +220,13 @@ export class FazendinhaService {
   }
 }
 
-function toPublicBet(bet: FazendinhaBet, numbers: number[], sellerId: number, quoteTable: string): PublicFazendinhaBet {
+/** Pule da Fazendinha -> comprovante público (compra e Consultar pule). */
+export function toPublicBet(
+  bet: FazendinhaBet,
+  numbers: number[],
+  sellerId: number,
+  quoteTable: string,
+): PublicFazendinhaBet {
   return {
     puleNumber: bet.puleNumber,
     drawDate: fromDate(bet.drawDate),

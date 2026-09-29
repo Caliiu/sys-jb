@@ -252,6 +252,8 @@ model FazendinhaBet {
   drawDate       DateTime       @map("draw_date") @db.Date
   lottery        String
   drawHour       Int            @map("draw_hour") @db.SmallInt
+  // Código da extração na venda (ex.: LTTRIVO09), gravado pelo trigger a partir do cadastro.
+  drawCode       String         @default(dbgenerated("''")) @map("draw_code")
   mode           FazendinhaMode
   stakeCents     Int            @map("stake_cents")
   // Prêmio de cada número pela cotação vigente na compra (a cotação pode mudar depois).
@@ -443,6 +445,8 @@ model LotteryTicket {
   drawDate    DateTime @map("draw_date") @db.Date
   lottery     String
   drawHour    Int      @map("draw_hour") @db.SmallInt
+  // Código da extração na venda (ex.: PT14), gravado pelo trigger a partir do cadastro.
+  drawCode    String   @default(dbgenerated("''")) @map("draw_code")
   // Horário limite da extração (do cadastro de sorteios; o trigger grava o valor do cadastro).
   closesAt    DateTime @map("closes_at") @db.Timestamptz(3)
   totalCents  BigInt   @map("total_cents")
@@ -496,6 +500,8 @@ model Draw {
   groupName     String   @map("group_name")
   // Nome no pule e na tela (ex.: LT PT RIO 09HS). Único na banca.
   name          String
+  // Código curto dos relatórios (ex.: PT14). Único na banca; vazio no cadastro = gerado do nome e da hora.
+  code          String   @default("")
   drawMinutes   Int      @map("draw_minutes") @db.SmallInt
   // Horário máximo de venda (<= horário do sorteio).
   closesMinutes Int      @map("closes_minutes") @db.SmallInt
@@ -513,6 +519,7 @@ model Draw {
 
   @@unique([tenantId, id])
   @@unique([tenantId, name])
+  @@unique([tenantId, code])
   @@index([tenantId, sortOrder])
   @@map("draws")
 }

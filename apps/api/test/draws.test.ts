@@ -78,6 +78,7 @@ const toSave = (
 const NEW_DRAW: SaveDrawRequest = {
   group: 'teste',
   name: 'lt teste 10hs',
+  code: '',
   drawTime: '10:20',
   closesAt: '10:15',
   weekdays: [1, 2, 3, 4, 5, 6, 0],
@@ -132,6 +133,8 @@ describe('painel: /v1/admin/draws', () => {
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const draw = findDraw(created.body, 'LT TESTE 10HS');
     expect(draw).toMatchObject({ group: 'TESTE', hour: 10, weekdays: [0, 1, 2, 3, 4, 5, 6], games: ['lotteries'] });
+    // Sem código: gerado do nome e da hora.
+    expect(draw.code).toBe('TESTE10');
 
     const updated = await session.http.put(
       `/v1/admin/draws/${draw.id}`,
@@ -139,6 +142,12 @@ describe('painel: /v1/admin/draws', () => {
     );
     expect(updated.status).toBe(200);
     expect(findDraw(updated.body, 'LT TESTE 10HS')).toMatchObject({ closesAt: '10:18', weekdays: [1, 3] });
+
+    // Código informado (em maiúsculas); vazio de novo volta ao gerado.
+    const coded = await session.http.put(`/v1/admin/draws/${draw.id}`, toSave(draw, { code: 'tst10' }));
+    expect(findDraw(coded.body, 'LT TESTE 10HS').code).toBe('TST10');
+    const regenerated = await session.http.put(`/v1/admin/draws/${draw.id}`, toSave(draw, { code: '' }));
+    expect(findDraw(regenerated.body, 'LT TESTE 10HS').code).toBe('TESTE10');
 
     const removed = await session.http.delete(`/v1/admin/draws/${draw.id}`);
     expect(removed.status).toBe(200);
@@ -148,9 +157,12 @@ describe('painel: /v1/admin/draws', () => {
     expect(audit.body.items.map((e: { action: string }) => e.action)).toEqual([
       'draw.delete',
       'draw.update',
+      'draw.update',
+      'draw.update',
       'draw.create',
     ]);
-    expect(audit.body.items[1].details).toEqual({ fields: ['Venda até', 'Dias'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[1].details).toEqual({ fields: ['Código'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[3].details).toEqual({ fields: ['Venda até', 'Dias'], draw: 'LT TESTE 10HS' });
   });
 
   it('valida o cadastro', async () => {
@@ -164,6 +176,9 @@ describe('painel: /v1/admin/draws', () => {
       [{ games: [] }, 'games'],
       [{ name: ' ' }, 'name'],
       [{ name: 'X'.repeat(41) }, 'name'],
+      [{ code: 'PT 14' }, 'code'],
+      [{ code: 'PT-14' }, 'code'],
+      [{ code: 'X'.repeat(13) }, 'code'],
     ];
     for (const [patch, field] of cases) {
       const res = await session.http.post('/v1/admin/draws', { ...NEW_DRAW, ...patch });
@@ -173,6 +188,10 @@ describe('painel: /v1/admin/draws', () => {
     const duplicated = await session.http.post('/v1/admin/draws', { ...NEW_DRAW, name: 'LT PT RIO 09HS' });
     expect(duplicated.status).toBe(409);
     expect(duplicated.body.code).toBe('CONFLICT');
+    expect(duplicated.body.details).toEqual([{ field: 'name', message: 'Já existe um sorteio com este nome.' }]);
+    const sameCode = await session.http.post('/v1/admin/draws', { ...NEW_DRAW, code: 'PTRIO09' });
+    expect(sameCode.status).toBe(409);
+    expect(sameCode.body.details).toEqual([{ field: 'code', message: 'Já existe um sorteio com este código.' }]);
   });
 
   it('não desativa, não tira o jogo nem o dia, não renomeia e não exclui sorteio com apostas vendidas', async () => {
@@ -362,6 +381,7 @@ describe('exceções de data', () => {
     });
     expect(again.status).toBe(409);
     expect(again.body.code).toBe('CONFLICT');
+    expect(again.body.details).toEqual([{ field: 'date', message: 'Já existe uma exceção para esta data e sorteio.' }]);
 
     // Remover o feriado volta a vender.
     const removed = await session.http.delete(`/v1/admin/draws/exceptions/${holiday.body.exceptions[0].id}`);

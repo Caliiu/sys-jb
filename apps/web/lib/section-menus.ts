@@ -20,9 +20,9 @@ export const RESULTS_MENU: SectionMenu = {
 export const REPORTS_MENU: SectionMenu = {
   title: 'Relatórios',
   items: [
-    { label: 'Consultar saldo' },
-    { label: 'Consultar pule' },
-    { label: 'Movimento loterias' },
+    { label: 'Consultar saldo', href: ROUTES.balanceReport },
+    { label: 'Consultar pule', href: ROUTES.puleLookup },
+    { label: 'Movimento loterias', href: ROUTES.lotteryMovement },
     { label: 'Cotações', href: ROUTES.quotes },
     { label: 'Cotadas' },
   ],
@@ -30,5 +30,16 @@ export const REPORTS_MENU: SectionMenu = {
 
 export const PRIZES_MENU: SectionMenu = {
   title: 'Premiadas',
-  items: [{ label: 'Consultar premiadas' }, { label: 'Reclame' }],
+  items: [
+    { label: 'Consultar premiadas', href: ROUTES.prizesCheck },
+    { label: 'Reclame', href: ROUTES.prizeClaim },
+  ],
+};
+
+export const PULE_LOOKUP_MENU: SectionMenu = {
+  title: 'Consultar pule',
+  items: [
+    { label: 'Consultar por código', href: ROUTES.puleByCode },
+    { label: 'Consultar por data', href: ROUTES.puleByDate },
+  ],
 };

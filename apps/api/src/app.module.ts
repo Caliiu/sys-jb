@@ -12,7 +12,11 @@ import { DrawsController } from './draws/draws.controller.js';
 import { DrawsService } from './draws/draws.service.js';
 import { LotteriesController } from './lotteries/lotteries.controller.js';
 import { LotteriesService } from './lotteries/lotteries.service.js';
+import { PrizesController } from './prizes/prizes.controller.js';
+import { PrizesService } from './prizes/prizes.service.js';
 import { QuotesController } from './quotes/quotes.controller.js';
+import { PulesController, ReportsController } from './reports/reports.controller.js';
+import { ReportsService } from './reports/reports.service.js';
 import { QuotesService } from './quotes/quotes.service.js';
 import { PromotersController } from './admin/promoters.controller.js';
 import { PromotersRepository } from './admin/promoters.repository.js';
@@ -62,6 +66,9 @@ export class AppModule {
         DrawsAdminController,
         DrawsController,
         QuotesController,
+        PrizesController,
+        ReportsController,
+        PulesController,
         LotteriesController,
         ProfileController,
         FazendinhaController,
@@ -88,6 +95,8 @@ export class AppModule {
         AuditService,
         CommissionsService,
         QuotesService,
+        PrizesService,
+        ReportsService,
         DrawsService,
         LotteriesService,
         SessionGuard,

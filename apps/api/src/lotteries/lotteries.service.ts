@@ -33,7 +33,7 @@ const toDate = (drawDate: string) => new Date(`${drawDate}T00:00:00Z`);
 /** Horário limite no dia da extração, em Brasília (sem horário de verão: sempre -03:00). O trigger grava o do cadastro. */
 const closesAtOf = (drawDate: string, draw: PublicDraw) => new Date(`${drawDate}T${draw.closesAt}:00-03:00`);
 
-interface ItemRow {
+export interface ItemRow {
   position: number;
   modality: string;
   placement: string;
@@ -45,7 +45,7 @@ interface ItemRow {
   possiblePrizeCents: bigint;
 }
 
-type TicketWithItems = LotteryTicket & { items: ItemRow[] };
+export type TicketWithItems = LotteryTicket & { items: ItemRow[] };
 
 /** Mesmo item? (palpites na ordem enviada; valores em centavos) */
 const sameItem = (a: ItemRow, b: PlaceLotteryTicketsInput['items'][number]) =>
@@ -237,7 +237,8 @@ function toItemRow(item: PlaceLotteryTicketsInput['items'][number], i: number, q
   };
 }
 
-function toPublicTicket(ticket: TicketWithItems, sellerId: number): PublicLotteryTicket {
+/** Pule de Loterias (com os itens) -> comprovante público (compra e Consultar pule). */
+export function toPublicTicket(ticket: TicketWithItems, sellerId: number): PublicLotteryTicket {
   return {
     puleNumber: ticket.puleNumber,
     drawDate: ticket.drawDate.toISOString().slice(0, 10),

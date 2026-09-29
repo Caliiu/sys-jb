@@ -58,7 +58,7 @@ export default function BottomNav() {
         <Link
           href={ROUTES.pixTopUp}
           aria-label="Recarga Pix"
-          className="absolute -top-6 w-14 h-14 rounded-full bg-gradient-to-br from-cyan-400 to-brand-teal shadow-lg flex items-center justify-center ring-4 ring-[#EDEDED] active:scale-95 transition-transform"
+          className="absolute -top-6 w-14 h-14 rounded-full bg-gradient-to-br from-cyan-400 to-brand-teal shadow-lg flex items-center justify-center active:scale-95 transition-transform"
         >
           <Image src="/icons/pix.png" alt="" width={24} height={24} />
         </Link>

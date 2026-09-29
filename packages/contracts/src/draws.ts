@@ -18,7 +18,10 @@ export const WEEKDAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] 
 /** Dias à frente (além de hoje) que aceitam apostas. */
 export const DRAW_MAX_DAY_OFFSET = 6;
 
-export const DRAW_LIMITS = { groupMax: 30, nameMax: 40, noteMax: 80, sortOrderMax: 100_000 } as const;
+export const DRAW_LIMITS = { groupMax: 30, nameMax: 40, codeMax: 12, noteMax: 80, sortOrderMax: 100_000 } as const;
+
+/** Código curto da extração nos relatórios (ex.: PT14): letras maiúsculas e dígitos. */
+export const DRAW_CODE_PATTERN = /^[A-Z0-9]{1,12}$/;
 
 /** Sorteio como o jogador vê (só os ativos). */
 export interface PublicDraw {
@@ -126,6 +129,8 @@ export function groupDraws<T extends Pick<PublicDraw, 'group'>>(draws: readonly 
 // ---------------------------------------------------------------------------
 
 export interface AdminDraw extends PublicDraw {
+  /** Código curto dos relatórios (ex.: PT14). */
+  code: string;
   active: boolean;
   sortOrder: number;
 }
@@ -149,6 +154,8 @@ export interface AdminDrawsResponse {
 export interface SaveDrawRequest {
   group: string;
   name: string;
+  /** Código curto (ex.: PT14); vazio = gerado do nome e da hora. */
+  code: string;
   drawTime: string;
   closesAt: string;
   weekdays: number[];

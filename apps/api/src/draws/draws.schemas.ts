@@ -17,6 +17,13 @@ export const saveDrawSchema = z.strictObject({
     .toUpperCase()
     .min(1, 'Informe o nome.')
     .max(DRAW_LIMITS.nameMax, `No máximo ${DRAW_LIMITS.nameMax} caracteres.`),
+  // Vazio = gerado do nome e da hora.
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .max(DRAW_LIMITS.codeMax, `No máximo ${DRAW_LIMITS.codeMax} caracteres.`)
+    .regex(/^[A-Z0-9]*$/, 'Use só letras e números, sem espaços.'),
   drawTime: time('Horário do sorteio'),
   closesAt: time('Venda até'),
   weekdays: z

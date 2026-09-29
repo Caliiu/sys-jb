@@ -69,4 +69,31 @@ describe('Relatórios > Cotações', () => {
     expect(rowOf('FAZENDINHA CT-100')).toHaveTextContent('R$ 0,00');
     expect(screen.queryByText(/aposta seca/)).toBeNull();
   });
+
+  it('Compartilhar gera o PDF da tabela e o abre numa aba nova', async () => {
+    const tab = { location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    let pdf: Blob | undefined;
+    URL.createObjectURL = vi.fn((blob: Blob) => ((pdf = blob), 'blob:cotacoes'));
+    URL.revokeObjectURL = vi.fn();
+
+    renderScreen();
+    await userEvent.click(screen.getByRole('button', { name: 'TRADICIONAL' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Compartilhar' }));
+
+    expect(open).toHaveBeenCalledWith('', '_blank');
+    await vi.waitFor(() => expect(tab.location.href).toBe('blob:cotacoes'));
+    expect(pdf?.type).toBe('application/pdf');
+    // O Blob do jsdom não tem arrayBuffer(); o FileReader lê os bytes.
+    const bytes = await new Promise<ArrayBuffer>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.readAsArrayBuffer(pdf!);
+    });
+    const text = new TextDecoder('latin1').decode(bytes);
+    expect(text).toContain('(VENDEDOR: 100042)');
+    expect(text).toContain('(MILHAR)');
+    expect(text).toContain('(R$ 8.000,00)');
+    open.mockRestore();
+  });
 });

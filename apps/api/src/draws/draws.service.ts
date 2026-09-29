@@ -41,6 +41,7 @@ const fromDate = (date: Date) => date.toISOString().slice(0, 10);
 const FIELD_LABELS: Record<keyof SaveDrawInput, string> = {
   group: 'Grupo',
   name: 'Nome',
+  code: 'Código',
   drawTime: 'Horário',
   closesAt: 'Venda até',
   weekdays: 'Dias',
@@ -54,6 +55,7 @@ function toAdminDraw(row: Draw): AdminDraw {
     id: row.id,
     group: row.groupName,
     name: row.name,
+    code: row.code,
     hour: Math.floor(row.drawMinutes / 60),
     drawTime: minutesToTime(row.drawMinutes),
     closesAt: minutesToTime(row.closesMinutes),
@@ -64,7 +66,7 @@ function toAdminDraw(row: Draw): AdminDraw {
   };
 }
 
-const toPublicDraw = ({ active: _active, sortOrder: _sortOrder, ...draw }: AdminDraw): PublicDraw => draw;
+const toPublicDraw = ({ active: _active, sortOrder: _sortOrder, code: _code, ...draw }: AdminDraw): PublicDraw => draw;
 
 const toPublicException = (row: DrawException): PublicDrawException => ({
   date: fromDate(row.date),
@@ -309,15 +311,23 @@ export class DrawsService {
         );
       }
       if (isUniqueViolation(error)) {
+        // Pelo nome da constraint: os metadados do erro sempre trazem outras chaves "name"/"code".
         const meta = JSON.stringify(error.meta ?? {});
-        if (meta.includes('name')) {
+        if (meta.includes('draws_tenant_id_code_key')) {
+          throw new AppError(409, 'CONFLICT', 'Já existe um sorteio com este código.', [
+            { field: 'code', message: 'Já existe um sorteio com este código.' },
+          ]);
+        }
+        if (meta.includes('draws_tenant_id_name_key')) {
           throw new AppError(409, 'CONFLICT', 'Já existe um sorteio com este nome.', [
             { field: 'name', message: 'Já existe um sorteio com este nome.' },
           ]);
         }
-        throw new AppError(409, 'CONFLICT', 'Já existe uma exceção para esta data e sorteio.', [
-          { field: 'date', message: 'Já existe uma exceção para esta data e sorteio.' },
-        ]);
+        if (meta.includes('draw_exceptions_tenant_date_draw_key')) {
+          throw new AppError(409, 'CONFLICT', 'Já existe uma exceção para esta data e sorteio.', [
+            { field: 'date', message: 'Já existe uma exceção para esta data e sorteio.' },
+          ]);
+        }
       }
       throw error;
     }
@@ -334,6 +344,8 @@ function toRow(input: SaveDrawInput) {
   return {
     groupName: input.group,
     name: input.name,
+    // Vazio: o banco gera do nome e da hora (trigger draws_default_code).
+    code: input.code,
     drawMinutes,
     closesMinutes,
     weekdays: [...input.weekdays].sort((a, b) => a - b),
