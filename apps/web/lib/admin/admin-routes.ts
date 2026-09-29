@@ -6,8 +6,8 @@ export const ADMIN_ROUTES = {
   login: '/login',
   users: '/usuarios',
   user: (id: string) => `/usuarios/${id}`,
-  promoters: '/promotores',
-  promoter: (id: string) => `/promotores/${id}`,
+  /** CSV da lista de usuários (rota, não página). */
+  usersExport: '/usuarios/exportar',
   audit: '/auditoria',
   commissions: '/comissoes',
   quotes: '/cotacoes',

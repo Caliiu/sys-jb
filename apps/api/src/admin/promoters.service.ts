@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AdminPromoterListItem, AdminUserListItem, Page } from '@sysjb/contracts';
+import type { AdminPromoterListItem, AdminPromoterOption, AdminUserListItem, Page } from '@sysjb/contracts';
 import { Errors } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
@@ -35,6 +35,11 @@ export class PromotersService {
     @Inject(DatabaseService) private readonly db: DatabaseService,
     @Inject(PromotersRepository) private readonly repo: PromotersRepository,
   ) {}
+
+  /** Nome e ID de todos os promotores (filtro da lista de usuários). */
+  options(tenant: ResolvedTenant): Promise<AdminPromoterOption[]> {
+    return this.db.withTenant(tenant.id, (tx) => this.repo.listOptions(tx, tenant.id));
+  }
 
   async list(tenant: ResolvedTenant, query: ListPromotersQuery): Promise<Page<AdminPromoterListItem>> {
     const { rows, total } = await this.db.withTenant(tenant.id, (tx) => this.repo.list(tx, tenant.id, query));

@@ -1,9 +1,14 @@
 import { Controller, Get, Header, Inject, Query, UseGuards } from '@nestjs/common';
-import type { AdminAuditEntry, Page } from '@sysjb/contracts';
+import type { AdminAuditEntry, AdminAuditSummary, Page } from '@sysjb/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
-import { type ListAuditQuery, listAuditQuerySchema } from './admin.schemas.js';
+import {
+  type AuditSummaryQuery,
+  auditSummaryQuerySchema,
+  type ListAuditQuery,
+  listAuditQuerySchema,
+} from './admin.schemas.js';
 import { AuditService } from './audit.service.js';
 import { ConsoleGuard } from './console.guard.js';
 import { OperatorGuard, RequirePermission } from './operator.guard.js';
@@ -22,5 +27,15 @@ export class AuditController {
     @Query(new ZodValidationPipe(listAuditQuerySchema)) query: ListAuditQuery,
   ): Promise<Page<AdminAuditEntry>> {
     return this.audit.list(tenant, query);
+  }
+
+  @Get('summary')
+  @RequirePermission('audit.read')
+  @Header('Cache-Control', 'no-store')
+  summary(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @Query(new ZodValidationPipe(auditSummaryQuerySchema)) query: AuditSummaryQuery,
+  ): Promise<AdminAuditSummary> {
+    return this.audit.summary(tenant, query);
   }
 }

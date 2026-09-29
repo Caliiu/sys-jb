@@ -44,6 +44,10 @@ export class AdminUsersRepository {
       tenantId,
       ...(query.status ? { status: query.status } : {}),
       ...(query.search ? searchFilter(query.search) : {}),
+      // Indicados do promotor: quem indicou tem de ser promotor (id de jogador comum não lista nada).
+      ...(query.promoterId
+        ? { referredByUserId: query.promoterId, referredBy: { promoterCommissionBps: { not: null } } }
+        : {}),
     };
     const rows = await tx.user.findMany({
       where,

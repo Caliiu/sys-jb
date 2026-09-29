@@ -1,30 +1,44 @@
-import { AUDIT_ACTIONS, type AdminAuditEntry, type AuditAction } from '@sysjb/contracts';
+import { AUDIT_ACTIONS, type AdminAuditEntry, type AuditAction, type AuditPeriod } from '@sysjb/contracts';
 import { ADMIN_ROUTES } from './admin-routes';
 import { formatBrl } from '../currency';
 import { formatCommission } from './commission';
-import { parsePage } from './promoters-query';
-
-export const AUDIT_PAGE_SIZE = 20;
+import { DEFAULT_PAGE_SIZE, parsePageSize } from './page-size';
 
 export interface AuditQuery {
   page: number;
+  pageSize: number;
   /** '' = todas as ações. */
   action: AuditAction | '';
   /** '' = todos os usuários; senão, o id (UUID) do usuário afetado. */
   userId: string;
+  /** '' = todo o histórico. */
+  period: AuditPeriod | '';
 }
 
+/** Período na URL (em português) e na API. */
+export const AUDIT_PERIOD_PARAMS: Record<AuditPeriod, string> = { today: 'hoje', '7d': '7d', '30d': '30d' };
+
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+/** Página da URL com tolerância: valor inválido vira 1, nunca erro (a URL é digitável). */
+function parsePage(raw: string | string[] | undefined): number {
+  const page = Number(first(raw));
+  return Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1;
+}
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Filtros da URL com tolerância: valor inválido vira "sem filtro", nunca erro (a URL é digitável). */
 export function parseAuditQuery(raw: Record<string, string | string[] | undefined>): AuditQuery {
   const action = first(raw.acao) ?? '';
   const userId = first(raw.usuario) ?? '';
+  const period = first(raw.periodo) ?? '';
   return {
     page: parsePage(raw.page),
+    pageSize: parsePageSize(raw.pageSize),
     action: (AUDIT_ACTIONS as readonly string[]).includes(action) ? (action as AuditAction) : '',
     userId: UUID_RE.test(userId) ? userId.toLowerCase() : '',
+    period:
+      (Object.keys(AUDIT_PERIOD_PARAMS) as AuditPeriod[]).find((key) => AUDIT_PERIOD_PARAMS[key] === period) ?? '',
   };
 }
 
@@ -33,10 +47,38 @@ export function auditHref(query: Partial<AuditQuery>): string {
   const params = new URLSearchParams();
   if (query.action) params.set('acao', query.action);
   if (query.userId) params.set('usuario', query.userId);
+  if (query.period) params.set('periodo', AUDIT_PERIOD_PARAMS[query.period]);
+  if (query.pageSize && query.pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(query.pageSize));
   if (query.page && query.page > 1) params.set('page', String(query.page));
   const qs = params.toString();
   return qs ? `${ADMIN_ROUTES.audit}?${qs}` : ADMIN_ROUTES.audit;
 }
+
+/** Cor do selo da ação: exclusões e bloqueios em vermelho, inclusões e créditos em verde, o resto neutro. */
+export type AuditTone = 'danger' | 'success' | 'neutral';
+
+export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
+  'user.update': 'neutral',
+  'user.block': 'danger',
+  'user.unblock': 'success',
+  'promoter.enable': 'success',
+  'promoter.update': 'neutral',
+  'promoter.disable': 'danger',
+  'wallet.credit': 'success',
+  'commission.rate': 'neutral',
+  'commission.close': 'success',
+  'quote.update': 'neutral',
+  'draw.create': 'success',
+  'draw.update': 'neutral',
+  'draw.delete': 'danger',
+  'draw.exception.create': 'success',
+  'draw.exception.delete': 'danger',
+  'mural.create': 'success',
+  'mural.update': 'neutral',
+  'mural.delete': 'danger',
+  'branding.update': 'neutral',
+  'home.layout.update': 'neutral',
+};
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'user.update': 'Cadastro corrigido',

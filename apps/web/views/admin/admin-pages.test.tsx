@@ -28,7 +28,7 @@ vi.mock('@/app/admin/actions', () => ({
 const { default: UsersPage } = await import('./UsersPage');
 const { default: UserDetailPage } = await import('./UserDetailPage');
 const { default: AdminLoginPage } = await import('./AdminLoginPage');
-const { default: AdminSidebar } = await import('@/components/admin/AdminSidebar');
+const { default: AdminShell } = await import('@/components/admin/AdminShell');
 
 const ID_ANA = '5b0f3c3e-4d1c-4b63-9a3a-0c1f2e3d4a5b';
 const item = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => ({
@@ -81,91 +81,130 @@ const detail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('lista de usuários', () => {
-  it('mostra os usuários com CPF e telefone formatados, status e link para o detalhe', () => {
+const Q = { page: 1, pageSize: 25, search: '', status: '' as const, promoterId: '' };
+const ID_PAULA = 'c'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b';
+
+describe('lista de unidades', () => {
+  it('mostra as unidades com Data/ID, telefone com WhatsApp, login (CPF), status e Editar', () => {
     renderWithProviders(
       <UsersPage
-        query={{ page: 1, search: '', status: '' }}
+        query={Q}
         result={page([
           item(),
           item({ id: 'b'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', name: 'Bruno Alves', status: 'BLOCKED' }),
         ])}
       />,
     );
+    expect(screen.getByRole('heading', { level: 1, name: 'Unidades Registradas' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Lista de unidades' })).toBeInTheDocument();
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]!).getByRole('link', { name: 'Ana Souza Lima' })).toHaveAttribute(
+    const first = within(rows[0]!);
+    expect(first.getByRole('link', { name: 'Ana Souza Lima' })).toHaveAttribute('href', `/usuarios/${ID_ANA}`);
+    expect(first.getByRole('link', { name: 'Editar Ana Souza Lima' })).toHaveAttribute('href', `/usuarios/${ID_ANA}`);
+    expect(first.getByText('100002')).toBeInTheDocument();
+    expect(first.getByText('25/09/26')).toBeInTheDocument();
+    expect(first.getByRole('link', { name: 'WhatsApp (11) 91234-5678' })).toHaveAttribute(
       'href',
-      `/usuarios/${ID_ANA}`,
+      'https://wa.me/5511912345678',
     );
-    expect(within(rows[0]!).getByText('529.982.247-25')).toBeInTheDocument();
-    expect(within(rows[0]!).getByText('(11) 91234-5678')).toBeInTheDocument();
-    expect(within(rows[0]!).getByText('25/09/2026')).toBeInTheDocument();
-    expect(within(rows[0]!).getByText('Ativo')).toBeInTheDocument();
+    expect(first.getByText('529.982.247-25')).toBeInTheDocument();
+    expect(first.getByText('Ativo')).toBeInTheDocument();
     expect(within(rows[1]!).getByText('Bloqueado')).toBeInTheDocument();
   });
 
-  it('coluna Promotor: nome de quem indicou (link só com permissão de promotores) ou "—"', () => {
-    const promoter = { id: 'c'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', displayId: 100001, name: 'Paula Promotora' };
-    const items = [item({ promoter }), item({ id: 'd'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', promoter: null })];
-    const query = { page: 1, search: '', status: '' as const };
+  it('Promotor (com a %) e Indicado por são colunas separadas; só o Indicado por é link', () => {
+    const promoter = { id: ID_PAULA, displayId: 100001, name: 'Paula Promotora', commissionBps: 700 };
+    const referredBy = { id: ID_PAULA, displayId: 100001, name: 'Paula Promotora' };
+    const plain = { id: 'e'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', displayId: 100009, name: 'Jogador Comum' };
+    const items = [
+      item({ promoter, referredBy }),
+      item({ id: 'd'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b', referredBy: plain }),
+    ];
 
-    const { unmount } = renderWithProviders(<UsersPage query={query} result={page(items)} canReadPromoters />);
+    renderWithProviders(<UsersPage query={Q} result={page(items)} />);
     expect(screen.getByRole('columnheader', { name: 'Promotor' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Indicado por' })).toBeInTheDocument();
     const rows = screen.getAllByRole('row').slice(1);
-    expect(within(rows[0]!).getByRole('link', { name: 'Paula Promotora' })).toHaveAttribute(
-      'href',
-      `/promotores/${promoter.id}`,
-    );
+    const links = within(rows[0]!).getAllByRole('link', { name: 'Paula Promotora' });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', `/usuarios/${ID_PAULA}`);
+    expect(within(rows[0]!).getByText('7%')).toBeInTheDocument();
     expect(within(rows[1]!).getByLabelText('Sem promotor')).toHaveTextContent('—');
-    unmount();
-
-    renderWithProviders(<UsersPage query={query} result={page(items)} />);
-    const [first] = screen.getAllByRole('row').slice(1);
-    expect(within(first!).getByText('Paula Promotora')).toBeInTheDocument();
-    expect(within(first!).queryByRole('link', { name: 'Paula Promotora' })).toBeNull();
+    expect(within(rows[1]!).getByRole('link', { name: 'Jogador Comum' })).toBeInTheDocument();
   });
 
   it('sem resultados mostra o aviso', () => {
-    renderWithProviders(<UsersPage query={{ page: 1, search: 'zzz', status: '' }} result={page([])} />);
-    expect(screen.getByText('Nenhum usuário encontrado.')).toBeInTheDocument();
+    renderWithProviders(<UsersPage query={{ ...Q, search: 'zzz' }} result={page([])} />);
+    expect(screen.getByText('Nenhuma unidade encontrada.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum registro')).toBeInTheDocument();
   });
 
-  it('busca e filtro são um formulário GET que mantém os valores da URL', () => {
-    renderWithProviders(<UsersPage query={{ page: 1, search: 'ana', status: 'BLOCKED' }} result={page([item()])} />);
-    const form = screen.getByRole('search');
+  it('filtros são um formulário GET que mantém os valores da URL', () => {
+    const promoters = [{ id: ID_PAULA, displayId: 100001, name: 'Paula Promotora' }];
+    renderWithProviders(
+      <UsersPage
+        query={{ ...Q, search: 'ana', status: 'BLOCKED', pageSize: 50, promoterId: ID_PAULA }}
+        result={page([item()])}
+        promoters={promoters}
+      />,
+    );
+    const form = screen.getByRole('search', { name: 'Filtrar unidades' });
     expect(form).toHaveAttribute('method', 'get');
     expect(form).toHaveAttribute('action', '/usuarios');
-    expect(screen.getByRole('searchbox', { name: 'Buscar usuários' })).toHaveValue('ana');
+    expect(screen.getByRole('searchbox', { name: 'Pesquisar' })).toHaveValue('ana');
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('BLOCKED');
+    expect(screen.getByRole('combobox', { name: 'Resultados por página' })).toHaveValue('50');
+    expect(screen.getByRole('combobox', { name: 'Promotor' })).toHaveValue(ID_PAULA);
+    expect(screen.getByRole('option', { name: '100001 | Paula Promotora' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Limpar' })).toHaveAttribute('href', '/usuarios');
-  });
-
-  it('sem filtro ativo não mostra "Limpar"', () => {
-    renderWithProviders(<UsersPage query={{ page: 1, search: '', status: '' }} result={page([item()])} />);
-    expect(screen.queryByRole('link', { name: 'Limpar' })).toBeNull();
-  });
-
-  it('paginação preserva busca e status; nas pontas o botão fica desabilitado', () => {
-    const query = { page: 2, search: 'ana', status: 'ACTIVE' as const };
-    const { unmount } = renderWithProviders(
-      <UsersPage query={query} result={page([item()], { page: 2, totalPages: 3, total: 41 })} />,
+    expect(screen.getByRole('link', { name: 'Exportar' })).toHaveAttribute(
+      'href',
+      `/usuarios/exportar?search=ana&status=BLOCKED&promoterId=${ID_PAULA}`,
     );
-    expect(screen.getByText('Página 2 de 3 · 41 usuários')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Imprimir' })).toBeInTheDocument();
+  });
+
+  it('sem opções de promotor o filtro não aparece; sem filtro ativo não há "Limpar"', () => {
+    renderWithProviders(<UsersPage query={Q} result={page([item()])} />);
+    expect(screen.queryByRole('combobox', { name: 'Promotor' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Limpar' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Exportar' })).toHaveAttribute('href', '/usuarios/exportar');
+  });
+
+  it('mudar um select envia o formulário', async () => {
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'requestSubmit').mockImplementation(() => {});
+    renderWithProviders(<UsersPage query={Q} result={page([item()])} />);
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'ACTIVE');
+    expect(submit).toHaveBeenCalledOnce();
+    submit.mockRestore();
+  });
+
+  it('paginação numerada preserva os filtros; nas pontas Anterior/Próximo ficam desabilitados', () => {
+    const query = { ...Q, page: 2, search: 'ana', status: 'ACTIVE' as const, pageSize: 10 };
+    const { unmount } = renderWithProviders(
+      <UsersPage query={query} result={page([item()], { page: 2, pageSize: 10, totalPages: 5, total: 41 })} />,
+    );
+    expect(screen.getByText('Mostrando de 11 até 20 de 41 unidades')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Anterior' })).toHaveAttribute(
       'href',
-      '/usuarios?search=ana&status=ACTIVE',
+      '/usuarios?search=ana&status=ACTIVE&pageSize=10',
     );
-    expect(screen.getByRole('link', { name: 'Próxima' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Próximo' })).toHaveAttribute(
       'href',
-      '/usuarios?search=ana&status=ACTIVE&page=3',
+      '/usuarios?search=ana&status=ACTIVE&pageSize=10&page=3',
     );
+    expect(screen.getByRole('link', { name: 'Página 5' })).toHaveAttribute(
+      'href',
+      '/usuarios?search=ana&status=ACTIVE&pageSize=10&page=5',
+    );
+    expect(screen.getByText('2', { selector: '[aria-current="page"]' })).toBeInTheDocument();
     unmount();
 
-    renderWithProviders(<UsersPage query={{ page: 1, search: '', status: '' }} result={page([item()])} />);
+    renderWithProviders(<UsersPage query={Q} result={page([item()], { pageSize: 25 })} />);
     expect(screen.queryByRole('link', { name: 'Anterior' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Próxima' })).toBeNull();
-    expect(screen.getByText('Página 1 de 1 · 1 usuário')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Próximo' })).toBeNull();
+    expect(screen.getByText('Mostrando de 1 até 1 de 1 unidade')).toBeInTheDocument();
   });
 });
 
@@ -425,26 +464,25 @@ describe('login do painel', () => {
 describe('menu do painel', () => {
   const renderSidebar = (permissions: readonly Permission[]) =>
     renderWithProviders(
-      <AdminSidebar
-        tenantName="Banca Teste"
-        operatorName="Maria Souza"
-        roleLabel="Gerente"
-        permissions={permissions}
-      />,
+      <AdminShell tenantName="Banca Teste" operatorName="Maria Souza" roleLabel="Gerente" permissions={permissions} />,
     );
 
   it('mostra a banca, o operador com o perfil e os itens permitidos (marcando o atual)', () => {
     renderSidebar(['users.read']);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-    expect(within(nav).getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/usuarios');
-    expect(within(nav).getByRole('link', { name: 'Usuários' })).toHaveAttribute('aria-current', 'page');
+    // O grupo da página atual já vem aberto.
+    const group = within(nav).getByRole('group', { name: 'Unidades' });
+    expect(within(group).getByRole('button', { name: 'Unidades' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(group).getByRole('link', { name: 'Unidades' })).toHaveAttribute('href', '/usuarios');
+    expect(within(group).getByRole('link', { name: 'Unidades' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getAllByText('Maria Souza').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gerente').length).toBeGreaterThan(0);
   });
 
   it('sem permissão de consulta, o item não aparece', () => {
     renderSidebar([]);
-    expect(screen.queryByRole('link', { name: 'Usuários' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Unidades' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Unidades' })).toBeNull();
   });
 
   it('Auditoria só aparece com a permissão de consultá-la', () => {
@@ -454,6 +492,35 @@ describe('menu do painel', () => {
     renderSidebar(ROLE_PERMISSIONS.MANAGER);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
     expect(within(nav).getByRole('link', { name: 'Auditoria' })).toHaveAttribute('href', '/auditoria');
+  });
+
+  it('grupos abrem e fecham; fora da página atual começam fechados', async () => {
+    renderSidebar(ROLE_PERMISSIONS.MANAGER);
+    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+    const toggle = within(nav).getByRole('button', { name: 'Financeiro' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(nav).queryByRole('link', { name: 'Comissões' })).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(nav).getByRole('link', { name: 'Comissões' })).toHaveAttribute('href', '/comissoes');
+
+    const current = within(nav).getByRole('button', { name: 'Unidades' });
+    await userEvent.click(current);
+    expect(current).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('relógio do topo parte do horário do servidor (Brasília)', () => {
+    renderWithProviders(
+      <AdminShell
+        tenantName="Banca Teste"
+        operatorName="Maria Souza"
+        roleLabel="Gerente"
+        permissions={['users.read']}
+        serverNow="2026-09-29T19:02:43.000Z"
+      />,
+    );
+    expect(screen.getByText('16:02:43')).toBeInTheDocument();
   });
 
   it('Sair encerra a sessão e volta ao login', async () => {

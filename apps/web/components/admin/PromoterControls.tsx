@@ -11,8 +11,6 @@ interface PromoterControlsProps {
   userId: string;
   /** Comissão atual em centésimos de %; null = ainda não é promotor. */
   commissionBps: number | null;
-  /** O que fazer depois de remover: recarregar a página ou voltar para a lista de promotores. */
-  afterRemove?: 'refresh' | 'list';
 }
 
 const inputClass =
@@ -22,7 +20,7 @@ const inputClass =
  * Promover a promotor, alterar a comissão ou remover. Só aparece para quem pode gerenciar promotores
  * (a API confere a permissão de novo a cada chamada).
  */
-export default function PromoterControls({ userId, commissionBps, afterRemove = 'refresh' }: PromoterControlsProps) {
+export default function PromoterControls({ userId, commissionBps }: PromoterControlsProps) {
   const router = useRouter();
   const inputId = useId();
   const isPromoter = commissionBps !== null;
@@ -68,8 +66,7 @@ export default function PromoterControls({ userId, commissionBps, afterRemove = 
       const result = await removePromoterAction(userId);
       if (result.ok) {
         setConfirmingRemoval(false);
-        if (afterRemove === 'list') router.replace(ADMIN_ROUTES.promoters);
-        else startTransition(() => router.refresh());
+        startTransition(() => router.refresh());
       } else if (result.code === 'SESSION_INVALID') {
         router.replace(ADMIN_ROUTES.login);
       } else {

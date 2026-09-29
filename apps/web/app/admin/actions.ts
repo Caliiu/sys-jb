@@ -12,7 +12,6 @@ import type {
   SetFazendinhaQuotesRequest,
   SetTraditionalQuotesRequest,
   AdminUserDetail,
-  AdminUserListItem,
   OperatorLoginResponse,
 } from '@sysjb/contracts';
 import {
@@ -449,18 +448,4 @@ export async function saveHomeLayoutAction(input: unknown): Promise<AdminActionR
 
   const res = await adminApi.saveHomeLayout(caller, body.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
-}
-
-const SEARCH_RESULTS = 5;
-const searchSchema = z.string().trim().min(2).max(100);
-
-/** Busca de usuários para escolher quem vira promotor: só as primeiras correspondências. */
-export async function searchUsersAction(search: unknown): Promise<AdminActionResult<AdminUserListItem[]>> {
-  const term = searchSchema.safeParse(search);
-  if (!term.success) return invalidInput;
-  const caller = await operatorCaller();
-  if (isFailure(caller)) return caller;
-
-  const res = await adminApi.listUsers(caller, { page: 1, search: term.data, status: '' });
-  return res.ok ? { ok: true, data: res.data.items.slice(0, SEARCH_RESULTS) } : toAdminFailure(res.status, res.error);
 }

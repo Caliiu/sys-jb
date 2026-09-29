@@ -36,7 +36,10 @@ export function toAdminListItem(user: ListSource): AdminUserListItem {
     createdAt: user.createdAt.toISOString(),
     referredBy: user.referredBy ? toRef(user.referredBy) : null,
     // O mesmo "indicado por", só quando é promotor (os percentuais se somam no fechamento).
-    promoter: user.referredBy?.promoterCommissionBps != null ? toRef(user.referredBy) : null,
+    promoter:
+      user.referredBy?.promoterCommissionBps != null
+        ? { ...toRef(user.referredBy), commissionBps: user.referredBy.promoterCommissionBps }
+        : null,
   };
 }
 

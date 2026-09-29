@@ -257,12 +257,52 @@ describe('cadastro pelo link de convite', () => {
     const referrals = (await session.http.get(`/v1/admin/promoters/${promoter.id}/referrals`)).body;
     expect(referrals.total).toBe(1);
     expect((referrals.items as AdminUserListItem[]).map((item) => item.id)).toEqual([res.body.id]);
-    const ref = { id: promoter.id, displayId: promoter.displayId, name: promoter.name };
+    const ref = { id: promoter.id, displayId: promoter.displayId, name: promoter.name, commissionBps: 1000 };
     expect((referrals.items as AdminUserListItem[])[0]!.promoter).toEqual(ref);
     const listed = (await session.http.get('/v1/admin/users')).body.items as AdminUserListItem[];
     expect(listed.find((item) => item.id === res.body.id)!.promoter).toEqual(ref);
     expect(listed.find((item) => item.id === promoter.id)!.promoter).toBeNull();
     expect((await session.http.get(`/v1/admin/promoters/${promoter.id}`)).body.referralsCount).toBe(1);
+  });
+
+  it('lista de usuários filtra pelos indicados de um promotor (id de jogador comum não lista ninguém)', async () => {
+    const session = await loginOperator(app, 'aurora');
+    const promoter = await createUser(app, 'aurora');
+    const other = await createUser(app, 'aurora');
+    const plain = await createUser(app, 'aurora');
+    await promote(session, promoter.id, 1000);
+    await promote(session, other.id, 700);
+    const mine = await register(String(promoter.displayId));
+    await register(String(other.displayId));
+    await register(String(plain.displayId));
+
+    const ids = async (promoterId: string) =>
+      ((await session.http.get(`/v1/admin/users?promoterId=${promoterId}`)).body.items as AdminUserListItem[]).map(
+        (item) => item.id,
+      );
+    expect(await ids(promoter.id)).toEqual([mine.body.id]);
+    expect(await ids(plain.id)).toEqual([]);
+    expect((await session.http.get('/v1/admin/users?promoterId=nao-e-uuid')).status).toBe(400);
+  });
+
+  it('opções do filtro: todos os promotores da banca, por nome; basta users.read', async () => {
+    const manager = await loginOperator(app, 'aurora');
+    const bia = await createUser(app, 'aurora', { name: 'Bia Promotora' });
+    const ana = await createUser(app, 'aurora', { name: 'Ana Promotora' });
+    await createUser(app, 'aurora', { name: 'Caio Jogador' });
+    await promote(manager, bia.id, 1000);
+    await promote(manager, ana.id, 500);
+    const boreal = await loginOperator(app, 'boreal');
+    await promote(boreal, (await createUser(app, 'boreal')).id, 1000);
+
+    const support = await loginOperator(app, 'aurora', { role: 'SUPPORT' });
+    const res = await support.http.get('/v1/admin/promoters/options');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toEqual([
+      { id: ana.id, displayId: ana.displayId, name: 'Ana Promotora' },
+      { id: bia.id, displayId: bia.displayId, name: 'Bia Promotora' },
+    ]);
   });
 
   it('código desconhecido, de usuário bloqueado ou de outra banca: cadastro segue sem vínculo; jogador comum indica', async () => {

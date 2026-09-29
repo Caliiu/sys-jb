@@ -1,5 +1,6 @@
 import {
   AUDIT_ACTIONS,
+  AUDIT_PERIODS,
   FAZENDINHA_MODE_IDS,
   FAZENDINHA_STAKES_CENTS,
   MAX_QUOTE_PRIZE_CENTS,
@@ -26,7 +27,7 @@ export const operatorLoginSchema = z.strictObject({
 
 export const operatorTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
-/** Query da lista: página (padrão 1), tamanho (padrão 20, máx. 100), busca e status. Chaves desconhecidas são rejeitadas. */
+/** Query da lista: página (padrão 1), tamanho (padrão 20, máx. 100), busca, status e promotor. Chaves desconhecidas são rejeitadas. */
 export const listUsersQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -37,6 +38,7 @@ export const listUsersQuerySchema = z.strictObject({
     .optional()
     .transform((value) => value || undefined),
   status: z.enum(USER_STATUSES).optional(),
+  promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
 });
 
 /** Lista de promotores (e de jogadores de um promotor): paginação e, na lista de promotores, busca. */
@@ -133,13 +135,21 @@ export const setFazendinhaQuotesSchema = z.strictObject({
 /** Mês das comissões: YYYY-MM (2000-01 a 2099-12). */
 export const commissionMonthSchema = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/, 'Mês inválido (use AAAA-MM).');
 
-/** Auditoria: página, tamanho e filtros opcionais por ação e por usuário afetado. */
+const auditFilters = {
+  action: z.enum(AUDIT_ACTIONS, { error: 'Ação inválida.' }).optional(),
+  userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+};
+
+/** Auditoria: página, tamanho e filtros opcionais por ação, usuário afetado e período. */
 export const listAuditQuerySchema = z.strictObject({
   page: z.coerce.number().int().min(1).max(1_000_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  action: z.enum(AUDIT_ACTIONS, { error: 'Ação inválida.' }).optional(),
-  userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+  ...auditFilters,
+  period: z.enum(AUDIT_PERIODS, { error: 'Período inválido.' }).optional(),
 });
+
+/** Resumo por período da auditoria: os mesmos filtros de ação e usuário (o período é o que ele conta). */
+export const auditSummaryQuerySchema = z.strictObject(auditFilters);
 
 export type OperatorLoginInput = z.output<typeof operatorLoginSchema>;
 export type ListUsersQuery = z.output<typeof listUsersQuerySchema>;
@@ -148,6 +158,7 @@ export type ReferralsQuery = z.output<typeof referralsQuerySchema>;
 export type SetPromoterInput = z.output<typeof setPromoterSchema>;
 export type SetUserStatusInput = z.output<typeof setUserStatusSchema>;
 export type ListAuditQuery = z.output<typeof listAuditQuerySchema>;
+export type AuditSummaryQuery = z.output<typeof auditSummaryQuerySchema>;
 export type WalletCreditInput = z.output<typeof walletCreditSchema>;
 export type SetCommissionSettingsInput = z.output<typeof setCommissionSettingsSchema>;
 export type SetTraditionalQuotesInput = z.output<typeof setTraditionalQuotesSchema>;

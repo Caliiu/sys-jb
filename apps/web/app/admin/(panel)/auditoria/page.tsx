@@ -24,7 +24,7 @@ export default async function Page({
   }
 
   const query = parseAuditQuery(await searchParams);
-  const res = await adminApi.listAudit(session, query);
+  const [res, summary] = await Promise.all([adminApi.listAudit(session, query), adminApi.auditSummary(session, query)]);
   if (!res.ok) {
     const failure = toAdminFailure(res.status, res.error);
     if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
@@ -33,5 +33,6 @@ export default async function Page({
   // Página além do fim (ex.: filtro mudou): leva à última página existente.
   if (query.page > res.data.totalPages) redirect(auditHref({ ...query, page: res.data.totalPages }));
 
-  return <AuditPage query={query} result={res.data} />;
+  // Sem o resumo (falha pontual), a lista funciona sem os cards de período.
+  return <AuditPage query={query} result={res.data} summary={summary.ok ? summary.data : null} />;
 }

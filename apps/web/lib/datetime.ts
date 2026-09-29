@@ -25,6 +25,16 @@ const SHORT_DATE_TIME = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
 });
 
+const SHORT_DATE = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+});
+
+/** ISO 8601 -> "25/09/26" */
+export const formatShortDate = (iso: string): string => SHORT_DATE.format(new Date(iso));
+
 /** ISO 8601 -> "11:10" */
 export const formatTime = (iso: string): string => TIME.format(new Date(iso));
 
@@ -40,6 +50,16 @@ const DATE_TIME_SECONDS = new Intl.DateTimeFormat('pt-BR', {
   minute: '2-digit',
   second: '2-digit',
 });
+
+const CLOCK = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/** ISO 8601 -> "16:02:43" (relógio do painel) */
+export const formatClock = (iso: string): string => CLOCK.format(new Date(iso));
 
 /** ISO 8601 -> "28/09/2026 20:18:40" (cabeçalho dos comprovantes) */
 export const formatDateTimeSeconds = (iso: string): string =>

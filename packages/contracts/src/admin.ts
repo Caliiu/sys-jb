@@ -113,8 +113,11 @@ export interface AdminUserListItem {
   createdAt: string;
   /** Quem indicou o usuário no cadastro (jogador ou promotor); null = veio sem convite. */
   referredBy: { id: string; displayId: number; name: string } | null;
-  /** O mesmo "indicado por", só quando essa pessoa é promotor (ganha a % de promotor além da de indicação). */
-  promoter: { id: string; displayId: number; name: string } | null;
+  /**
+   * O mesmo "indicado por", só quando essa pessoa é promotor (ganha a % de promotor além da de indicação).
+   * `commissionBps`: comissão do promotor em centésimos de %.
+   */
+  promoter: { id: string; displayId: number; name: string; commissionBps: number } | null;
 }
 
 export interface AdminUserDetail {
@@ -183,6 +186,15 @@ export interface AdminUserListQuery {
   /** Nome, CPF, telefone ou ID do usuário. */
   search?: string;
   status?: UserStatus;
+  /** Só os jogadores indicados por este promotor. */
+  promoterId?: string;
+}
+
+/** Opção do filtro por promotor (GET /v1/admin/promoters/options): todos os promotores, por nome. */
+export interface AdminPromoterOption {
+  id: string;
+  displayId: number;
+  name: string;
 }
 
 /** Ações registradas na trilha de auditoria (sempre sobre um usuário da banca). */
@@ -246,12 +258,28 @@ export type AuditDetails = {
 };
 
 /** GET /v1/admin/audit: mais recentes primeiro; filtros opcionais por ação e por usuário afetado. */
+/**
+ * Período da auditoria, em dias de calendário de Brasília: hoje, últimos 7 dias (hoje e os 6 anteriores) ou
+ * últimos 30 dias (hoje e os 29 anteriores).
+ */
+export const AUDIT_PERIODS = ['today', '7d', '30d'] as const;
+export type AuditPeriod = (typeof AUDIT_PERIODS)[number];
+
 export interface AdminAuditQuery {
   page?: number;
   pageSize?: number;
   action?: AuditAction;
   /** id (UUID) do usuário afetado. */
   userId?: string;
+  period?: AuditPeriod;
+}
+
+/** GET /v1/admin/audit/summary: quantos registros em cada período (com os mesmos filtros de ação e usuário). */
+export interface AdminAuditSummary {
+  today: number;
+  last7Days: number;
+  last30Days: number;
+  total: number;
 }
 
 /** Bolsas que o painel pode creditar: saldo, bônus e disponível em games. */

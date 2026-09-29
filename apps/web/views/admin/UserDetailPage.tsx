@@ -17,7 +17,7 @@ interface UserDetailPageProps {
   user: AdminUserDetail;
   canEdit: boolean;
   canChangeStatus: boolean;
-  /** Pode consultar promotores (o link para o promotor só aparece para quem abre a página dele). */
+  /** Pode consultar promotores: a seção Indicação e promotor aparece mesmo sem indicação. */
   canReadPromoters?: boolean;
   /** Pode promover a promotor, alterar a comissão e remover. */
   canManagePromoters?: boolean;
@@ -117,18 +117,9 @@ export default function UserDetailPage({
               <div>
                 <dt className={labelClass}>Situação</dt>
                 <dd className="mt-0.5 text-[13.5px] text-admin-text">
-                  {user.promoterCommissionBps === null ? (
-                    'Não é promotor'
-                  ) : canReadPromoters ? (
-                    <Link
-                      href={ADMIN_ROUTES.promoter(user.id)}
-                      className="font-semibold text-admin-accent hover:underline"
-                    >
-                      Promotor · comissão de {formatCommission(user.promoterCommissionBps)}
-                    </Link>
-                  ) : (
-                    `Promotor · comissão de ${formatCommission(user.promoterCommissionBps)}`
-                  )}
+                  {user.promoterCommissionBps === null
+                    ? 'Não é promotor'
+                    : `Promotor · comissão de ${formatCommission(user.promoterCommissionBps)}`}
                 </dd>
               </div>
               <div>
@@ -149,18 +140,9 @@ export default function UserDetailPage({
               <div>
                 <dt className={labelClass}>Promotor do jogador</dt>
                 <dd className="mt-0.5 text-[13.5px] text-admin-text">
-                  {user.referredBy?.promoterCommissionBps == null ? (
-                    'Nenhum (quem indicou não é promotor)'
-                  ) : canReadPromoters ? (
-                    <Link
-                      href={ADMIN_ROUTES.promoter(user.referredBy.id)}
-                      className="font-semibold text-admin-accent hover:underline"
-                    >
-                      {user.referredBy.name} · comissão de {formatCommission(user.referredBy.promoterCommissionBps)}
-                    </Link>
-                  ) : (
-                    `${user.referredBy.name} · comissão de ${formatCommission(user.referredBy.promoterCommissionBps)}`
-                  )}
+                  {user.referredBy?.promoterCommissionBps == null
+                    ? 'Nenhum (quem indicou não é promotor)'
+                    : `${user.referredBy.name} · comissão de ${formatCommission(user.referredBy.promoterCommissionBps)}`}
                 </dd>
               </div>
             </dl>

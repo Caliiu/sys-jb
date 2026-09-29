@@ -9,7 +9,7 @@ import { parseUsersQuery, usersHref } from '@/lib/admin/users-query';
 import UsersPage from '@/views/admin/UsersPage';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Usuários' };
+export const metadata = { title: 'Unidades' };
 
 export default async function Page({
   searchParams,
@@ -20,18 +20,28 @@ export default async function Page({
   if (!gate.ok) return <AdminUnavailable message={gate.message} />;
   const { session } = gate;
   if (!can(session.operator, 'users.read')) {
-    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar usuários.</AdminMessage>;
+    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar as unidades.</AdminMessage>;
   }
 
   const query = parseUsersQuery(await searchParams);
-  const res = await adminApi.listUsers(session, query);
+  const [res, promoters] = await Promise.all([
+    adminApi.listUsers(session, query),
+    adminApi.listPromoterOptions(session),
+  ]);
   if (!res.ok) {
     const failure = toAdminFailure(res.status, res.error);
     if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
-    return <AdminMessage title="Não foi possível carregar os usuários">{failure.message}</AdminMessage>;
+    return <AdminMessage title="Não foi possível carregar as unidades">{failure.message}</AdminMessage>;
   }
   // Página além do fim (ex.: filtro mudou): leva à última página existente.
   if (query.page > res.data.totalPages) redirect(usersHref({ ...query, page: res.data.totalPages }));
 
-  return <UsersPage query={query} result={res.data} canReadPromoters={can(session.operator, 'promoters.read')} />;
+  return (
+    <UsersPage
+      query={query}
+      result={res.data}
+      // Sem as opções (falha pontual), a lista funciona sem o filtro por promotor.
+      promoters={promoters.ok ? promoters.data : null}
+    />
+  );
 }

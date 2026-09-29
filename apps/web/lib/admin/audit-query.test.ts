@@ -16,24 +16,32 @@ const entry = (details: AdminAuditEntry['details']): AdminAuditEntry => ({
 
 describe('auditoria: filtros da URL', () => {
   it('lê ação, usuário e página; valores inválidos viram "sem filtro"', () => {
-    expect(parseAuditQuery({ acao: 'user.block', usuario: ID.toUpperCase(), page: '3' })).toEqual({
+    expect(
+      parseAuditQuery({ acao: 'user.block', usuario: ID.toUpperCase(), page: '3', pageSize: '10', periodo: 'hoje' }),
+    ).toEqual({
       page: 3,
+      pageSize: 10,
       action: 'user.block',
       userId: ID,
+      period: 'today',
     });
-    expect(parseAuditQuery({ acao: 'user.delete', usuario: '123', page: '-1' })).toEqual({
+    expect(
+      parseAuditQuery({ acao: 'user.delete', usuario: '123', page: '-1', pageSize: '20', periodo: 'today' }),
+    ).toEqual({
       page: 1,
+      pageSize: 25,
       action: '',
       userId: '',
+      period: '',
     });
   });
 
   it('monta o endereço omitindo o padrão', () => {
     expect(auditHref({})).toBe('/auditoria');
-    expect(auditHref({ action: 'user.block', userId: ID, page: 2 })).toBe(
-      `/auditoria?acao=user.block&usuario=${ID}&page=2`,
+    expect(auditHref({ action: 'user.block', userId: ID, page: 2, pageSize: 50, period: '30d' })).toBe(
+      `/auditoria?acao=user.block&usuario=${ID}&periodo=30d&pageSize=50&page=2`,
     );
-    expect(auditHref({ action: '', userId: '', page: 1 })).toBe('/auditoria');
+    expect(auditHref({ action: '', userId: '', page: 1, pageSize: 25 })).toBe('/auditoria');
   });
 });
 

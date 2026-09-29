@@ -9,7 +9,7 @@ vi.mock('@/app/admin/actions', () => ({ saveBrandingAction: vi.fn(), adminLogout
 
 const actions = await import('@/app/admin/actions');
 const { default: BrandingEditor } = await import('./BrandingEditor');
-const { default: AdminSidebar } = await import('./AdminSidebar');
+const { default: AdminShell } = await import('./AdminShell');
 const save = vi.mocked(actions.saveBrandingAction);
 
 const BRANDING: AdminBranding = {
@@ -143,13 +143,13 @@ describe('Identidade visual no painel', () => {
     expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
   });
 
-  it('menu: grupo Personalização com Identidade visual e Mural, só para quem pode ver', () => {
+  it('menu: grupo Gestão Web com Identidade visual e Mural, só para quem pode ver', () => {
     const renderSidebar = (permissions: readonly (typeof ROLE_PERMISSIONS.MANAGER)[number][]) =>
       renderWithProviders(
-        <AdminSidebar tenantName="Banca" operatorName="Operador" roleLabel="Gerente" permissions={permissions} />,
+        <AdminShell tenantName="Banca" operatorName="Operador" roleLabel="Gerente" permissions={permissions} />,
       );
     const manager = renderSidebar(ROLE_PERMISSIONS.MANAGER);
-    const group = screen.getAllByRole('group', { name: 'Personalização' })[0]!;
+    const group = screen.getAllByRole('group', { name: 'Gestão Web' })[0]!;
     expect(within(group).getByRole('link', { name: 'Identidade visual' })).toHaveAttribute(
       'href',
       '/identidade-visual',
@@ -158,6 +158,6 @@ describe('Identidade visual no painel', () => {
     manager.unmount();
 
     renderSidebar(ROLE_PERMISSIONS.SUPPORT);
-    expect(screen.queryByRole('group', { name: 'Personalização' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Gestão Web' })).toBeNull();
   });
 });

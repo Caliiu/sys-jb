@@ -14,6 +14,9 @@ export type ReferralRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 
   referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
 };
 
+/** Teto de opções do filtro por promotor (proteção; a banca não deve chegar perto disso). */
+export const PROMOTER_OPTIONS_MAX = 1000;
+
 const PROMOTER_SELECT = {
   id: true,
   displayId: true,
@@ -49,6 +52,16 @@ export class PromotersRepository {
     });
     const total = await tx.user.count({ where });
     return { rows: rows as PromoterRow[], total };
+  }
+
+  /** Todos os promotores da banca, por nome (opções do filtro da lista de usuários). */
+  listOptions(tx: TenantTx, tenantId: string): Promise<Array<Pick<User, 'id' | 'displayId' | 'name'>>> {
+    return tx.user.findMany({
+      where: { tenantId, promoterCommissionBps: { not: null } },
+      select: { id: true, displayId: true, name: true },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      take: PROMOTER_OPTIONS_MAX,
+    });
   }
 
   /** Promotor da banca (comissão definida); null se o usuário não existe ou não é promotor. */

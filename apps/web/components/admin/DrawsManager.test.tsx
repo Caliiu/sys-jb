@@ -16,7 +16,7 @@ vi.mock('@/app/admin/actions', () => ({
 
 const actions = await import('@/app/admin/actions');
 const { default: DrawsManager } = await import('./DrawsManager');
-const { default: AdminSidebar } = await import('./AdminSidebar');
+const { default: AdminShell } = await import('./AdminShell');
 const save = vi.mocked(actions.saveDrawAction);
 const remove = vi.mocked(actions.deleteDrawAction);
 const addException = vi.mocked(actions.addDrawExceptionAction);
@@ -170,7 +170,7 @@ describe('Sorteios no painel', () => {
   it('menu: Sorteios aparece para Gerente e Financeiro, não para Suporte', () => {
     const renderSidebar = (permissions: (typeof ROLE_PERMISSIONS)[keyof typeof ROLE_PERMISSIONS]) =>
       renderWithProviders(
-        <AdminSidebar tenantName="Banca" operatorName="Operador" roleLabel="Gerente" permissions={permissions} />,
+        <AdminShell tenantName="Banca" operatorName="Operador" roleLabel="Gerente" permissions={permissions} />,
       );
     const { unmount } = renderSidebar(ROLE_PERMISSIONS.SUPPORT);
     expect(screen.queryByRole('link', { name: 'Sorteios' })).toBeNull();
