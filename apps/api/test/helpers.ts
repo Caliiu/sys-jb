@@ -23,6 +23,9 @@ export const KEYS: Record<TenantSlug, string> = {
 export const ADMIN_KEY = randomBytes(24).toString('hex');
 export const ADMIN_HOST = 'admin.test';
 
+/** Token do webhook de resultados (32 caracteres, o máximo do provedor); gerado por execução. */
+export const RESULTS_WEBHOOK_TOKEN = randomBytes(16).toString('hex');
+
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     host: '127.0.0.1',
@@ -38,6 +41,9 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     adminKeyDigest: digestKey(ADMIN_KEY),
     authSecret: randomBytes(24).toString('hex'),
     rateLimit: { enabled: false, rules: DEFAULT_RATE_LIMIT_RULES },
+    resultsWebhookTokenDigest: digestKey(RESULTS_WEBHOOK_TOKEN),
+    // Sem busca agendada nos testes: cada teste de horóscopo chama a sincronização com um provedor falso.
+    horoscope: null,
     ...overrides,
   };
 }
@@ -133,7 +139,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
  */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE horoscope_readings, result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
   await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
 }

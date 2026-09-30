@@ -76,7 +76,8 @@ describe('Calcular prêmio', () => {
     renderCalculator();
     const nav = within(screen.getByRole('navigation', { name: 'Ferramentas' }));
     expect(nav.getByRole('link', { name: 'Prêmio' })).toHaveAttribute('aria-current', 'page');
-    expect(nav.getAllByRole('button').map((b) => b.textContent)).toEqual(['Horóscopo', 'Sonhos', 'Atrasados']);
+    expect(nav.getByRole('link', { name: 'Horóscopo' })).not.toHaveAttribute('aria-current');
+    expect(nav.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sonhos', 'Atrasados']);
     await userEvent.click(nav.getByRole('button', { name: 'Sonhos' }));
     expect(screen.getByRole('status')).toHaveTextContent('Sonhos: disponível em breve.');
   });

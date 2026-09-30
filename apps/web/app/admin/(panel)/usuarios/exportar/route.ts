@@ -9,7 +9,7 @@ import { hostnameOnly, isAdminHost, serviceKeyFor } from '@/lib/server-env';
 const PAGE_SIZE = 100;
 
 /**
- * CSV da lista de unidades com os filtros da URL (todas as páginas, até USERS_CSV_MAX_ROWS). Rotas não passam
+ * CSV da lista de apostadores com os filtros da URL (todas as páginas, até USERS_CSV_MAX_ROWS). Rotas não passam
  * pelo layout do painel, então o host é conferido aqui; a sessão e a permissão, pela API.
  */
 export async function GET(request: Request) {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   return new Response(usersCsv(items.slice(0, USERS_CSV_MAX_ROWS)), {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="unidades-${day}.csv"`,
+      'Content-Disposition': `attachment; filename="apostadores-${day}.csv"`,
       'Cache-Control': 'private, no-store',
     },
   });

@@ -411,17 +411,18 @@ Tela em `/fazendinha` (uma rota só; as etapas lista → palpites → comprovant
 
 ## Loterias
 
-Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor → Loterias → Carrinho → Finalizar, e o recibo. Só o **Tradicional** está disponível; os outros tipos avisam "em breve". "Repetir pule" tem fluxo próprio (abaixo). Regras em `packages/contracts/src/lotteries.ts`, usadas pela tela e pela API.
+Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor → Loterias → Carrinho → Finalizar, e o recibo. Disponíveis: **Tradicional** (1/7) e **Tradicional 1/10**; os outros tipos avisam "em breve". "Repetir pule" tem fluxo próprio (abaixo). Regras em `packages/contracts/src/lotteries.ts`, usadas pela tela e pela API.
 
 - **Modalidades**: as da tabela de cotações (Grupo, Dezena, Centena, Milhar, Unidade, Duque/Terno Dez, Terno Dez Seco, Duque/Terno/Quadra GP, Quina 8/5, Sena 10/6, Passe Vai/Vem) e as derivadas pela cotação da base: Centena/Milhar Invertida (valor dividido pelas permutações), Centena Esquerda/Inv Esq, Dezena Esq/Meio e Milhar e Centena (metade em cada). Modalidade com cotação 0 não aparece. Ficaram de fora "Palpitão" e "Centena 3X" (regra não definida).
-- **Colocação**: números aceitam 1º, 1/5, 1 e 1/5, 2º–5º, 1/2, 1/3, 1/4 (prêmio ÷ posições); combos têm colocação fixa (a cotação já considera).
+- **Colocação** (`LOTTERY_GAME_PLACEMENTS`): na 1/7, 1º a 6º, 1/5, 1 e 1/5 e as faixas até o 6º (1/2 … 5/6); na 1/10, 1º a 10º, 1/5, 1/10, 1 e 1/5 e as faixas até o 10º (sem 6/9). Faixa = prêmio ÷ posições. Combos têm colocação fixa (a cotação já considera), igual nos dois jogos.
+- **Tradicional 1/10**: mesmas modalidades e a **mesma tabela de cotação** da 1/7; mudam as colocações e as loterias: só os sorteios marcados como "Loterias 1/10" no cadastro (Sorteios no painel; no padrão, BAHIA e LOTECE/LOTEP, que valem nos dois jogos). O pule grava o jogo (`lottery_tickets.game`), mostrado no recibo, em Consultar pule e no PDF. O banco confere de novo: sorteio do jogo (`draw_for_sale`), colocação do jogo (trigger com `lottery_placement_allowed`, mesma lista do contrato, conferida por teste) e a trava de apostas vendidas por jogo (tirar a 1/10 de um sorteio com pule 1/10 vendido: `DRAW_HAS_BETS`). Sem `game` no pedido, vale a 1/7.
 - **Valor**: "Todos" divide entre os palpites; "Cada" vale por palpite. Várias loterias = um pule por extração, com os mesmos itens.
 - **Compra** (`POST /v1/lotteries/tickets`): valida sorteios (cadastro da banca), palpites, horário limite (o banco confere de novo e grava o "Venda até" do cadastro no pule) e a **cotação que o jogador viu** (`QUOTE_CHANGED` se mudou). Grava os pules e debita cada um (`lottery_debit`, movimentação `LOTTERY_BET`) na mesma transação; mesma chave não compra de novo. Entra no cálculo das comissões (valor apostado).
 - **Limitações**: sem apuração de resultado nem pagamento de prêmio; o botão "Valendo" do carrinho não foi feito.
 
 ### Repetir pule
 
-Na primeira tela das Loterias, "Repetir pule" abre um fluxo próprio na mesma rota (`RepeatPuleFlow`, layout de `PRINTS/Repetir Pule/`): **modalidade** (só o Tradicional; os outros tipos avisam "em breve") → **data** (hoje e os próximos 6 dias) → **loterias** (a mesma lista da compra, com favoritas) → **código da pule** (resumo do que foi escolhido; só dígitos, "Colar" pega os dígitos da área de transferência) → "Pule repetida com sucesso! Direcionando ao recibo…" → **recibo** (Compartilhar e Menu). Falha: "Não foi possível repetir" com o motivo e "Tentar novamente".
+Na primeira tela das Loterias, "Repetir pule" abre um fluxo próprio na mesma rota (`RepeatPuleFlow`, layout de `PRINTS/Repetir Pule/`): **jogo** (Tradicional 1/7 ou 1/10; os outros tipos avisam "em breve"; a pule só se repete no jogo dela, senão a API diz qual é) → **data** (hoje e os próximos 6 dias) → **loterias** (a mesma lista da compra, com favoritas) → **código da pule** (resumo do que foi escolhido; só dígitos, "Colar" pega os dígitos da área de transferência) → "Pule repetida com sucesso! Direcionando ao recibo…" → **recibo** (Compartilhar e Menu). Falha: "Não foi possível repetir" com o motivo e "Tentar novamente".
 
 - **API** (`POST /v1/lotteries/tickets/repeat`, sessão): `{ idempotencyKey, puleNumber, drawDate, draws }`. As apostas (modalidade, colocação, palpites, valor e divisão) vêm da pule; a compra passa pela **mesma venda** das Loterias (sorteios do cadastro, horário, saldo, débito na mesma transação e idempotência) e usa a **cotação de agora**. Responde como a compra.
 - **Segurança**: só pule de Loterias do **próprio jogador**. O número é sequencial e as apostas não são públicas, então pule inexistente, de outro jogador, de outra banca ou da Fazendinha têm a mesma resposta (`404 NOT_FOUND`, "Pule inválida"), sem revelar nada e sem cobrar. Modalidade que foi desligada na cotação: `409` ("Esta pule tem uma modalidade que não está mais disponível.").
@@ -447,6 +448,63 @@ Cadastro **por banca**, em **Sorteios** no painel (Gerente edita; Financeiro con
 | DELETE | `/v1/admin/draws/:id`            | `draws.manage` | Exclui (só sem nenhuma aposta vendida)                                      |
 | POST   | `/v1/admin/draws/exceptions`     | `draws.manage` | `{ date, drawId \| null, kind: "CANCEL" \| "EXTRA", note? }`                |
 | DELETE | `/v1/admin/draws/exceptions/:id` | `draws.manage` | Remove a exceção (recusado se deixaria apostas de um extra sem sorteio)     |
+
+## Resultados
+
+Resultados das loterias vindos do provedor **Loteria Integrada**. São **globais** (o resultado de uma extração é o mesmo para todas as bancas) e ficam em `lottery_results`: um por **data (Brasília) + sigla + extração** (hora, 0–23). O jogador vê em **Resultados > Resultado loterias** (hoje e os 7 dias anteriores) o número, o grupo e o bicho de cada prêmio das extrações que escolher (ver vínculo abaixo). O catálogo de siglas e nomes fica em `@sysjb/contracts` (`RESULT_LOTTERIES`); sigla fora dele é aceita e aparece em maiúsculas.
+
+**Webhook (entrada principal).** O provedor faz `POST` a cada resultado e reenvia até receber `200`/`201`.
+
+- **URL a cadastrar no provedor**: `https://<hostname do web>/integracoes/resultados` (ex.: `https://admin.seudominio.com.br/integracoes/resultados`; vale em qualquer hostname do web, inclusive o do painel). A API não é exposta à internet: o web repassa o corpo (até 16 KB) e os cabeçalhos do token para `POST /v1/integrations/results` e devolve a resposta dela. O web não guarda segredo da integração.
+- **Token**: `RESULTS_WEBHOOK_TOKEN` (24 a 32 caracteres; o provedor aceita até 32), cadastrado **igual** no painel do provedor. `pnpm setup:env` gera um de 32. O provedor manda o token em `X-Auth-Token`, `Token` e `Authorization: Bearer`: todos os que vierem precisam conferir (comparação em tempo constante). Vazio = webhook desativado (`401`).
+- **Validação** (`422` com os nomes dos campos, nunca os valores): data real e não futura, sigla de 2 a 4 letras, extração 00–23, de 5 a 10 prêmios com 4 dígitos (5 na Federal). `"0"` marca prêmio não usado e só vale no fim; `"0000"` é número válido. Prêmio enviado como número JSON é recusado (perderia o zero à esquerda). `res_resultado` precisa bater com os prêmios um a um. O grupo é calculado pelo milhar (o `res_grupos` do provedor não é usado); `res_api_chave` e `res_servidor` não são guardados.
+- **Idempotência e correções**: reenvio igual responde `200` sem alterar nada (inclusive entregas simultâneas: uma instrução `INSERT ... ON CONFLICT`). Resultado diferente do gravado é uma **correção**: vira nova revisão (`revision`) e a versão anterior vai para `lottery_result_revisions` (trigger `SECURITY DEFINER`; somente inclusão), com aviso no log. Uma lista de prêmios que é o começo da gravada (ex.: 5 prêmios depois de 7) e campo calculado vazio **não** apagam o que já existe.
+- **Banco**: CHECKs repetem as regras de formato; revisão e datas são do banco (trigger), nunca da API. A role de runtime lê, inclui e corrige o conteúdo; não exclui, não muda data/sigla/extração nem grava o histórico.
+
+**Consulta (recuperação).** A API de consulta do provedor (`RESULTS_API_URL`, `RESULTS_API_TOKEN` fornecido por ele) consome a **cota mensal** do contrato, então é usada só sob demanda, para recuperar o que o webhook não entregou:
+
+```bash
+pnpm results:fetch --lottery rj                                  # hoje, o que já saiu e falta
+pnpm results:fetch --lottery rj --date 2026-09-30 --extraction 21
+pnpm results:fetch --lottery all --date 2026-09-30               # todas as siglas do catálogo
+pnpm results:fetch --lottery rj --date 2026-09-30 --force        # consulta mesmo completo (conferir correção)
+```
+
+**Proteção da cota** (`results-recovery.ts`), antes de cada consulta:
+
+1. **Já gravado não é consultado.** O catálogo diz quais extrações cada sigla tem; só consulta se faltar alguma. Sem `--extraction`, consulta o dia inteiro: **uma** requisição traz todas as extrações.
+2. **Extração que ainda não saiu não é consultada** (hoje: só 30 minutos depois da hora da extração).
+3. **Consulta respondida há menos de `RESULTS_API_COOLDOWN_MINUTES`** (padrão 10), com resultado ou "nenhum resultado", não se repete para a mesma data e sigla. Falha de rede não ativa a espera.
+4. **Cota mensal.** Cada consulta fica em `result_consultations` (somente inclusão; data/hora do banco), com as respostas HTTP recebidas, novas tentativas incluídas: é o que o provedor cobra. As consultas param ao chegar em `RESULTS_API_QUOTA_STOP_PERCENT` (padrão 90) de `RESULTS_API_MONTHLY_QUOTA` (mês de Brasília), e as novas tentativas nunca passam do limite. Sem cota informada, só conta e mostra o uso. `401` (token inválido ou cota do provedor esgotada) interrompe as siglas seguintes.
+
+`--force` ignora 1 a 3 (a cota continua valendo). Duas execuções simultâneas podem passar juntas pela conferência da cota (no máximo uma consulta a mais cada).
+
+Mesmas regras do webhook (normalização, idempotência, correção com histórico). Só grava itens da data/sigla/extração pedidas. Cliente só HTTPS, sem seguir redirecionamento (o token não vaza para outro host), com tempo limite, resposta de até 1 MB e até 2 novas tentativas em falha de rede/5xx. Usa a credencial de runtime (`DATABASE_URL`).
+
+**Vínculo com os sorteios da banca.** Cada sorteio tem o resultado do provedor que vale para ele (`draws.result_lottery` + `draws.result_extraction`, editável em Painel > Sorteios > "Resultado (provedor)"; só combinações do catálogo). A extração é a hora do **provedor**, que pode não ser a da banca: "LT FEDERAL" (20h na banca) é a Federal das 19h (`fd` 19). O cadastro padrão já vem ligado onde a correspondência é certa (54 de 72); ficam sem ligação os que o provedor não tem (Lotece, Capital, Alvorada, Minas Pref) e os ambíguos (Lotep 09h/20h, Nacional 21h, Maluquinha Federal). Sem ligação, o sorteio aparece na escolha mas nunca tem resultado.
+
+**Tela do jogador** (Resultados > Resultado loterias): data (hoje e 7 dias antes) → escolha das extrações do dia (a mesma lista agrupada da compra, com favoritas) → comprovante com número, grupo e bicho de cada prêmio das escolhidas que já têm resultado (nenhuma: "Não há resultado na data"), com Compartilhar em PDF.
+
+**Ainda não feito**: apuração das apostas (conferir pules contra o resultado e creditar prêmios). A tabela de resultados, as revisões e o vínculo acima já estão prontos para isso; a apuração precisa decidir o que fazer com uma correção depois de pagar.
+
+| Método | Rota                            | Acesso                                  | Comportamento                                                                                       |
+| ------ | ------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| POST   | `/integracoes/resultados` (web) | token do provedor                       | Repassa à API. `502` se a API não responder (o provedor reenvia)                                    |
+| POST   | `/v1/integrations/results`      | token do provedor (sem banca)           | `201 {codigo, mensagem}` novo; `200` repetido ou corrigido; `401` token; `422` inválido; `400` JSON |
+| GET    | `/v1/results?date=YYYY-MM-DD`   | credencial da banca + sessão do jogador | Resultados do dia (hoje até 7 dias atrás; fora disso `400`), na ordem do catálogo                   |
+
+## Horóscopo
+
+Tela em `/loterias/horoscopo` (barra de ferramentas das Loterias e atalho do início): previsão do dia do signo (abre no signo do jogador, calculado **no servidor** pela data de nascimento; só o signo vai para o navegador), palpites (grupo, dezenas, centenas e milhares, com "Toque para copiar") e "Apostar agora".
+
+**Integração** (API de horóscopo da Loteria Integrada, `HOROSCOPE_API_URL` e `HOROSCOPE_API_TOKEN`): uma requisição traz os 12 signos do dia.
+
+- **Busca diária agendada na API**: todo dia às `HOROSCOPE_SYNC_AT` (padrão 00:01, Brasília) e ao iniciar, se hoje ainda não está no cache. "Ainda não há previsões" (o provedor ainda não publicou), previsão de outro dia e falhas passageiras (rede, 5xx) tentam de novo a cada `HOROSCOPE_RETRY_MINUTES` (padrão 15), sem passar da próxima busca diária. Token recusado ou limite diário: só na próxima busca diária, com erro no log. Uma busca por vez. `pnpm horoscope:fetch` busca na hora.
+- **Cache** em `horoscope_readings` (global, uma linha por data e signo; CHECKs de signo, texto, dezenas e cores). Gravação idempotente: igual não muda nada; correção do provedor no mesmo dia atualiza. A role de runtime não exclui.
+- **O jogador nunca chama o provedor**: `GET /v1/horoscope` (credencial da banca + sessão) lê só o cache de hoje. Sem previsão (dia ainda não publicado, integração desligada), a tela usa a leitura gerada localmente (`apps/web/lib/horoscope.ts`), determinística pela data e pelo signo.
+- **Validação da resposta**: signo pelo nome (a ordem pode variar), com ou sem acento; dezenas `78-04-46-45-68` (formato real) ou `04, 18, 29` (documentação); cores separadas por vírgula (`Verde-pistache-claro` é uma cor só); texto sem caracteres de controle, até 2.000 caracteres, exibido como texto (nunca HTML). Item inválido é descartado sozinho, com o motivo no log.
+- **Palpites com a previsão do provedor**: as dezenas dele; grupo da 1ª dezena; centena e milhar de cada dezena com os algarismos da frente sorteados pela data e pelo signo.
+- **Segurança**: token só no servidor da API (a varredura do bundle confere que não chega ao navegador), HTTPS, sem seguir redirecionamento, tempo limite, resposta de até 256 KB. Com mais de uma instância da API, cada uma agenda a sua busca (gravação idempotente: no máximo uma requisição a mais por dia por instância).
 
 ## Personalização
 
@@ -647,6 +705,8 @@ Nada é publicado nem implantado automaticamente.
 `fazendinha.test.ts` cobre a compra: pule + débito na mesma transação (saldo antes dos prêmios, bônus intocado), saldo insuficiente sem gravar nada, número já vendido (inclusive compras simultâneas: só uma leva), idempotência (reenvio e cliques simultâneos com a mesma chave = um pule e um débito), catálogo e janela de datas, números vendidos por banca, e as travas do banco (sem `UPDATE` em carteira, sem pule sem débito, sem débito duplo, total conferido, pule imutável).
 
 `draws.test.ts` cobre o cadastro de sorteios: leitura do jogador (padrão, Federal quarta/domingo), permissões, validação, auditoria, as travas de apostas vendidas (desativar, tirar jogo/dia, renomear, excluir, feriado, remover extra), exceções na venda (API e banco), isolamento entre bancas e a concorrência compra × alteração nos dois sentidos.
+
+`results-quota.test.ts` cobre a proteção da cota (o que consultar, espera, limite do mês, novas tentativas perto do limite, `401`, falha de rede, `--force`, registro somente inclusão). `results.test.ts` cobre os resultados: normalização (exemplo da documentação do provedor, prêmios "0", 10 prêmios, Federal com 5 dígitos, cada recusa), token do webhook (cada cabeçalho, divergência, desativado), idempotência inclusive simultânea, correção com histórico, sem apagar prêmios ou campos já gravados, privilégios e CHECKs do banco, a leitura do jogador e o cliente da consulta (parâmetros, 404, sem repetir em 401, repetição em 5xx/rede, tamanho, formato).
 
 `admin.test.ts` cobre o painel: login de operador (resposta única, bloqueio, cada operador na sua banca pelo mesmo endereço, e-mail único no sistema, banca inativa, credencial do painel × das bancas, painel desativado sem `ADMIN_SERVICE_KEY`), sessão (expirada, desativado, cliente × operador), perfis e permissões (matriz completa), lista (máscara, paginação estável, busca sem curingas, filtro), detalhe, edição com auditoria, bloqueio (sessões revogadas, login, `/v1/me`) e privilégios do banco (auditoria somente inclusão, operadores só leitura, usuário só nasce `ACTIVE`, leitura por chave antes de haver banca). `config.test.ts` cobre a validação da `ADMIN_SERVICE_KEY`.
 

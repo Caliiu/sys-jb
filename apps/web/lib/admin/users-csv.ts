@@ -29,7 +29,7 @@ export function csvCell(value: string): string {
 }
 
 /**
- * CSV das unidades no padrão das planilhas em português: ";" separa colunas, CRLF entre linhas e BOM UTF-8
+ * CSV dos apostadores no padrão das planilhas em português: ";" separa colunas, CRLF entre linhas e BOM UTF-8
  * (sem ele o Excel mostra os acentos errados).
  */
 export function usersCsv(items: AdminUserListItem[]): string {

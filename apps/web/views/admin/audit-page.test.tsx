@@ -1,7 +1,7 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AdminAuditEntry, Page } from '@sysjb/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { AuditQuery } from '@/lib/admin/audit-query';
 import { renderWithProviders } from '@/test/render';
 import AuditPage from './AuditPage';
@@ -47,19 +47,20 @@ const page = (items: AdminAuditEntry[]): Page<AdminAuditEntry> => ({
   totalPages: 1,
 });
 const noFilter: AuditQuery = { page: 1, pageSize: 25, action: '', userId: '', period: '' };
-const summary = { today: 3, last7Days: 12, last30Days: 40, total: 1250 };
+// 30/09/2026 12:00 em Brasília.
+const NOW = '2026-09-30T15:00:00.000Z';
 
 describe('Registro de auditoria', () => {
-  it('mostra quando e quem alterou, a ação (selo), a unidade (link) e o que mudou', () => {
-    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Registro de Auditoria' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Registro de alterações' })).toBeInTheDocument();
+  it('mostra quando e quem alterou, a ação (selo), o apostador (link) e o que mudou', () => {
+    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Auditoria' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Registro de auditoria' });
     expect(
       within(table)
         .getAllByRole('columnheader')
         .map((th) => th.textContent),
-    ).toEqual(['Alterado em', 'Ação', 'Unidade', 'Detalhes']);
+    ).toEqual(['Alterado em', 'Ação', 'Apostador', 'Detalhes']);
 
     const [first, second, third] = within(table).getAllByRole('row').slice(1);
     expect(first).toHaveTextContent('28/09/26 10:05');
@@ -73,16 +74,16 @@ describe('Registro de auditoria', () => {
     );
 
     expect(second).toHaveTextContent('Usuário bloqueado');
-    expect(second).toHaveTextContent('Unidade removida');
+    expect(second).toHaveTextContent('Apostador removido');
 
     expect(third).toHaveTextContent('Comissões do mês fechadas');
     expect(third).toHaveTextContent('Banca');
     expect(third).toHaveTextContent('Mês 08/2026: R$ 315,00 pagos');
-    expect(screen.queryByRole('link', { name: 'Limpar filtros' })).toBeNull();
+    expect(screen.getByText('Mostrando 1 a 3 de 3 registros')).toBeInTheDocument();
   });
 
   it('no celular, a mesma lista em cartões', () => {
-    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} />);
+    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
     const cards = within(screen.getByRole('list', { name: 'Registro de auditoria' })).getAllByRole('listitem');
     expect(cards).toHaveLength(3);
     expect(cards[0]).toHaveTextContent('Comissão alterada');
@@ -90,29 +91,36 @@ describe('Registro de auditoria', () => {
     expect(within(cards[0]!).getByRole('link', { name: '100002 · Ana Souza Lima' })).toBeInTheDocument();
   });
 
-  it('cards de período: contagens, link que filtra (mantendo os outros filtros) e o atual marcado', () => {
+  it('atalhos de período: link que filtra mantendo os outros filtros, o atual marcado e as datas no resumo', () => {
     const query = { ...noFilter, action: 'user.block' as const, period: '7d' as const, page: 3 };
-    renderWithProviders(<AuditPage query={query} result={page(entries)} summary={summary} />);
-    const periods = screen.getByRole('navigation', { name: 'Períodos' });
-    const today = within(periods).getByRole('link', { name: /Hoje/ });
-    expect(today).toHaveTextContent('3');
-    expect(today).toHaveAttribute('href', '/auditoria?acao=user.block&periodo=hoje');
-    const week = within(periods).getByRole('link', { name: /Últimos 7 dias/ });
-    expect(week).toHaveAttribute('aria-current', 'true');
-    expect(within(periods).getByRole('link', { name: /Total/ })).toHaveTextContent('1.250');
-    expect(within(periods).getByRole('link', { name: /Total/ })).toHaveAttribute('href', '/auditoria?acao=user.block');
+    renderWithProviders(<AuditPage query={query} result={page(entries)} nowIso={NOW} />);
+    const periods = screen.getByRole('navigation', { name: 'Período' });
+    expect(
+      within(periods)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Hoje', '7D', '30D', 'Tudo']);
+    expect(within(periods).getByRole('link', { name: 'Hoje' })).toHaveAttribute(
+      'href',
+      '/auditoria?acao=user.block&periodo=hoje',
+    );
+    expect(within(periods).getByRole('link', { name: '7D' })).toHaveAttribute('aria-current', 'true');
+    expect(within(periods).getByRole('link', { name: 'Tudo' })).toHaveAttribute('href', '/auditoria?acao=user.block');
+    expect(screen.getByText(/Período:/)).toHaveTextContent('Período: 24/09/2026 – 30/09/2026');
   });
 
-  it('sem resumo (falha da API), os cards não aparecem', () => {
-    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} summary={null} />);
-    expect(screen.queryByRole('navigation', { name: 'Períodos' })).toBeNull();
+  it('sem período: todo o histórico', () => {
+    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
+    expect(screen.getByText(/Período:/)).toHaveTextContent('Período: Todo o histórico');
+    expect(screen.getByRole('link', { name: 'Tudo' })).toHaveAttribute('aria-current', 'true');
   });
 
-  it('filtro por ação é um formulário GET que mantém unidade, período e tamanho da página', () => {
+  it('filtros: formulário GET com Pesquisar e Limpar, mantendo apostador, período e tamanho da página', () => {
     renderWithProviders(
       <AuditPage
         query={{ page: 1, pageSize: 50, action: 'promoter.update', userId: ANA.id, period: 'today' }}
         result={page([entries[0]!])}
+        nowIso={NOW}
       />,
     );
     const form = screen.getByRole('form', { name: 'Filtrar auditoria' });
@@ -122,29 +130,46 @@ describe('Registro de auditoria', () => {
     expect(within(form).getByRole('combobox', { name: 'Resultados por página' })).toHaveValue('50');
     expect(form.querySelector('input[type="hidden"][name="usuario"]')).toHaveValue(ANA.id);
     expect(form.querySelector('input[type="hidden"][name="periodo"]')).toHaveValue('hoje');
-    expect(screen.getByText(/Mostrando só a unidade/)).toHaveTextContent('Ana Souza Lima (ID 100002)');
-    expect(screen.getByRole('link', { name: 'Remover filtro de unidade' })).toHaveAttribute(
+    expect(within(form).getByRole('button', { name: 'Pesquisar' })).toHaveAttribute('type', 'submit');
+    expect(within(form).getByRole('link', { name: 'Limpar Filtros' })).toHaveAttribute('href', '/auditoria');
+    expect(screen.getByText(/Mostrando só o apostador/)).toHaveTextContent('Ana Souza Lima (ID 100002)');
+    expect(screen.getByRole('link', { name: 'Remover filtro de apostador' })).toHaveAttribute(
       'href',
       '/auditoria?acao=promoter.update&periodo=hoje&pageSize=50',
     );
-    expect(screen.getByRole('link', { name: 'Limpar filtros' })).toHaveAttribute('href', '/auditoria');
     expect(screen.getByRole('button', { name: 'Imprimir' })).toBeInTheDocument();
   });
 
-  it('mudar a ação envia o formulário', async () => {
-    const submit = vi.spyOn(HTMLFormElement.prototype, 'requestSubmit').mockImplementation(() => {});
-    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} />);
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Ação' }), 'user.block');
-    expect(submit).toHaveBeenCalledOnce();
-    submit.mockRestore();
+  it('Pesquisar deixa os campos vazios fora da URL', () => {
+    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
+    const form = screen.getByRole<HTMLFormElement>('form', { name: 'Filtrar auditoria' });
+    let sent: string[] = [];
+    // No document (depois do onSubmit do React, que fica na raiz): vê os campos como o navegador os enviaria.
+    const capture = (event: Event) => {
+      sent = [...new FormData(form).keys()];
+      event.preventDefault();
+    };
+    document.addEventListener('submit', capture);
+    fireEvent.submit(form);
+    document.removeEventListener('submit', capture);
+    expect(sent).toEqual(['pageSize']);
+  });
+
+  it('Ocultar esconde os filtros', async () => {
+    renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
+    const toggle = screen.getByRole('button', { name: 'Ocultar' });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAccessibleName('Mostrar');
+    expect(screen.queryByRole('form', { name: 'Filtrar auditoria' })).toBeNull();
   });
 
   it('vazio: avisa, com mensagem diferente quando há filtro', () => {
-    const { unmount } = renderWithProviders(<AuditPage query={noFilter} result={page([])} />);
+    const { unmount } = renderWithProviders(<AuditPage query={noFilter} result={page([])} nowIso={NOW} />);
     expect(screen.getByText('Nenhuma alteração registrada ainda.')).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
     unmount();
-    renderWithProviders(<AuditPage query={{ ...noFilter, period: 'today' }} result={page([])} />);
-    expect(screen.getByText('Nenhum registro com esses filtros.')).toBeInTheDocument();
+    renderWithProviders(<AuditPage query={{ ...noFilter, period: 'today' }} result={page([])} nowIso={NOW} />);
+    expect(screen.getByText('Nenhum resultado encontrado')).toBeInTheDocument();
   });
 });

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { type RateLimitConfig, loadRateLimitConfig } from '../rate-limit/rate-limit.rules.js';
+import { type HoroscopeConfig, loadHoroscopeConfig } from '../horoscope/horoscope.config.js';
+import { parseResultsWebhookToken } from '../results/results.config.js';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
 
@@ -24,6 +26,10 @@ export interface AppConfig {
   authSecret: string;
   /** Limite de requisições (RATE_LIMIT_ENABLED e RATE_LIMIT_<REGRA>). */
   rateLimit: RateLimitConfig;
+  /** SHA-256 do token do webhook de resultados (RESULTS_WEBHOOK_TOKEN); null = webhook desativado. */
+  resultsWebhookTokenDigest: Buffer | null;
+  /** API de horóscopo (HOROSCOPE_API_*); null = desligada (a tela usa o texto local). */
+  horoscope: HoroscopeConfig | null;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -115,5 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     adminKeyDigest: parseAdminKey(e.ADMIN_SERVICE_KEY, serviceKeys),
     authSecret: e.AUTH_SECRET,
     rateLimit: loadRateLimitConfig(env),
+    resultsWebhookTokenDigest: parseResultsWebhookToken(env.RESULTS_WEBHOOK_TOKEN),
+    horoscope: loadHoroscopeConfig(env),
   };
 }

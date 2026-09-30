@@ -163,4 +163,6 @@ export * from './reports.js';
 export * from './murals.js';
 export * from './branding.js';
 export * from './home-layout.js';
+export * from './horoscope.js';
+export * from './results.js';
 export * from './validation.js';

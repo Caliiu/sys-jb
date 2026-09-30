@@ -46,6 +46,7 @@ const FIELD_LABELS: Record<keyof SaveDrawInput, string> = {
   closesAt: 'Venda até',
   weekdays: 'Dias',
   games: 'Jogos',
+  result: 'Resultado',
   active: 'Ativo',
   sortOrder: 'Ordem',
 };
@@ -61,6 +62,10 @@ function toAdminDraw(row: Draw): AdminDraw {
     closesAt: minutesToTime(row.closesMinutes),
     weekdays: [...row.weekdays].sort((a, b) => a - b),
     games: DRAW_GAMES.filter((game) => row[game]),
+    result:
+      row.resultLottery !== null && row.resultExtraction !== null
+        ? { lottery: row.resultLottery, extraction: row.resultExtraction }
+        : null,
     active: row.active,
     sortOrder: row.sortOrder,
   };
@@ -170,7 +175,9 @@ export class DrawsService {
         const changed = (Object.keys(FIELD_LABELS) as Array<keyof SaveDrawInput>).filter((field) =>
           field === 'games'
             ? before.games.join() !== DRAW_GAMES.filter((g) => after.games.includes(g)).join()
-            : String(before[field]) !== String(after[field]),
+            : field === 'result'
+              ? JSON.stringify(before.result) !== JSON.stringify(after.result)
+              : String(before[field]) !== String(after[field]),
         );
         if (changed.length === 0) return this.load(tx, tenant.id);
         // O banco trava a linha e confere as apostas vendidas (trigger draws_guard_bets).
@@ -350,7 +357,10 @@ function toRow(input: SaveDrawInput) {
     closesMinutes,
     weekdays: [...input.weekdays].sort((a, b) => a - b),
     lotteries: input.games.includes('lotteries'),
+    lotteries10: input.games.includes('lotteries10'),
     fazendinha: input.games.includes('fazendinha'),
+    resultLottery: input.result?.lottery ?? null,
+    resultExtraction: input.result?.extraction ?? null,
     active: input.active,
     sortOrder: input.sortOrder,
   };

@@ -83,6 +83,7 @@ const NEW_DRAW: SaveDrawRequest = {
   closesAt: '10:15',
   weekdays: [1, 2, 3, 4, 5, 6, 0],
   games: ['lotteries'],
+  result: null,
   active: true,
   sortOrder: 5000,
 };
@@ -104,12 +105,21 @@ describe('GET /v1/draws (jogador)', () => {
       closesAt: '09:18',
       weekdays: [0, 1, 2, 3, 4, 5, 6],
       games: ['lotteries', 'fazendinha'],
+      result: { lottery: 'rj', extraction: 9 },
     });
+    // A Federal da banca é às 20h; o resultado é a Federal das 19h do provedor.
     expect(body.draws.find((d) => d.name === 'LT FEDERAL')).toMatchObject({
       hour: 20,
       closesAt: '19:58',
       weekdays: [0, 3],
+      result: { lottery: 'fd', extraction: 19 },
     });
+    expect(body.draws.find((d) => d.name === 'LT BAND 15HS')!.result).toEqual({ lottery: 'sp', extraction: 15 });
+    // Sem correspondência certa no provedor: sem ligação (o painel define).
+    for (const name of ['LT LOTECE 10HS', 'LT CAPITAL 10HS', 'LT LOTEP 09HS', 'LT NACIONAL 21HS', 'LT MALUQ FEDERAL']) {
+      expect(body.draws.find((d) => d.name === name)!.result, name).toBeNull();
+    }
+    expect(body.draws.filter((d) => d.result !== null)).toHaveLength(54);
     expect(body.exceptions).toEqual([]);
   });
 
@@ -149,6 +159,18 @@ describe('painel: /v1/admin/draws', () => {
     const regenerated = await session.http.put(`/v1/admin/draws/${draw.id}`, toSave(draw, { code: '' }));
     expect(findDraw(regenerated.body, 'LT TESTE 10HS').code).toBe('TESTE10');
 
+    // Ligação com o resultado do provedor: definir, repetir (sem auditoria) e tirar.
+    const linked = await session.http.put(
+      `/v1/admin/draws/${draw.id}`,
+      toSave(draw, { result: { lottery: 'ln', extraction: 10 } }),
+    );
+    expect(linked.status, JSON.stringify(linked.body)).toBe(200);
+    expect(findDraw(linked.body, 'LT TESTE 10HS').result).toEqual({ lottery: 'ln', extraction: 10 });
+    const current = findDraw(linked.body, 'LT TESTE 10HS');
+    await session.http.put(`/v1/admin/draws/${draw.id}`, toSave(current));
+    const unlinked = await session.http.put(`/v1/admin/draws/${draw.id}`, toSave(current, { result: null }));
+    expect(findDraw(unlinked.body, 'LT TESTE 10HS').result).toBeNull();
+
     const removed = await session.http.delete(`/v1/admin/draws/${draw.id}`);
     expect(removed.status).toBe(200);
     expect(findDraw(removed.body, 'LT TESTE 10HS')).toBeUndefined();
@@ -159,10 +181,14 @@ describe('painel: /v1/admin/draws', () => {
       'draw.update',
       'draw.update',
       'draw.update',
+      'draw.update',
+      'draw.update',
       'draw.create',
     ]);
-    expect(audit.body.items[1].details).toEqual({ fields: ['Código'], draw: 'LT TESTE 10HS' });
-    expect(audit.body.items[3].details).toEqual({ fields: ['Venda até', 'Dias'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[1].details).toEqual({ fields: ['Resultado'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[2].details).toEqual({ fields: ['Resultado'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[3].details).toEqual({ fields: ['Código'], draw: 'LT TESTE 10HS' });
+    expect(audit.body.items[5].details).toEqual({ fields: ['Venda até', 'Dias'], draw: 'LT TESTE 10HS' });
   });
 
   it('valida o cadastro', async () => {
@@ -179,12 +205,25 @@ describe('painel: /v1/admin/draws', () => {
       [{ code: 'PT 14' }, 'code'],
       [{ code: 'PT-14' }, 'code'],
       [{ code: 'X'.repeat(13) }, 'code'],
+      // Fora do catálogo: sigla desconhecida ou extração que a loteria não tem.
+      [{ result: { lottery: 'zz', extraction: 10 } }, 'result'],
+      [{ result: { lottery: 'rj', extraction: 10 } }, 'result'],
+      [{ result: { lottery: 'RJ', extraction: 9 } }, 'result'],
     ];
     for (const [patch, field] of cases) {
       const res = await session.http.post('/v1/admin/draws', { ...NEW_DRAW, ...patch });
       expect(res.status, JSON.stringify(patch)).toBe(400);
       expect(res.body.details?.[0]?.field, JSON.stringify(patch)).toBe(field);
     }
+    // Campo obrigatório (null = sem ligação).
+    const { result: _result, ...withoutResult } = NEW_DRAW;
+    expect((await session.http.post('/v1/admin/draws', withoutResult)).status).toBe(400);
+    // O banco recusa sigla sem extração (e vice-versa), mesmo por fora da API.
+    await expect(
+      asTenant(migratorPool, auroraId, (c) =>
+        c.query(`UPDATE draws SET result_extraction = NULL WHERE name = 'LT PT RIO 09HS'`),
+      ),
+    ).rejects.toThrow(/draws_result_source_pair/);
     const duplicated = await session.http.post('/v1/admin/draws', { ...NEW_DRAW, name: 'LT PT RIO 09HS' });
     expect(duplicated.status).toBe(409);
     expect(duplicated.body.code).toBe('CONFLICT');

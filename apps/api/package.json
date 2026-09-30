@@ -10,7 +10,9 @@
     "start": "node --env-file=../../.env dist/main.js",
     "operator:create": "tsx --env-file=../../.env scripts/create-operator.ts",
     "wallet:adjust": "tsx --env-file=../../.env scripts/wallet-adjust.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "results:fetch": "tsx --env-file=../../.env scripts/fetch-results.ts",
+    "horoscope:fetch": "tsx --env-file=../../.env scripts/fetch-horoscope.ts"
   },
   "dependencies": {
     "@nestjs/common": "12.1.0",

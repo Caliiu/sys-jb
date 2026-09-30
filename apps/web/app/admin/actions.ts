@@ -252,6 +252,7 @@ const saveDrawSchema = z.strictObject({
     closesAt: z.string().max(5),
     weekdays: z.array(z.number().int()).max(7),
     games: z.array(z.enum(DRAW_GAMES)).max(DRAW_GAMES.length),
+    result: z.strictObject({ lottery: z.string().max(4), extraction: z.number().int() }).nullable(),
     active: z.boolean(),
     sortOrder: z.number().int().min(0).max(DRAW_LIMITS.sortOrderMax),
   }),
@@ -448,4 +449,33 @@ export async function saveHomeLayoutAction(input: unknown): Promise<AdminActionR
 
   const res = await adminApi.saveHomeLayout(caller, body.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Apostador escolhido nos filtros (só o que a tela mostra: nada de CPF ou telefone). */
+export interface PlayerOption {
+  id: string;
+  displayId: number;
+  name: string;
+}
+
+const PLAYER_SEARCH_RESULTS = 10;
+const playerSearchSchema = z.string().trim().min(2).max(100);
+
+/** Busca de apostadores para o filtro (nome, CPF, telefone ou ID): as primeiras correspondências. */
+export async function searchPlayersAction(search: unknown): Promise<AdminActionResult<PlayerOption[]>> {
+  const term = playerSearchSchema.safeParse(search);
+  if (!term.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.listUsers(caller, {
+    page: 1,
+    pageSize: PLAYER_SEARCH_RESULTS,
+    search: term.data,
+    status: '',
+    promoterId: '',
+  });
+  return res.ok
+    ? { ok: true, data: res.data.items.map(({ id, displayId, name }) => ({ id, displayId, name })) }
+    : toAdminFailure(res.status, res.error);
 }

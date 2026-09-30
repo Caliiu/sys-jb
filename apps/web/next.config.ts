@@ -25,9 +25,10 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         {
-          // Fora: arquivos do Next (/_next/...) e qualquer arquivo com extensão (public/: logos, ícones, favicon),
-          // que continuam nos caminhos de sempre. As páginas do painel não têm ponto no caminho.
-          source: '/:path((?!_next/)(?!.*\\.[A-Za-z0-9]+$).*)',
+          // Fora: arquivos do Next (/_next/...), qualquer arquivo com extensão (public/: logos, ícones, favicon),
+          // que continuam nos caminhos de sempre, e as integrações externas (/integracoes/..., ex.: webhook de
+          // resultados), que valem em qualquer host. As páginas do painel não têm ponto no caminho.
+          source: '/:path((?!_next/)(?!integracoes/)(?!.*\\.[A-Za-z0-9]+$).*)',
           has: [{ type: 'host', value: adminHostname }],
           destination: '/admin/:path',
         },

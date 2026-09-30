@@ -3,6 +3,7 @@
  * (as mesmas que a API usa para validar a compra); os sorteios, do cadastro da banca. Valores em centavos.
  */
 import {
+  type DrawGame,
   type DrawSchedule,
   LOTTERY_LIMITS,
   type LotteryModality,
@@ -32,8 +33,8 @@ export interface LotteryDay {
   hasFederal: boolean;
 }
 
-/** Hoje e os próximos dias que aceitam apostas (Brasília). */
-export function lotteryDays(nowIso: string, schedule: DrawSchedule): LotteryDay[] {
+/** Hoje e os próximos dias que aceitam apostas (Brasília). `game`: jogo do cadastro de sorteios (a Federal é da 1/7). */
+export function lotteryDays(nowIso: string, schedule: DrawSchedule, game: DrawGame = 'lotteries'): LotteryDay[] {
   return Array.from({ length: LOTTERY_LIMITS.maxDayOffset + 1 }, (_, offset) => {
     const date = drawDateOf(nowIso, offset);
     const [y, m, d] = date.split('-');
@@ -47,7 +48,7 @@ export function lotteryDays(nowIso: string, schedule: DrawSchedule): LotteryDay[
       weekday,
       title,
       dayOfMonth: String(Number(d)),
-      hasFederal: drawsOn(schedule, date, 'lotteries').some((draw) => draw.name.includes('FEDERAL')),
+      hasFederal: drawsOn(schedule, date, game).some((draw) => draw.name.includes('FEDERAL')),
     };
   });
 }

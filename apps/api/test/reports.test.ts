@@ -110,6 +110,7 @@ async function lateDraw(code: string): Promise<{ name: string; hour: number }> {
     closesAt: '23:59',
     weekdays: [0, 1, 2, 3, 4, 5, 6],
     games: ['lotteries', 'fazendinha'],
+    result: null,
     active: true,
     sortOrder: 9000,
   };

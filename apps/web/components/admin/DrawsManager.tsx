@@ -5,13 +5,18 @@ import {
   type AdminDrawsResponse,
   DRAW_EXCEPTION_LABELS,
   DRAW_GAME_LABELS,
+  DRAW_DEFAULT_GAMES,
   DRAW_GAMES,
   DRAW_LIMITS,
   type DrawExceptionKind,
   type DrawGame,
+  RESULT_SOURCE_OPTIONS,
+  type ResultSource,
   type SaveDrawRequest,
   WEEKDAY_SHORT,
+  extractionLabel,
   groupDraws,
+  resultSourceLabel,
 } from '@sysjb/contracts';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -49,6 +54,13 @@ const gamesLabel = (games: DrawGame[]) => games.map((g) => DRAW_GAME_LABELS[g]).
 
 const formatDate = (date: string) => date.split('-').reverse().join('/');
 
+/** Valor do select de resultado: "rj:9" (sigla + extração); '' = sem ligação. */
+const sourceValue = (source: ResultSource | null) => (source ? `${source.lottery}:${source.extraction}` : '');
+function sourceFrom(value: string): ResultSource | null {
+  const [lottery, extraction] = value.split(':');
+  return lottery && extraction ? { lottery, extraction: Number(extraction) } : null;
+}
+
 type Message = { ok: boolean; text: string } | null;
 
 /** Formulário do sorteio (novo ou edição): o que a API recebe, mais o id na edição. */
@@ -63,7 +75,8 @@ const emptyDraft = (sortOrder: number): DrawDraft => ({
   drawTime: '',
   closesAt: '',
   weekdays: [0, 1, 2, 3, 4, 5, 6],
-  games: [...DRAW_GAMES],
+  games: [...DRAW_DEFAULT_GAMES],
+  result: null,
   active: true,
   sortOrder,
 });
@@ -77,6 +90,7 @@ const draftOf = (draw: AdminDraw): DrawDraft => ({
   closesAt: draw.closesAt,
   weekdays: draw.weekdays,
   games: draw.games,
+  result: draw.result,
   active: draw.active,
   sortOrder: draw.sortOrder,
 });
@@ -280,6 +294,27 @@ function DrawForm({
             <p className="mt-1 text-[12px] font-semibold text-admin-danger">{fieldError('games')}</p>
           )}
         </fieldset>
+        <Field label="Resultado (provedor)" error={fieldError('result')}>
+          {(id) => (
+            <select
+              id={id}
+              value={sourceValue(form.result)}
+              onChange={(e) => set('result', sourceFrom(e.target.value))}
+              className={inputClass}
+            >
+              <option value="">Sem resultado</option>
+              {RESULT_SOURCE_OPTIONS.map((option) => (
+                <optgroup key={option.name} label={option.name}>
+                  {option.sources.map((source) => (
+                    <option key={sourceValue(source)} value={sourceValue(source)}>
+                      {option.name} {extractionLabel(source.extraction)}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          )}
+        </Field>
         <Field label="Ordem na lista" error={fieldError('sortOrder')}>
           {(id) => (
             <input
@@ -574,6 +609,9 @@ export default function DrawsManager({
                   Jogos
                 </th>
                 <th scope="col" className={thClass}>
+                  Resultado
+                </th>
+                <th scope="col" className={thClass}>
                   Situação
                 </th>
                 {canManage && (
@@ -588,7 +626,7 @@ export default function DrawsManager({
                 <tr className="bg-admin-bg">
                   <th
                     scope="colgroup"
-                    colSpan={canManage ? 8 : 7}
+                    colSpan={canManage ? 9 : 8}
                     className="px-4 py-2 text-[12px] font-bold tracking-wide text-admin-text"
                   >
                     {g.label}
@@ -604,6 +642,9 @@ export default function DrawsManager({
                     <td className="px-4 py-2 tabular-nums">{d.closesAt}</td>
                     <td className="px-4 py-2">{weekdaysLabel(d.weekdays)}</td>
                     <td className="px-4 py-2">{gamesLabel(d.games)}</td>
+                    <td className="px-4 py-2">
+                      {d.result ? resultSourceLabel(d.result) : <span className="text-admin-muted">—</span>}
+                    </td>
                     <td className="px-4 py-2">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold ${

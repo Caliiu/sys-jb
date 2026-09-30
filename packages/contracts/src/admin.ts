@@ -28,6 +28,7 @@ export const PERMISSIONS = [
   'murals.manage',
   'branding.read',
   'branding.manage',
+  'tickets.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -45,6 +46,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * Mural: `murals.manage` cadastra/altera/exclui os avisos com imagem do app do jogador (só o Gerente).
  * Comissões: `commissions.manage` define a % do "Indique e ganhe" e fecha o mês (o banco confere o perfil
  * MANAGER de novo no fechamento).
+ * Bilhetes: `tickets.read` consulta os pules vendidos (todos os perfis; ninguém altera pule pelo painel).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -65,9 +67,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'murals.manage',
     'branding.read',
     'branding.manage',
+    'tickets.read',
   ],
-  SUPPORT: ['users.read', 'users.update'],
-  FINANCE: ['users.read', 'promoters.read', 'commissions.read', 'quotes.read', 'draws.read'],
+  SUPPORT: ['users.read', 'users.update', 'tickets.read'],
+  FINANCE: ['users.read', 'promoters.read', 'commissions.read', 'quotes.read', 'draws.read', 'tickets.read'],
 };
 
 export function hasPermission(role: OperatorRole, permission: Permission): boolean {
@@ -197,6 +200,55 @@ export interface AdminPromoterOption {
   name: string;
 }
 
+// ---------------------------------------------------------------------------
+// Bilhetes (pules vendidos: Loterias e Fazendinha, cada jogo com a sua numeração)
+// ---------------------------------------------------------------------------
+
+/** Jogo do bilhete: a numeração é própria de cada um (o mesmo número pode existir nos dois). */
+export type AdminTicketGame = 'lotteries' | 'fazendinha';
+
+export interface AdminTicketListItem {
+  game: AdminTicketGame;
+  puleNumber: number;
+  /** ISO 8601 da venda. */
+  createdAt: string;
+  /** Data do sorteio ("vale"), YYYY-MM-DD. */
+  drawDate: string;
+  /** Nome do sorteio na venda (ex.: LT PT RIO 09HS). */
+  lottery: string;
+  /** Código da extração na venda (ex.: PTRIO09). */
+  drawCode: string;
+  totalCents: number;
+  player: { id: string; displayId: number; name: string };
+}
+
+/** GET /v1/admin/tickets: bilhetes vendidos no dia (Brasília), mais recentes primeiro, e o total apostado. */
+export interface AdminTicketList extends Page<AdminTicketListItem> {
+  /** Soma de todos os bilhetes do filtro (não só da página). */
+  totalCents: number;
+}
+
+export interface AdminTicketListQuery {
+  /** Dia da venda (YYYY-MM-DD, Brasília). */
+  date: string;
+  page?: number;
+  pageSize?: number;
+  /** Só os bilhetes dos indicados deste promotor. */
+  promoterId?: string;
+  /** Só os bilhetes deste apostador. */
+  userId?: string;
+  /** Só os bilhetes deste sorteio (pelo nome e hora da venda, que não mudam depois de vender). */
+  drawId?: string;
+}
+
+/** Opção do filtro "Horário (Extração)" (GET /v1/admin/tickets/draw-options): sorteios da banca, por horário. */
+export interface AdminTicketDrawOption {
+  id: string;
+  name: string;
+  /** HH:MM. */
+  drawTime: string;
+}
+
 /** Ações registradas na trilha de auditoria (sempre sobre um usuário da banca). */
 export const AUDIT_ACTIONS = [
   'user.update',
@@ -272,14 +324,6 @@ export interface AdminAuditQuery {
   /** id (UUID) do usuário afetado. */
   userId?: string;
   period?: AuditPeriod;
-}
-
-/** GET /v1/admin/audit/summary: quantos registros em cada período (com os mesmos filtros de ação e usuário). */
-export interface AdminAuditSummary {
-  today: number;
-  last7Days: number;
-  last30Days: number;
-  total: number;
 }
 
 /** Bolsas que o painel pode creditar: saldo, bônus e disponível em games. */

@@ -1,4 +1,10 @@
-import type { BalanceReport, LotteryMovementReport, LotterySplit, PuleDetail } from '@sysjb/contracts';
+import {
+  type BalanceReport,
+  LOTTERY_GAME_LABELS,
+  type LotteryMovementReport,
+  type LotterySplit,
+  type PuleDetail,
+} from '@sysjb/contracts';
 import { formatBrl, formatCents } from './currency';
 import { formatCalendarDate, formatShortCalendarDate } from './datetime';
 import { MODE_CODE, palpiteLabel } from './fazendinha';
@@ -63,6 +69,8 @@ export interface PuleCard {
   stampIso: string;
   drawDate: string;
   quoteTable: string;
+  /** Loterias: "Tradicional 1/7" ou "Tradicional 1/10"; ausente na Fazendinha. */
+  gameLabel?: string;
   lottery: string;
   puleNumber: number;
   items: Array<{
@@ -84,6 +92,7 @@ export function puleCard(detail: PuleDetail): PuleCard {
       stampIso: ticket.createdAt,
       drawDate: ticket.drawDate,
       quoteTable: ticket.quoteTable,
+      gameLabel: LOTTERY_GAME_LABELS[ticket.game],
       lottery: ticket.lottery,
       puleNumber: ticket.puleNumber,
       items: ticket.items.map((item) => ({
@@ -128,6 +137,7 @@ export function puleReceipt(card: PuleCard, stamp: string): ReceiptPdfContent {
       [
         { left: 'Vale', right: formatShortCalendarDate(card.drawDate) },
         { left: 'Cotação', right: card.quoteTable },
+        ...(card.gameLabel ? [{ left: 'Jogo', right: card.gameLabel }] : []),
       ],
       [{ left: card.lottery, right: `#${card.puleNumber}` }],
       ...card.items.map((item) => [

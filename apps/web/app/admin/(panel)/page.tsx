@@ -1,7 +1,10 @@
-import { redirect } from 'next/navigation';
+import ComingSoonRoute, { comingSoonMetadata } from '@/components/admin/ComingSoonRoute';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 
-/** Raiz do painel (admin.<domínio>/): por enquanto o painel só tem a lista de usuários. */
+export const dynamic = 'force-dynamic';
+export const metadata = comingSoonMetadata(ADMIN_ROUTES.home);
+
+/** Página ainda não construída: "Em breve" (com sessão e permissão conferidas). */
 export default function Page() {
-  redirect(ADMIN_ROUTES.users);
+  return <ComingSoonRoute href={ADMIN_ROUTES.home} />;
 }

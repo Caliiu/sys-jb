@@ -4,7 +4,7 @@ import { DEFAULT_HOME_LAYOUT, type HomeLayout } from '@sysjb/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, router } from '@/test/render';
 
-vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/cards-inicio' }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/personalizacao/cards-inicio' }));
 vi.mock('@/app/admin/actions', () => ({ saveHomeLayoutAction: vi.fn() }));
 
 const actions = await import('@/app/admin/actions');

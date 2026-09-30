@@ -7,18 +7,43 @@
  * valor do palpite × cotação ÷ R$ 1,00 ÷ divisor da colocação ÷ permutações (nas invertidas).
  */
 
+import type { DrawGame } from './draws.js';
 import type { Cents, PublicWallet } from './index.js';
 import type { PublicQuotes, TraditionalQuoteModality } from './quotes.js';
 
-/** Tipos de jogo da primeira tela. Só o Tradicional está disponível por enquanto. */
+/**
+ * Jogos de loteria à venda. Mesmas modalidades e a mesma tabela de cotação; mudam as colocações (a 1/10 vai até o
+ * 10º prêmio) e os sorteios (cada sorteio do cadastro diz em quais jogos vale). O pule grava o jogo.
+ */
+export const LOTTERY_GAMES = ['tradicional', 'tradicional_10'] as const;
+export type LotteryGame = (typeof LOTTERY_GAMES)[number];
+
+/** Jogo do cadastro de sorteios (draws.ts) que cada jogo de loteria usa. */
+export const LOTTERY_GAME_DRAWS: Record<LotteryGame, DrawGame> = {
+  tradicional: 'lotteries',
+  tradicional_10: 'lotteries10',
+};
+
+/** Tipos de jogo da primeira tela. Os indisponíveis avisam "em breve". */
 export const LOTTERY_GAME_TYPES = [
   { id: 'tradicional', label: 'Tradicional', description: 'Tradicionais 1/7', available: true },
-  { id: 'tradicional_10', label: 'Tradicional 1/10', description: 'Oficiais 1/10', available: false },
+  { id: 'tradicional_10', label: 'Tradicional 1/10', description: 'Oficiais 1/10', available: true },
   { id: 'uruguaia', label: 'Lot. Uruguaia', description: 'Uruguaia oficial', available: false },
   { id: 'quininha', label: 'Quininha', description: 'Loterias Caixa', available: false },
   { id: 'seninha', label: 'Seninha', description: 'Loterias Caixa', available: false },
   { id: 'super15', label: 'Super15', description: 'Loterias Caixa', available: false },
 ] as const;
+
+export const isLotteryGame = (id: string): id is LotteryGame => (LOTTERY_GAMES as readonly string[]).includes(id);
+
+/** Tipo de jogo de um pule (nome e descrição da primeira tela). */
+export const lotteryGameType = (game: LotteryGame) => LOTTERY_GAME_TYPES.find((type) => type.id === game)!;
+
+/** Nome do jogo no comprovante: "Tradicional 1/7" ou "Tradicional 1/10". */
+export const LOTTERY_GAME_LABELS: Record<LotteryGame, string> = {
+  tradicional: 'Tradicional 1/7',
+  tradicional_10: 'Tradicional 1/10',
+};
 
 /**
  * Como a modalidade lê o palpite:
@@ -116,51 +141,99 @@ export interface LotteryPlacement {
   badge?: { text: string; tone: 'green' | 'blue' };
 }
 
+const BADGES: Record<string, LotteryPlacement['badge']> = {
+  p1: { text: 'Maior prêmio', tone: 'green' },
+  p1_5: { text: '5x mais chances', tone: 'blue' },
+  p1_10: { text: '10x mais chances', tone: 'blue' },
+};
+
+/**
+ * Colocação pelo id: "p3" = só o 3º prêmio; "p2_5" = do 2º ao 5º (o prêmio é dividido pela quantidade de posições);
+ * "p1_e_1_5" = metade do valor no 1º, metade no 1/5. Os ids nunca mudam: ficam gravados nos pules.
+ */
+function placementOf(id: string): LotteryPlacement {
+  if (id === 'p1_e_1_5') {
+    return { id, label: '1 e 1/5 PRÊMIO', positions: [1, 2, 3, 4, 5], divisor: 5, splitFirstAndFive: true };
+  }
+  const match = /^p(\d{1,2})(?:_(\d{1,2}))?$/.exec(id);
+  if (!match) throw new Error(`colocação inválida: ${id}`);
+  const from = Number(match[1]);
+  const to = match[2] === undefined ? from : Number(match[2]);
+  const positions = Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const badge = BADGES[id];
+  return {
+    id,
+    label: from === to ? `${from} PRÊMIO` : `${from}/${to} PRÊMIO`,
+    positions,
+    divisor: positions.length,
+    ...(badge ? { badge } : {}),
+  };
+}
+
+/** Faixas "de/até" do prêmio `from` até cada um de `tos`. */
+const ranges = (from: number, tos: readonly number[]) => tos.map((to) => `p${from}_${to}`);
+
+/** Colocações de cada jogo, na ordem da tela de Colocação. */
+export const LOTTERY_GAME_PLACEMENTS: Record<LotteryGame, readonly string[]> = {
+  tradicional: [
+    'p1',
+    'p1_5',
+    'p1_e_1_5',
+    'p2',
+    'p3',
+    'p4',
+    'p5',
+    'p6',
+    ...ranges(1, [2, 3, 4, 6]),
+    ...ranges(2, [3, 4, 5, 6]),
+    ...ranges(3, [4, 5, 6]),
+    ...ranges(4, [5, 6]),
+    ...ranges(5, [6]),
+  ],
+  tradicional_10: [
+    'p1',
+    'p1_5',
+    'p1_10',
+    'p1_e_1_5',
+    'p2',
+    'p3',
+    'p4',
+    'p5',
+    'p6',
+    'p7',
+    'p8',
+    'p9',
+    'p10',
+    ...ranges(1, [2, 3, 4, 6, 7, 8, 9]),
+    ...ranges(2, [3, 4, 5, 6, 7, 8, 9, 10]),
+    ...ranges(3, [4, 5, 6, 7, 8, 9, 10]),
+    ...ranges(4, [5, 6, 7, 8, 9, 10]),
+    ...ranges(5, [6, 7, 8, 9, 10]),
+    ...ranges(6, [7, 8, 10]),
+    ...ranges(7, [8, 9, 10]),
+    ...ranges(8, [9, 10]),
+    ...ranges(9, [10]),
+  ],
+};
+
+/** Todas as colocações de algum jogo (a busca pelo id vale para pules de qualquer jogo). */
 export const LOTTERY_PLACEMENTS: LotteryPlacement[] = [
-  { id: 'p1', label: '1 PRÊMIO', positions: [1], divisor: 1, badge: { text: 'Maior prêmio', tone: 'green' } },
-  {
-    id: 'p1_5',
-    label: '1/5 PRÊMIO',
-    positions: [1, 2, 3, 4, 5],
-    divisor: 5,
-    badge: { text: '5x mais chances', tone: 'blue' },
-  },
-  { id: 'p1_e_1_5', label: '1 e 1/5 PRÊMIO', positions: [1, 2, 3, 4, 5], divisor: 5, splitFirstAndFive: true },
-  { id: 'p2', label: '2 PRÊMIO', positions: [2], divisor: 1 },
-  { id: 'p3', label: '3 PRÊMIO', positions: [3], divisor: 1 },
-  { id: 'p4', label: '4 PRÊMIO', positions: [4], divisor: 1 },
-  { id: 'p5', label: '5 PRÊMIO', positions: [5], divisor: 1 },
-  { id: 'p1_2', label: '1/2 PRÊMIO', positions: [1, 2], divisor: 2 },
-  { id: 'p1_3', label: '1/3 PRÊMIO', positions: [1, 2, 3], divisor: 3 },
-  { id: 'p1_4', label: '1/4 PRÊMIO', positions: [1, 2, 3, 4], divisor: 4 },
-  // Faixas "de/até" (ex.: 2/5 = do 2º ao 5º prêmio): o prêmio é dividido pela quantidade de posições.
-  ...(
-    [
-      [1, 6],
-      [2, 3],
-      [2, 4],
-      [2, 5],
-      [2, 6],
-      [3, 4],
-      [3, 5],
-      [3, 6],
-      [4, 5],
-      [4, 6],
-      [5, 6],
-    ] as const
-  ).map(([from, to]): LotteryPlacement => {
-    const positions = Array.from({ length: to - from + 1 }, (_, i) => from + i);
-    return { id: `p${from}_${to}`, label: `${from}/${to} PRÊMIO`, positions, divisor: positions.length };
-  }),
-];
+  ...new Set(LOTTERY_GAMES.flatMap((game) => LOTTERY_GAME_PLACEMENTS[game])),
+].map(placementOf);
 
 export const findLotteryModality = (id: string) => LOTTERY_MODALITIES.find((m) => m.id === id);
 export const findLotteryPlacement = (id: string) => LOTTERY_PLACEMENTS.find((p) => p.id === id);
 
-/** Colocações aceitas: os combos têm colocação fixa (a cotação já considera isso). */
-export function placementsFor(modality: LotteryModality): LotteryPlacement[] {
-  if (modality.fixedPlacement) return LOTTERY_PLACEMENTS.filter((p) => p.id === modality.fixedPlacement);
-  return LOTTERY_PLACEMENTS;
+/**
+ * Colocações aceitas no jogo, na ordem da tela. Os combos têm colocação fixa (a cotação já considera isso), que vale
+ * nos dois jogos.
+ */
+export function placementsFor(modality: LotteryModality, game: LotteryGame = 'tradicional'): LotteryPlacement[] {
+  const ids = LOTTERY_GAME_PLACEMENTS[game];
+  if (modality.fixedPlacement) {
+    return ids.includes(modality.fixedPlacement) ? [findLotteryPlacement(modality.fixedPlacement)!] : [];
+  }
+  return ids.map((id) => findLotteryPlacement(id)!);
 }
 
 /** Tamanho do palpite em dígitos (combos: todos os números juntos, ex.: "0512" = grupos 05 e 12). */
@@ -287,6 +360,8 @@ export interface LotteryItemRequest {
 export interface PlaceLotteryTicketsRequest {
   /** UUID por tentativa de compra: repetir a mesma chave não compra de novo. */
   idempotencyKey: string;
+  /** Jogo (colocações e sorteios aceitos). Ausente = Tradicional 1/7. */
+  game?: LotteryGame;
   /** YYYY-MM-DD (Brasília). */
   drawDate: string;
   /** Sorteios do cadastro (nome e hora, como em PublicDraw). */
@@ -303,6 +378,8 @@ export interface RepeatLotteryTicketRequest {
   idempotencyKey: string;
   /** Número da pule a repetir (Loterias; tem de ser do jogador da sessão). */
   puleNumber: number;
+  /** Jogo escolhido na primeira etapa: tem de ser o da pule. Ausente = Tradicional 1/7. */
+  game?: LotteryGame;
   /** YYYY-MM-DD (Brasília). */
   drawDate: string;
   draws: Array<{ name: string; hour: number }>;
@@ -328,6 +405,7 @@ export interface PublicLotteryItem {
 /** Pule de uma extração. */
 export interface PublicLotteryTicket {
   puleNumber: number;
+  game: LotteryGame;
   drawDate: string;
   lottery: string;
   hour: number;

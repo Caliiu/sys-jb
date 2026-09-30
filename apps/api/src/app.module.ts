@@ -10,6 +10,8 @@ import { QuotesAdminController } from './admin/quotes-admin.controller.js';
 import { DrawsAdminController } from './admin/draws-admin.controller.js';
 import { MuralsAdminController } from './admin/murals-admin.controller.js';
 import { BrandingAdminController } from './admin/branding-admin.controller.js';
+import { TicketsAdminController } from './admin/tickets-admin.controller.js';
+import { TicketsAdminService } from './admin/tickets-admin.service.js';
 import { BrandingService } from './branding/branding.service.js';
 import { HomeLayoutService } from './branding/home-layout.service.js';
 import { MuralsController } from './murals/murals.controller.js';
@@ -42,6 +44,11 @@ import { APP_CONFIG, type AppConfig } from './config/config.js';
 import { DatabaseService } from './database/database.service.js';
 import { RateLimitInterceptor } from './rate-limit/rate-limit.interceptor.js';
 import { RateLimitService } from './rate-limit/rate-limit.service.js';
+import { ResultsController, ResultsWebhookController } from './results/results.controller.js';
+import { ResultsService } from './results/results.service.js';
+import { HoroscopeController } from './horoscope/horoscope.controller.js';
+import { HoroscopeService } from './horoscope/horoscope.service.js';
+import { ResultsWebhookGuard } from './results/results-webhook.guard.js';
 import { FazendinhaController } from './fazendinha/fazendinha.controller.js';
 import { FazendinhaService } from './fazendinha/fazendinha.service.js';
 import { HealthController } from './health/health.controller.js';
@@ -74,6 +81,7 @@ export class AppModule {
         DrawsAdminController,
         MuralsAdminController,
         BrandingAdminController,
+        TicketsAdminController,
         MuralsController,
         DrawsController,
         QuotesController,
@@ -83,6 +91,9 @@ export class AppModule {
         LotteriesController,
         ProfileController,
         FazendinhaController,
+        ResultsController,
+        ResultsWebhookController,
+        HoroscopeController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -107,6 +118,7 @@ export class AppModule {
         PromotersService,
         AuditService,
         CommissionsService,
+        TicketsAdminService,
         QuotesService,
         PrizesService,
         ReportsService,
@@ -118,6 +130,9 @@ export class AppModule {
         SessionGuard,
         ProfileService,
         FazendinhaService,
+        ResultsService,
+        ResultsWebhookGuard,
+        HoroscopeService,
       ],
     };
   }

@@ -5,17 +5,15 @@ import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { formatCommission } from '@/lib/admin/commission';
 import { formatShortDate } from '@/lib/datetime';
 import { maskCpfInput, maskPhoneInput } from '@/lib/masks';
+import { smallButtonClass } from './filter-styles';
 import StatusBadge from './StatusBadge';
 
 interface UsersTableProps {
   items: AdminUserListItem[];
   emptyMessage?: string;
-  /**
-   * Colunas "Promotor" (quem indicou, se for promotor, com a % dele) e "Indicado por" (quem indicou, jogador
-   * ou promotor). Desligadas na lista de indicados do próprio promotor.
-   */
-  showPromoter?: boolean;
 }
+
+const HEADERS = ['ID', 'Apostador', 'Promotor', 'Indicado por', 'Login', 'Status', 'Ações'];
 
 const none = (label: string) => (
   <span className="text-admin-muted" aria-label={label}>
@@ -24,30 +22,18 @@ const none = (label: string) => (
 );
 
 /**
- * Tabela de unidades (usuários) no formato do painel: Data/ID, unidade com telefone (WhatsApp), promotor com a
- * comissão, indicação, login (CPF), status e Editar. CPF e telefone chegam só com dígitos e são formatados aqui.
+ * Tabela de apostadores (usuários): ID e cadastro, apostador com telefone (WhatsApp), promotor com a comissão (só quando
+ * quem indicou é promotor), quem indicou, login (CPF), status e Editar. CPF e telefone chegam só com dígitos.
  */
-export default function UsersTable({
-  items,
-  emptyMessage = 'Nenhuma unidade encontrada.',
-  showPromoter = true,
-}: UsersTableProps) {
-  const HEADERS = [
-    'Data/Id',
-    'Unidade',
-    ...(showPromoter ? ['Promotor', 'Indicado por'] : []),
-    'Login',
-    'Status',
-    'Ações',
-  ];
+export default function UsersTable({ items, emptyMessage = 'Nenhum resultado encontrado' }: UsersTableProps) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-left text-[12.5px]">
-        <caption className="sr-only">Unidades da banca</caption>
+      <table className="w-full min-w-[760px] text-left text-[14px]">
+        <caption className="sr-only">Apostadores da banca</caption>
         <thead>
-          <tr className="border-b-2 border-admin-border text-[12.5px] text-admin-text">
+          <tr className="border-b border-admin-border text-[13px] text-admin-muted">
             {HEADERS.map((header) => (
-              <th key={header} scope="col" className="px-3 py-2.5 font-bold">
+              <th key={header} scope="col" className="px-4 py-3 font-medium first:pl-0 last:pr-0">
                 {header === 'Ações' ? <span className="sr-only">{header}</span> : header}
               </th>
             ))}
@@ -56,19 +42,19 @@ export default function UsersTable({
         <tbody>
           {items.length === 0 && (
             <tr>
-              <td colSpan={HEADERS.length} className="px-3 py-8 text-center text-admin-muted">
+              <td colSpan={HEADERS.length} className="py-10 text-center text-admin-muted">
                 {emptyMessage}
               </td>
             </tr>
           )}
           {items.map((user) => (
-            <tr key={user.id} className="border-b border-admin-border align-top last:border-0 odd:bg-[#f9f9f9]">
-              <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
+            <tr key={user.id} className="border-b border-admin-border align-top hover:bg-admin-hover/60">
+              <td className="whitespace-nowrap py-3 pr-4 tabular-nums">
                 <span className="block">{user.displayId}</span>
-                <span className="block text-admin-muted">{formatShortDate(user.createdAt)}</span>
+                <span className="block text-[13px] text-admin-muted">{formatShortDate(user.createdAt)}</span>
               </td>
-              <td className="px-3 py-2.5">
-                <Link href={ADMIN_ROUTES.user(user.id)} className="font-semibold uppercase hover:underline">
+              <td className="px-4 py-3">
+                <Link href={ADMIN_ROUTES.user(user.id)} className="font-medium hover:underline">
                   {user.name}
                 </Link>
                 <a
@@ -76,47 +62,39 @@ export default function UsersTable({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`WhatsApp ${maskPhoneInput(user.phone)}`}
-                  className="mt-0.5 flex w-fit items-center gap-1 whitespace-nowrap tabular-nums text-admin-accent hover:underline"
+                  className="mt-0.5 flex w-fit items-center gap-1 whitespace-nowrap text-[13px] tabular-nums text-admin-accent hover:underline"
                 >
                   {maskPhoneInput(user.phone)}
                   <WhatsAppIcon className="h-3 w-3" aria-hidden />
                 </a>
               </td>
-              {showPromoter && (
-                <td className="px-3 py-2.5">
-                  {!user.promoter ? (
-                    none('Sem promotor')
-                  ) : (
-                    <>
-                      <span className="uppercase text-admin-muted">{user.promoter.name}</span>
-                      <span className="block tabular-nums">{formatCommission(user.promoter.commissionBps)}</span>
-                    </>
-                  )}
-                </td>
-              )}
-              {showPromoter && (
-                <td className="px-3 py-2.5">
-                  {user.referredBy ? (
-                    <Link href={ADMIN_ROUTES.user(user.referredBy.id)} className="uppercase hover:underline">
-                      {user.referredBy.name}
-                    </Link>
-                  ) : (
-                    none('Sem indicação')
-                  )}
-                </td>
-              )}
-              <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-admin-accent">
-                {maskCpfInput(user.document)}
+              <td className="px-4 py-3">
+                {!user.promoter ? (
+                  none('Sem promotor')
+                ) : (
+                  <>
+                    <span className="block">{user.promoter.name}</span>
+                    <span className="block text-[13px] tabular-nums text-admin-muted">
+                      {formatCommission(user.promoter.commissionBps)}
+                    </span>
+                  </>
+                )}
               </td>
-              <td className="px-3 py-2.5">
+              <td className="px-4 py-3">
+                {user.referredBy ? (
+                  <Link href={ADMIN_ROUTES.user(user.referredBy.id)} className="hover:underline">
+                    {user.referredBy.name}
+                  </Link>
+                ) : (
+                  none('Sem indicação')
+                )}
+              </td>
+              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{maskCpfInput(user.document)}</td>
+              <td className="px-4 py-3">
                 <StatusBadge status={user.status} />
               </td>
-              <td className="px-3 py-2.5 text-right print:hidden">
-                <Link
-                  href={ADMIN_ROUTES.user(user.id)}
-                  aria-label={`Editar ${user.name}`}
-                  className="inline-flex h-7 items-center rounded-sm bg-[#111] px-3 text-[12px] font-semibold text-white hover:bg-black"
-                >
+              <td className="py-3 pl-4 text-right print:hidden">
+                <Link href={ADMIN_ROUTES.user(user.id)} aria-label={`Editar ${user.name}`} className={smallButtonClass}>
                   Editar
                 </Link>
               </td>

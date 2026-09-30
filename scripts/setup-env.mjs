@@ -12,7 +12,9 @@ if (existsSync(target) && !process.argv.includes('--force')) {
 const example = readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
 const values = new Map();
 const output = example.replace(/change-me-[a-z-]+/g, (token) => {
-  if (!values.has(token)) values.set(token, randomBytes(24).toString('hex'));
+  // Token de webhook: o provedor de resultados aceita no máximo 32 caracteres.
+  const bytes = token.endsWith('-webhook-token') ? 16 : 24;
+  if (!values.has(token)) values.set(token, randomBytes(bytes).toString('hex'));
   return values.get(token);
 });
 

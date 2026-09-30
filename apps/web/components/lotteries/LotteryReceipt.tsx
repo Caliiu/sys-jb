@@ -1,6 +1,6 @@
 'use client';
 
-import type { PlaceLotteryTicketsResponse, PublicWallet } from '@sysjb/contracts';
+import { LOTTERY_GAME_LABELS, type PlaceLotteryTicketsResponse, type PublicWallet } from '@sysjb/contracts';
 import { FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatBrl } from '@/lib/currency';
@@ -62,6 +62,7 @@ export default function LotteryReceipt({ receipt, wallet, exitLabel, onExit, chi
             stampIso={t.createdAt}
             drawDate={t.drawDate}
             quoteTable={t.quoteTable}
+            gameLabel={LOTTERY_GAME_LABELS[t.game]}
             lottery={t.lottery}
             puleNumber={t.puleNumber}
             items={t.items.map((i) => ({

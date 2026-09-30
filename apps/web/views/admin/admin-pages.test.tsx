@@ -84,8 +84,8 @@ beforeEach(() => vi.clearAllMocks());
 const Q = { page: 1, pageSize: 25, search: '', status: '' as const, promoterId: '' };
 const ID_PAULA = 'c'.repeat(8) + '-4d1c-4b63-9a3a-0c1f2e3d4a5b';
 
-describe('lista de unidades', () => {
-  it('mostra as unidades com Data/ID, telefone com WhatsApp, login (CPF), status e Editar', () => {
+describe('lista de apostadores', () => {
+  it('mostra os apostadores com ID, telefone com WhatsApp, login (CPF), status e Editar', () => {
     renderWithProviders(
       <UsersPage
         query={Q}
@@ -95,8 +95,9 @@ describe('lista de unidades', () => {
         ])}
       />,
     );
-    expect(screen.getByRole('heading', { level: 1, name: 'Unidades Registradas' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Lista de unidades' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Apostadores' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument();
+    expect(screen.getByText(/Total:/)).toHaveTextContent('Total: 2');
     const rows = screen.getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
     const first = within(rows[0]!);
@@ -136,11 +137,11 @@ describe('lista de unidades', () => {
 
   it('sem resultados mostra o aviso', () => {
     renderWithProviders(<UsersPage query={{ ...Q, search: 'zzz' }} result={page([])} />);
-    expect(screen.getByText('Nenhuma unidade encontrada.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum resultado encontrado')).toBeInTheDocument();
     expect(screen.getByText('Nenhum registro')).toBeInTheDocument();
   });
 
-  it('filtros são um formulário GET que mantém os valores da URL', () => {
+  it('filtros são um formulário GET (Pesquisar aplica) que mantém os valores da URL', () => {
     const promoters = [{ id: ID_PAULA, displayId: 100001, name: 'Paula Promotora' }];
     renderWithProviders(
       <UsersPage
@@ -149,15 +150,16 @@ describe('lista de unidades', () => {
         promoters={promoters}
       />,
     );
-    const form = screen.getByRole('search', { name: 'Filtrar unidades' });
+    const form = screen.getByRole('search', { name: 'Filtrar apostadores' });
     expect(form).toHaveAttribute('method', 'get');
     expect(form).toHaveAttribute('action', '/usuarios');
     expect(screen.getByRole('searchbox', { name: 'Pesquisar' })).toHaveValue('ana');
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveValue('BLOCKED');
     expect(screen.getByRole('combobox', { name: 'Resultados por página' })).toHaveValue('50');
     expect(screen.getByRole('combobox', { name: 'Promotor' })).toHaveValue(ID_PAULA);
-    expect(screen.getByRole('option', { name: '100001 | Paula Promotora' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Limpar' })).toHaveAttribute('href', '/usuarios');
+    expect(screen.getByRole('option', { name: '100001 - Paula Promotora' })).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Pesquisar' })).toHaveAttribute('type', 'submit');
+    expect(within(form).getByRole('link', { name: 'Limpar Filtros' })).toHaveAttribute('href', '/usuarios');
     expect(screen.getByRole('link', { name: 'Exportar' })).toHaveAttribute(
       'href',
       `/usuarios/exportar?search=ana&status=BLOCKED&promoterId=${ID_PAULA}`,
@@ -165,27 +167,19 @@ describe('lista de unidades', () => {
     expect(screen.getByRole('button', { name: 'Imprimir' })).toBeInTheDocument();
   });
 
-  it('sem opções de promotor o filtro não aparece; sem filtro ativo não há "Limpar"', () => {
+  it('sem opções de promotor o filtro não aparece', () => {
     renderWithProviders(<UsersPage query={Q} result={page([item()])} />);
     expect(screen.queryByRole('combobox', { name: 'Promotor' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Limpar' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Exportar' })).toHaveAttribute('href', '/usuarios/exportar');
   });
 
-  it('mudar um select envia o formulário', async () => {
-    const submit = vi.spyOn(HTMLFormElement.prototype, 'requestSubmit').mockImplementation(() => {});
-    renderWithProviders(<UsersPage query={Q} result={page([item()])} />);
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'ACTIVE');
-    expect(submit).toHaveBeenCalledOnce();
-    submit.mockRestore();
-  });
-
-  it('paginação numerada preserva os filtros; nas pontas Anterior/Próximo ficam desabilitados', () => {
+  it('paginação preserva os filtros; nas pontas Anterior/Próximo ficam desabilitados', () => {
     const query = { ...Q, page: 2, search: 'ana', status: 'ACTIVE' as const, pageSize: 10 };
     const { unmount } = renderWithProviders(
       <UsersPage query={query} result={page([item()], { page: 2, pageSize: 10, totalPages: 5, total: 41 })} />,
     );
-    expect(screen.getByText('Mostrando de 11 até 20 de 41 unidades')).toBeInTheDocument();
+    expect(screen.getByText('Mostrando 11 a 20 de 41 registros')).toBeInTheDocument();
+    expect(screen.getByText('Página 2 de 5')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Anterior' })).toHaveAttribute(
       'href',
       '/usuarios?search=ana&status=ACTIVE&pageSize=10',
@@ -194,17 +188,13 @@ describe('lista de unidades', () => {
       'href',
       '/usuarios?search=ana&status=ACTIVE&pageSize=10&page=3',
     );
-    expect(screen.getByRole('link', { name: 'Página 5' })).toHaveAttribute(
-      'href',
-      '/usuarios?search=ana&status=ACTIVE&pageSize=10&page=5',
-    );
-    expect(screen.getByText('2', { selector: '[aria-current="page"]' })).toBeInTheDocument();
     unmount();
 
     renderWithProviders(<UsersPage query={Q} result={page([item()], { pageSize: 25 })} />);
     expect(screen.queryByRole('link', { name: 'Anterior' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Próximo' })).toBeNull();
-    expect(screen.getByText('Mostrando de 1 até 1 de 1 unidade')).toBeInTheDocument();
+    expect(screen.getByText('Mostrando 1 a 1 de 1 registro')).toBeInTheDocument();
+    expect(screen.getByText('Página 1 de 1')).toBeInTheDocument();
   });
 });
 
@@ -467,45 +457,69 @@ describe('menu do painel', () => {
       <AdminShell tenantName="Banca Teste" operatorName="Maria Souza" roleLabel="Gerente" permissions={permissions} />,
     );
 
-  it('mostra a banca, o operador com o perfil e os itens permitidos (marcando o atual)', () => {
+  it('estrutura da imagem: Início, Operação, Relatórios, Carteira, CRM e Configurações, com os traços', () => {
+    renderSidebar(ROLE_PERMISSIONS.MANAGER);
+    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+    expect(within(nav).getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/');
+    const groups = within(nav)
+      .getAllByRole('group')
+      .map((g) => within(g).getAllByRole('button')[0]!.textContent);
+    expect(groups).toEqual(['Operação', 'Relatórios', 'Carteira', 'CRM', 'Configurações']);
+    // Traços: depois de Início, antes de Carteira e, dentro de Configurações, antes de Mural (fechado aqui).
+    expect(within(nav).getAllByRole('separator')).toHaveLength(2);
+    // O grupo da página atual já vem aberto, com os itens na ordem da imagem.
+    const operation = within(nav).getByRole('group', { name: 'Operação' });
+    expect(
+      within(operation)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Apostadores', 'Bilhetes', 'Prêmios', 'Resumo da Operação']);
+  });
+
+  it('mostra o operador com o perfil e marca a página atual (Apostadores)', () => {
     renderSidebar(['users.read']);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-    // O grupo da página atual já vem aberto.
-    const group = within(nav).getByRole('group', { name: 'Unidades' });
-    expect(within(group).getByRole('button', { name: 'Unidades' })).toHaveAttribute('aria-expanded', 'true');
-    expect(within(group).getByRole('link', { name: 'Unidades' })).toHaveAttribute('href', '/usuarios');
-    expect(within(group).getByRole('link', { name: 'Unidades' })).toHaveAttribute('aria-current', 'page');
+    const group = within(nav).getByRole('group', { name: 'Operação' });
+    expect(within(group).getByRole('button', { name: 'Operação' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(group).getByRole('link', { name: 'Apostadores' })).toHaveAttribute('href', '/usuarios');
+    expect(within(group).getByRole('link', { name: 'Apostadores' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getAllByText('Maria Souza').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gerente').length).toBeGreaterThan(0);
   });
 
-  it('sem permissão de consulta, o item não aparece', () => {
+  it('sem permissão de consulta, nada aparece', () => {
     renderSidebar([]);
-    expect(screen.queryByRole('link', { name: 'Unidades' })).toBeNull();
-    expect(screen.queryByRole('group', { name: 'Unidades' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Início' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Operação' })).toBeNull();
   });
 
-  it('Auditoria só aparece com a permissão de consultá-la', () => {
+  it('Auditoria (em Relatórios) só aparece com a permissão de consultá-la', async () => {
+    const openReports = async () => {
+      const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+      await userEvent.click(within(nav).getByRole('button', { name: 'Relatórios' }));
+      return within(nav).getByRole('group', { name: 'Relatórios' });
+    };
     const { unmount } = renderSidebar(ROLE_PERMISSIONS.SUPPORT);
-    expect(screen.queryByRole('link', { name: 'Auditoria' })).toBeNull();
+    expect(within(await openReports()).queryByRole('link', { name: 'Auditoria' })).toBeNull();
     unmount();
     renderSidebar(ROLE_PERMISSIONS.MANAGER);
-    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-    expect(within(nav).getByRole('link', { name: 'Auditoria' })).toHaveAttribute('href', '/auditoria');
+    const reports = await openReports();
+    expect(within(reports).getByRole('link', { name: 'Auditoria' })).toHaveAttribute('href', '/auditoria');
+    expect(within(reports).getByRole('link', { name: 'Comissões' })).toHaveAttribute('href', '/comissoes');
   });
 
   it('grupos abrem e fecham; fora da página atual começam fechados', async () => {
     renderSidebar(ROLE_PERMISSIONS.MANAGER);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-    const toggle = within(nav).getByRole('button', { name: 'Financeiro' });
+    const toggle = within(nav).getByRole('button', { name: 'Carteira' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(within(nav).queryByRole('link', { name: 'Comissões' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Depósitos' })).toBeNull();
 
     await userEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(within(nav).getByRole('link', { name: 'Comissões' })).toHaveAttribute('href', '/comissoes');
+    expect(within(nav).getByRole('link', { name: 'Depósitos' })).toHaveAttribute('href', '/depositos');
 
-    const current = within(nav).getByRole('button', { name: 'Unidades' });
+    const current = within(nav).getByRole('button', { name: 'Operação' });
     await userEvent.click(current);
     expect(current).toHaveAttribute('aria-expanded', 'false');
   });
@@ -520,24 +534,71 @@ describe('menu do painel', () => {
         serverNow="2026-09-29T19:02:43.000Z"
       />,
     );
-    expect(screen.getByText('16:02:43')).toBeInTheDocument();
+    expect(screen.getByText('16:02')).toBeInTheDocument();
+    // A banca fica à direita da barra.
+    expect(screen.getAllByText('Banca Teste').length).toBeGreaterThan(0);
   });
 
-  it('Sair encerra a sessão e volta ao login', async () => {
+  it('barra superior: trilha grupo › página atual', () => {
+    renderSidebar(['users.read']);
+    const trail = screen.getByRole('navigation', { name: 'Trilha' });
+    expect(within(trail).getByText('Operação')).not.toHaveAttribute('aria-current');
+    expect(within(trail).getByText('Apostadores')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('a busca do menu filtra os itens (sem acento) e abre os grupos', async () => {
+    renderSidebar(ROLE_PERMISSIONS.MANAGER);
+    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+    const search = screen.getAllByRole('searchbox', { name: 'Pesquisar no menu' })[0]!;
+    await userEvent.type(search, 'cotacoes');
+    expect(within(nav).getByRole('link', { name: 'Cotações' })).toHaveAttribute('href', '/cotacoes');
+    expect(within(nav).queryByRole('link', { name: 'Sorteios' })).toBeNull();
+    expect(within(nav).queryByRole('button', { name: 'Operação' })).toBeNull();
+    expect(within(nav).queryAllByRole('separator')).toHaveLength(0);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'xyz');
+    expect(within(nav).getByText('Nada encontrado.')).toBeInTheDocument();
+  });
+
+  const openAccount = async () => {
+    await userEvent.click(screen.getAllByRole('button', { name: /Maria Souza/ })[0]!);
+    return screen.getByRole('menu', { name: 'Conta' });
+  };
+
+  it('Sair fica no menu da conta; encerra a sessão e volta ao login', async () => {
     actions.adminLogoutAction.mockResolvedValue(undefined);
     renderSidebar(['users.read']);
-    await userEvent.click(screen.getAllByRole('button', { name: 'Sair' })[0]!);
+    expect(screen.queryByRole('menuitem', { name: 'Sair' })).toBeNull();
+    const menu = await openAccount();
+    expect(menu).toHaveTextContent('Banca Teste');
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Sair' }));
     expect(actions.adminLogoutAction).toHaveBeenCalledOnce();
     expect(router.replace).toHaveBeenCalledWith('/login');
+  });
+
+  it('menu da conta fecha com Esc', async () => {
+    renderSidebar(['users.read']);
+    await openAccount();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu', { name: 'Conta' })).toBeNull();
   });
 
   it('se o logout falhar, avisa e continua na tela (a sessão pode seguir válida)', async () => {
     actions.adminLogoutAction.mockRejectedValue(new Error('rede'));
     renderSidebar(['users.read']);
-    await userEvent.click(screen.getAllByRole('button', { name: 'Sair' })[0]!);
+    const menu = await openAccount();
+    await userEvent.click(within(menu).getByRole('menuitem', { name: 'Sair' }));
     expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent('Não foi possível sair. Tente novamente.');
     expect(router.replace).not.toHaveBeenCalled();
-    expect(screen.getAllByRole('button', { name: 'Sair' })[0]).toBeEnabled();
+    expect(within(menu).getByRole('menuitem', { name: 'Sair' })).toBeEnabled();
+  });
+
+  it('no desktop o botão da barra recolhe e mostra o menu', async () => {
+    renderSidebar(['users.read']);
+    const toggle = screen.getByRole('button', { name: 'Recolher menu' });
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle).toHaveAccessibleName('Mostrar menu');
   });
 
   it('no celular a gaveta abre e fecha (Esc)', async () => {

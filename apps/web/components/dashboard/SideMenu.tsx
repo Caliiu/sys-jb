@@ -12,6 +12,7 @@ import {
   BarChart2,
   FileText,
   Banknote,
+  BookOpen,
   Settings,
   Headphones,
   LogOut,
@@ -43,7 +44,7 @@ interface MenuItem {
 const MAIN_ITEMS: MenuItem[] = [
   { label: 'Início', icon: Home, to: ROUTES.home },
   { label: 'Perfil', icon: User, to: ROUTES.profile },
-  { label: 'Loterias', icon: Coins },
+  { label: 'Loterias', icon: Coins, to: ROUTES.lotteries },
   { label: 'Cassino', icon: Gem },
   { label: 'Bingo', icon: Disc },
   { label: 'Premiadas', icon: Award, to: ROUTES.prizes },
@@ -51,6 +52,7 @@ const MAIN_ITEMS: MenuItem[] = [
   { label: 'Relatórios', icon: FileText, to: ROUTES.reports },
   { label: 'Recarga PIX', icon: PixIcon, to: ROUTES.pixTopUp, highlight: true },
   { label: 'Solicitar saque', icon: Banknote, to: ROUTES.withdrawals },
+  { label: 'Como jogar', icon: BookOpen, to: ROUTES.howToPlay },
   { label: 'Configurações', icon: Settings, to: ROUTES.settings },
 ];
 

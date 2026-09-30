@@ -2,10 +2,12 @@
 
 import {
   LOTTERY_GAME_TYPES,
+  type LotteryGame,
   type LotteryModality,
   type LotteryPlacement,
   type PublicQuotes,
   LOTTERY_MODALITIES,
+  isLotteryGame,
   lotteryQuoteCents,
 } from '@sysjb/contracts';
 import { ChevronRight, Clover, Repeat2, Search } from 'lucide-react';
@@ -87,13 +89,13 @@ function SearchBox({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-/** Etapa 1: tipo de jogo (só o Tradicional por enquanto) e "Repetir pule". */
+/** Etapa 1: tipo de jogo (Tradicional 1/7 e 1/10; os outros avisam "em breve") e "Repetir pule". */
 export function TypeStep({
   onPick,
   onRepeat,
   onComingSoon,
 }: {
-  onPick: () => void;
+  onPick: (game: LotteryGame) => void;
   onRepeat: () => void;
   onComingSoon: (label: string) => void;
 }) {
@@ -106,7 +108,7 @@ export function TypeStep({
             <li key={type.id}>
               <button
                 type="button"
-                onClick={() => (type.available ? onPick() : onComingSoon(type.label))}
+                onClick={() => (type.available && isLotteryGame(type.id) ? onPick(type.id) : onComingSoon(type.label))}
                 className={`${cardClass} relative w-full p-4 text-left active:scale-[0.99] transition-transform`}
               >
                 <span className={`w-9 h-9 rounded-lg ${color.bg} flex items-center justify-center`}>

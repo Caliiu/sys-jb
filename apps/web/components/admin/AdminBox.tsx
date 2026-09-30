@@ -2,40 +2,32 @@ import type { ReactNode } from 'react';
 import { useId } from 'react';
 
 interface AdminBoxProps {
-  title: string;
-  icon?: ReactNode;
-  /** Botões à direita do título. */
+  /** Título da caixa; sem ele, a caixa não tem cabeçalho (só o conteúdo). */
+  title?: string;
+  /** Ações à direita do título (ou, sem título, no topo). */
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
-  /** 'classic' = faixa escura no topo (padrão); 'card' = borda fina, cantos arredondados e sombra suave. */
-  variant?: 'classic' | 'card';
 }
 
-const VARIANTS = {
-  classic: 'rounded-sm border-t-[3px] border-admin-sidebar shadow-admin',
-  card: 'overflow-hidden rounded-lg border border-admin-border shadow-[0_1px_2px_rgba(15,23,42,0.06)]',
-};
-
-/** Caixa de conteúdo do painel: título (com ações à direita) e corpo branco. */
-export default function AdminBox({
-  title,
-  icon,
-  actions,
-  children,
-  className = '',
-  variant = 'classic',
-}: AdminBoxProps) {
+/** Caixa de conteúdo do painel: branca, borda fina, cantos arredondados e sombra leve. */
+export default function AdminBox({ title, actions, children, className = '' }: AdminBoxProps) {
   const titleId = useId();
   return (
-    <section aria-labelledby={titleId} className={`bg-admin-surface ${VARIANTS[variant]} ${className}`}>
-      <header className="flex items-center gap-2 border-b border-admin-border px-3 py-2.5">
-        {icon}
-        <h2 id={titleId} className="flex-1 text-[15.5px] text-admin-text">
-          {title}
-        </h2>
-        {actions}
-      </header>
+    <section
+      aria-labelledby={title ? titleId : undefined}
+      className={`rounded-xl border border-admin-border bg-admin-surface shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${className}`}
+    >
+      {(title || actions) && (
+        <header className="flex flex-wrap items-center gap-3 px-6 pt-5">
+          {title && (
+            <h2 id={titleId} className="flex-1 text-[17px] font-semibold text-admin-text">
+              {title}
+            </h2>
+          )}
+          {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
+        </header>
+      )}
       {children}
     </section>
   );

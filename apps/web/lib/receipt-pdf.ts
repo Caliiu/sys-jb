@@ -18,10 +18,11 @@ export interface ReceiptSegment {
   bold?: boolean;
 }
 
-/** Linha: texto à esquerda e, opcionalmente, valor alinhado à direita. */
+/** Linha: texto à esquerda e, opcionalmente, valor alinhado à direita (em negrito com `rightBold`). */
 export interface ReceiptLine {
   left: string | ReceiptSegment[];
   right?: string;
+  rightBold?: boolean;
 }
 
 /** Bloco de linhas, separado do seguinte por um traço. */
@@ -81,7 +82,11 @@ const SYMBOLS: Record<string, [regular: number, bold: number]> = {
   '.': [278, 278],
   '/': [278, 278],
   ':': [278, 333],
+  '›': [333, 333],
 };
+
+/** Caracteres fora de Latin-1 que o WinAnsiEncoding tem (código no encoding). */
+const WINANSI_EXTRA: Record<string, number> = { '›': 0x9b };
 
 function charWidth(char: string, bold: boolean): number {
   const base = char.normalize('NFD').charAt(0);
@@ -105,8 +110,13 @@ const upper = (text: string) => text.toLocaleUpperCase('pt-BR');
  * caracteres acima de 0x7E em octal (o arquivo fica só com ASCII).
  */
 function pdfString(text: string, uppercase = true): string {
-  const value = (uppercase ? upper(text) : text).replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
-  const escaped = value.replace(/[\\()]/g, '\\$&').replace(/[\xA0-\xFF]/g, (c) => `\\${c.charCodeAt(0).toString(8)}`);
+  let escaped = '';
+  for (const char of uppercase ? upper(text) : text) {
+    const code = WINANSI_EXTRA[char] ?? char.codePointAt(0)!;
+    if (code >= 0x20 && code <= 0x7e) escaped += '\\()'.includes(char) ? `\\${char}` : char;
+    else if ((code >= 0xa0 && code <= 0xff) || char in WINANSI_EXTRA) escaped += `\\${code.toString(8)}`;
+    else escaped += '?';
+  }
   return `(${escaped})`;
 }
 
@@ -168,7 +178,7 @@ export function buildReceiptPdf(input: ReceiptPdfInput): Uint8Array<ArrayBuffer>
         text(x, baseline, segment.text, segment.bold);
         x += textWidth(upper(segment.text), segment.bold ?? false);
       }
-      if (line.right) textRight(baseline, line.right);
+      if (line.right) textRight(baseline, line.right, line.rightBold);
     });
     top += sectionHeight(section);
     separator(top);

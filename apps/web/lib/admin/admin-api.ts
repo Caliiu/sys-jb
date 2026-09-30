@@ -1,7 +1,6 @@
 import 'server-only';
 import type {
   AdminAuditEntry,
-  AdminAuditSummary,
   AdminCommissionClosing,
   AdminCommissionMonth,
   AdminCommissionSettings,
@@ -11,6 +10,9 @@ import type {
   AdminMural,
   AdminPromoterListItem,
   AdminPromoterOption,
+  AdminTicketDrawOption,
+  AdminTicketList,
+  AdminTicketListItem,
   AdminUserDetail,
   AdminUserListItem,
   AdminWalletCreditRequest,
@@ -26,6 +28,7 @@ import type {
 import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import type { AuditQuery } from './audit-query';
+import type { TicketsQuery } from './tickets-query';
 import type { UsersQuery } from './users-query';
 
 type Caller = Pick<AdminSession, 'hostname' | 'token'>;
@@ -42,6 +45,27 @@ export const adminApi = {
     if (query.promoterId) params.set('promoterId', query.promoterId);
     return call<Page<AdminUserListItem>>(session, 'GET', `/v1/admin/users?${params}`);
   },
+
+  /** Bilhetes vendidos no dia, com os filtros da tela. */
+  listTickets(session: Caller, query: TicketsQuery) {
+    const params = new URLSearchParams({
+      date: query.date,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.userId) params.set('userId', query.userId);
+    if (query.drawId) params.set('drawId', query.drawId);
+    return call<AdminTicketList>(session, 'GET', `/v1/admin/tickets?${params}`);
+  },
+
+  /** Bilhete pelo número (um por jogo: Loterias e Fazendinha têm numerações próprias). */
+  searchTicket: (session: Caller, puleNumber: number) =>
+    call<AdminTicketListItem[]>(session, 'GET', `/v1/admin/tickets/${encodeURIComponent(String(puleNumber))}`),
+
+  /** Sorteios da banca para o filtro "Horário (Extração)". */
+  ticketDrawOptions: (session: Caller) =>
+    call<AdminTicketDrawOption[]>(session, 'GET', '/v1/admin/tickets/draw-options'),
 
   /** Todos os promotores (nome e ID), para o filtro da lista de usuários. */
   listPromoterOptions: (session: Caller) => call<AdminPromoterOption[]>(session, 'GET', '/v1/admin/promoters/options'),
@@ -139,14 +163,5 @@ export const adminApi = {
     if (query.userId) params.set('userId', query.userId);
     if (query.period) params.set('period', query.period);
     return call<Page<AdminAuditEntry>>(session, 'GET', `/v1/admin/audit?${params}`);
-  },
-
-  /** Contagem por período (hoje, 7 e 30 dias, total) com os mesmos filtros de ação e usuário. */
-  auditSummary(session: Caller, query: Pick<AuditQuery, 'action' | 'userId'>) {
-    const params = new URLSearchParams();
-    if (query.action) params.set('action', query.action);
-    if (query.userId) params.set('userId', query.userId);
-    const qs = params.toString();
-    return call<AdminAuditSummary>(session, 'GET', `/v1/admin/audit/summary${qs ? `?${qs}` : ''}`);
   },
 };

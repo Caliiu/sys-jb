@@ -284,6 +284,7 @@ model FazendinhaBet {
   // Alvo da FK composta dos números: garante que o número vendido é da mesma extração/modalidade/valor do pule.
   @@unique([tenantId, id, drawDate, lottery, drawHour, mode, stakeCents])
   @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([tenantId, createdAt])
   @@index([tenantId, lottery, drawHour, drawDate])
   @@map("fazendinha_bets")
 }
@@ -466,6 +467,8 @@ model LotteryTicket {
   totalCents  BigInt   @map("total_cents")
   // Nome da tabela de cotação na compra (ex.: 800/1/8000).
   quoteTable  String   @map("quote_table")
+  // Jogo: tradicional (1/7) ou tradicional_10 (1/10). Define colocações e sorteios aceitos; nunca muda.
+  game        String   @default("tradicional")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -508,25 +511,31 @@ model LotteryTicketItem {
 // hora (draw_minutes / 60); a venda é conferida contra esta tabela por trigger (dia da semana, exceções,
 // ativo, jogo e horário limite). Horários em minutos desde a meia-noite, em Brasília.
 model Draw {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
   // Grupo da tela (ex.: RIO/FEDERAL).
-  groupName     String   @map("group_name")
+  groupName        String   @map("group_name")
   // Nome no pule e na tela (ex.: LT PT RIO 09HS). Único na banca.
-  name          String
+  name             String
   // Código curto dos relatórios (ex.: PT14). Único na banca; vazio no cadastro = gerado do nome e da hora.
-  code          String   @default("")
-  drawMinutes   Int      @map("draw_minutes") @db.SmallInt
+  code             String   @default("")
+  drawMinutes      Int      @map("draw_minutes") @db.SmallInt
   // Horário máximo de venda (<= horário do sorteio).
-  closesMinutes Int      @map("closes_minutes") @db.SmallInt
+  closesMinutes    Int      @map("closes_minutes") @db.SmallInt
   // Dias da semana em que corre (0 = domingo … 6 = sábado).
-  weekdays      Int[]    @db.SmallInt
-  lotteries     Boolean  @default(true)
-  fazendinha    Boolean  @default(true)
-  active        Boolean  @default(true)
-  sortOrder     Int      @default(0) @map("sort_order")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  weekdays         Int[]    @db.SmallInt
+  lotteries        Boolean  @default(true)
+  // Vale para a Tradicional 1/10 (loterias oficiais de 10 prêmios).
+  lotteries10      Boolean  @default(false) @map("lotteries_10")
+  fazendinha       Boolean  @default(true)
+  // Resultado do provedor que vale para o sorteio (sigla + extração do provedor, que pode ser outra hora):
+  // os dois juntos ou nenhum (sem ligação = sem resultado na tela do jogador).
+  resultLottery    String?  @map("result_lottery")
+  resultExtraction Int?     @map("result_extraction") @db.SmallInt
+  active           Boolean  @default(true)
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   exceptions DrawException[]
@@ -618,4 +627,97 @@ model RateLimitCounter {
   @@id([key, windowStart])
   @@index([expiresAt])
   @@map("rate_limit_counters")
+}
+
+// Resultado de uma extração, recebido do provedor (webhook ou consulta). Vale para todas as bancas (sem tenant):
+// um por data (Brasília) + sigla da loteria + extração. A API só grava os campos do resultado; a troca por um
+// resultado diferente (correção do provedor) guarda a versão anterior em lottery_result_revisions (trigger).
+model LotteryResult {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  drawDate       DateTime @map("draw_date") @db.Date
+  // Sigla do provedor (ex.: rj).
+  lottery        String
+  // Hora do sorteio (0–23).
+  extraction     Int      @db.SmallInt
+  // Números do 1º prêmio em diante (5 a 10; 4 dígitos, ou 5 na Federal).
+  prizes         String[]
+  // Campos calculados pelo provedor (só dígitos), quando informados.
+  sumValue       String?  @map("sum_value")
+  multiplication String?
+  skipped        String?
+  super5         String?
+  // WEBHOOK ou CONSULTA: por onde chegou a versão atual.
+  source         String
+  // 1 na primeira versão; o trigger soma 1 a cada correção.
+  revision       Int      @default(1)
+  receivedAt     DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  revisions LotteryResultRevision[]
+
+  @@unique([drawDate, lottery, extraction])
+  @@map("lottery_results")
+}
+
+// Versão substituída de um resultado (somente inclusão, gravada pelo trigger do banco).
+model LotteryResultRevision {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resultId       String   @map("result_id") @db.Uuid
+  revision       Int
+  prizes         String[]
+  sumValue       String?  @map("sum_value")
+  multiplication String?
+  skipped        String?
+  super5         String?
+  source         String
+  // Quando a versão substituída tinha sido recebida.
+  receivedAt     DateTime @map("received_at") @db.Timestamptz(3)
+  replacedAt     DateTime @default(now()) @map("replaced_at") @db.Timestamptz(3)
+
+  result LotteryResult @relation(fields: [resultId], references: [id], onDelete: Restrict)
+
+  @@unique([resultId, revision])
+  @@map("lottery_result_revisions")
+}
+
+// Consulta feita à API de resultados do provedor (somente inclusão). Serve para não repetir consulta recente
+// (espera entre consultas iguais) e para contar o uso da cota mensal do contrato. Sem banca, como os resultados.
+model ResultConsultation {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Sempre do banco (a role de runtime não informa).
+  requestedAt DateTime @default(now()) @map("requested_at") @db.Timestamptz(3)
+  drawDate    DateTime @map("draw_date") @db.Date
+  lottery     String
+  // Null = todas as extrações do dia.
+  extraction  Int?     @db.SmallInt
+  // OK (200), EMPTY (404: nenhum resultado) ou ERROR.
+  status      String
+  // Status HTTP da última resposta; null = sem resposta (rede).
+  httpStatus  Int?     @map("http_status") @db.SmallInt
+  // Respostas HTTP recebidas (novas tentativas incluídas): o que a cota do provedor conta.
+  responses   Int      @db.SmallInt
+  // Itens devolvidos pelo provedor.
+  items       Int      @default(0)
+
+  @@index([requestedAt])
+  @@index([drawDate, lottery, requestedAt(sort: Desc)])
+  @@map("result_consultations")
+}
+
+// Previsão do dia de um signo, da API de horóscopo do provedor (Loteria Integrada): cache diário, global (sem banca).
+// A API busca uma vez por dia (os 12 signos numa requisição); o jogador só lê daqui.
+model HoroscopeReading {
+  // Data da previsão (Brasília), a "data_referencia" do provedor.
+  referenceDate DateTime @map("reference_date") @db.Date
+  // aries, touro, gemeos, cancer, leao, virgem, libra, escorpiao, sagitario, capricornio, aquario, peixes.
+  sign          String
+  text          String
+  // Dezenas da sorte ("04"…), na ordem do provedor.
+  tens          String[]
+  colors        String[]
+  // Quando a versão atual chegou (a busca seguinte do mesmo dia pode trazer uma correção).
+  fetchedAt     DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  @@id([referenceDate, sign])
+  @@map("horoscope_readings")
 }

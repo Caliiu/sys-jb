@@ -5,11 +5,20 @@
  */
 
 import { brasiliaNow, dayOffsetOf } from './fazendinha.js';
+import type { ResultSource } from './results.js';
 
-export const DRAW_GAMES = ['lotteries', 'fazendinha'] as const;
+/** Jogos em que um sorteio vale: Tradicional 1/7 (lotteries), Tradicional 1/10 (lotteries10) e Fazendinha. */
+export const DRAW_GAMES = ['lotteries', 'lotteries10', 'fazendinha'] as const;
 export type DrawGame = (typeof DRAW_GAMES)[number];
 
-export const DRAW_GAME_LABELS: Record<DrawGame, string> = { lotteries: 'Loterias', fazendinha: 'Fazendinha' };
+export const DRAW_GAME_LABELS: Record<DrawGame, string> = {
+  lotteries: 'Loterias 1/7',
+  lotteries10: 'Loterias 1/10',
+  fazendinha: 'Fazendinha',
+};
+
+/** Jogos marcados num sorteio novo do painel: a 1/10 é só para as loterias oficiais de 10 prêmios. */
+export const DRAW_DEFAULT_GAMES: readonly DrawGame[] = ['lotteries', 'fazendinha'];
 
 /** Dias da semana (0 = domingo). */
 export const WEEKDAY_LABELS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'] as const;
@@ -39,6 +48,8 @@ export interface PublicDraw {
   /** Dias da semana em que corre (0 = domingo … 6 = sábado). */
   weekdays: number[];
   games: DrawGame[];
+  /** Resultado do provedor que vale para este sorteio (Resultados > Resultado loterias); null = sem ligação. */
+  result: ResultSource | null;
 }
 
 export const DRAW_EXCEPTION_KINDS = ['CANCEL', 'EXTRA'] as const;
@@ -160,6 +171,8 @@ export interface SaveDrawRequest {
   closesAt: string;
   weekdays: number[];
   games: DrawGame[];
+  /** Resultado do provedor (sigla + extração do catálogo); null = sem ligação. */
+  result: ResultSource | null;
   active: boolean;
   sortOrder: number;
 }

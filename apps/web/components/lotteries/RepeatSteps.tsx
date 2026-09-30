@@ -1,6 +1,12 @@
 'use client';
 
-import { LOTTERY_GAME_TYPES, MAX_PULE_NUMBER, type PublicDraw } from '@sysjb/contracts';
+import {
+  LOTTERY_GAME_TYPES,
+  type LotteryGame,
+  MAX_PULE_NUMBER,
+  type PublicDraw,
+  isLotteryGame,
+} from '@sysjb/contracts';
 import { CalendarDays, ChevronRight, ClipboardPaste, Repeat2, Ticket, X } from 'lucide-react';
 import { type ReactNode, useId } from 'react';
 import type { LotteryDay } from '@/lib/lotteries';
@@ -52,12 +58,12 @@ function ListCard({
   );
 }
 
-/** Modalidade da pule a repetir (só o Tradicional por enquanto; as outras avisam "em breve"). */
+/** Jogo da pule a repetir (Tradicional 1/7 e 1/10; os outros avisam "em breve"). */
 export function RepeatModalityStep({
   onPick,
   onComingSoon,
 }: {
-  onPick: () => void;
+  onPick: (game: LotteryGame) => void;
   onComingSoon: (label: string) => void;
 }) {
   return (
@@ -70,7 +76,7 @@ export function RepeatModalityStep({
             icon={<Repeat2 className="h-5 w-5 text-brand-primary" aria-hidden />}
             title={type.label.toUpperCase()}
             subtitle="Repetir pule"
-            onClick={() => (type.available ? onPick() : onComingSoon(type.label))}
+            onClick={() => (type.available && isLotteryGame(type.id) ? onPick(type.id) : onComingSoon(type.label))}
           />
         ))}
       </ul>

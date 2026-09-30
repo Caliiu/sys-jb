@@ -4,7 +4,7 @@ import { type AdminBranding, ROLE_PERMISSIONS } from '@sysjb/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, router } from '@/test/render';
 
-vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/identidade-visual' }));
+vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/personalizacao' }));
 vi.mock('@/app/admin/actions', () => ({ saveBrandingAction: vi.fn(), adminLogoutAction: vi.fn() }));
 
 const actions = await import('@/app/admin/actions');
@@ -143,21 +143,21 @@ describe('Identidade visual no painel', () => {
     expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
   });
 
-  it('menu: grupo Gestão Web com Identidade visual e Mural, só para quem pode ver', () => {
+  it('menu: Configurações > Personalização (aberta) e Mural, só para quem pode ver', () => {
     const renderSidebar = (permissions: readonly (typeof ROLE_PERMISSIONS.MANAGER)[number][]) =>
       renderWithProviders(
         <AdminShell tenantName="Banca" operatorName="Operador" roleLabel="Gerente" permissions={permissions} />,
       );
     const manager = renderSidebar(ROLE_PERMISSIONS.MANAGER);
-    const group = screen.getAllByRole('group', { name: 'Gestão Web' })[0]!;
-    expect(within(group).getByRole('link', { name: 'Identidade visual' })).toHaveAttribute(
-      'href',
-      '/identidade-visual',
-    );
+    const group = screen.getAllByRole('group', { name: 'Configurações' })[0]!;
+    const link = within(group).getByRole('link', { name: 'Personalização' });
+    expect(link).toHaveAttribute('href', '/personalizacao');
+    expect(link).toHaveAttribute('aria-current', 'page');
     expect(within(group).getByRole('link', { name: 'Mural' })).toHaveAttribute('href', '/mural');
     manager.unmount();
 
+    // Suporte não vê nada de Configurações (nem os cadastros "em breve", que são do Gerente).
     renderSidebar(ROLE_PERMISSIONS.SUPPORT);
-    expect(screen.queryByRole('group', { name: 'Gestão Web' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Configurações' })).toBeNull();
   });
 });

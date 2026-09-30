@@ -1,14 +1,16 @@
 import { redirect } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
+import AdminPageTitle from '@/components/admin/AdminPageTitle';
 import HomeLayoutEditor from '@/components/admin/HomeLayoutEditor';
+import PersonalizationTabs from '@/components/admin/PersonalizationTabs';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Cards do início' };
+export const metadata = { title: 'Personalização' };
 
 export default async function Page() {
   const gate = await requireAdmin();
@@ -27,8 +29,8 @@ export default async function Page() {
 
   return (
     <div>
-      <p className="text-[12px] font-semibold uppercase tracking-wide text-admin-muted">Personalização</p>
-      <h1 className="mb-4 text-[18px] font-bold text-admin-text">Cards do início</h1>
+      <AdminPageTitle title="Personalização: Cards do início" />
+      <PersonalizationTabs active="home" />
       <HomeLayoutEditor
         initial={res.data}
         canManage={can(session.operator, 'branding.manage')}

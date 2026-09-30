@@ -16,7 +16,12 @@ export default function ReceiptSections({ sections }: { sections: ReceiptSection
                   segment.bold ? <strong key={k}>{segment.text}</strong> : <span key={k}>{segment.text}</span>,
                 )}
           </span>
-          {line.right !== undefined && <span className="shrink-0 tabular-nums">{line.right}</span>}
+          {line.right !== undefined &&
+            (line.rightBold ? (
+              <strong className="shrink-0 tabular-nums">{line.right}</strong>
+            ) : (
+              <span className="shrink-0 tabular-nums">{line.right}</span>
+            ))}
         </p>
       ))}
     </div>

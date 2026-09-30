@@ -33,6 +33,8 @@ interface TicketCardProps {
   stampIso: string;
   drawDate: string;
   quoteTable: string;
+  /** Loterias: "Tradicional 1/7" ou "Tradicional 1/10" (a Fazendinha não mostra). */
+  gameLabel?: string;
   lottery: string;
   puleNumber?: number;
   items: TicketCardItem[];
@@ -45,7 +47,19 @@ const row = 'border-b border-dashed border-gray-300 py-3';
 
 /** Pule no formato do comprovante (resumo antes de finalizar; recibo depois, com o número). */
 export default function TicketCard(props: TicketCardProps) {
-  const { heading, sellerId, stampIso, drawDate, quoteTable, lottery, puleNumber, items, totalCents, lookup } = props;
+  const {
+    heading,
+    sellerId,
+    stampIso,
+    drawDate,
+    quoteTable,
+    gameLabel,
+    lottery,
+    puleNumber,
+    items,
+    totalCents,
+    lookup,
+  } = props;
   return (
     <article
       aria-label={`${heading === 'RECIBO DA APOSTA' ? 'Recibo' : 'Resumo'} ${lottery}`}
@@ -73,6 +87,12 @@ export default function TicketCard(props: TicketCardProps) {
             <dt>Cotação</dt>
             <dd className="font-bold tabular-nums">{quoteTable}</dd>
           </div>
+          {gameLabel && (
+            <div className="flex justify-between">
+              <dt>Jogo</dt>
+              <dd className="font-bold">{gameLabel}</dd>
+            </div>
+          )}
         </dl>
         <p className={`${row} flex justify-between`}>
           <span>{lottery}</span>

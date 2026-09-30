@@ -33,7 +33,15 @@ for (const name of ['WEB_SERVICE_KEYS', 'TENANT_SERVICE_KEYS']) {
     if (value.length >= 16) secrets.add(value);
   }
 }
-for (const name of ['SYSJB_APP_PASSWORD', 'SYSJB_MIGRATOR_PASSWORD', 'POSTGRES_SUPERUSER_PASSWORD', 'AUTH_SECRET']) {
+for (const name of [
+  'SYSJB_APP_PASSWORD',
+  'SYSJB_MIGRATOR_PASSWORD',
+  'POSTGRES_SUPERUSER_PASSWORD',
+  'AUTH_SECRET',
+  'RESULTS_WEBHOOK_TOKEN',
+  'RESULTS_API_TOKEN',
+  'HOROSCOPE_API_TOKEN',
+]) {
   if ((process.env[name] ?? '').length >= 16) secrets.add(process.env[name]);
 }
 const forbiddenNames = ['WEB_SERVICE_KEYS', 'TENANT_SERVICE_KEYS', 'DATABASE_URL', 'Bearer '];

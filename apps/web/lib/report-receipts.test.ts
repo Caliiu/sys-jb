@@ -97,6 +97,7 @@ const lotteryDetail: PuleDetail = {
   cancellable: true,
   ticket: {
     puleNumber: 562361031,
+    game: 'tradicional',
     drawDate: '2026-09-29',
     lottery: 'LT PT RIO 14HS',
     hour: 14,
@@ -148,6 +149,7 @@ describe('recibo da pule', () => {
       quoteTable: '800/1/8000',
       lottery: 'LT PT RIO 14HS',
       puleNumber: 562361031,
+      gameLabel: 'Tradicional 1/7',
       items: [
         {
           title: 'MILHAR 1 PRÊMIO',
@@ -175,6 +177,7 @@ describe('recibo da pule', () => {
       [
         { left: 'Vale', right: '29/09/26' },
         { left: 'Cotação', right: '800/1/8000' },
+        { left: 'Jogo', right: 'Tradicional 1/7' },
       ],
       [{ left: 'LT PT RIO 14HS', right: '#562361031' }],
       [

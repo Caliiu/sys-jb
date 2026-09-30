@@ -70,9 +70,10 @@ describe('Loterias', () => {
     await click('Voltar às loterias');
     expect(heading()).toBe('Nova aposta');
     const tools = within(screen.getByRole('navigation', { name: 'Ferramentas' }));
-    // Prêmio abre o simulador; as outras ainda são "em breve".
+    // Prêmio e Horóscopo abrem as páginas deles; as outras ainda são "em breve".
     expect(tools.getByRole('link', { name: 'Prêmio' })).toHaveAttribute('href', '/loterias/calcular');
-    expect(tools.getAllByRole('button').map((b) => b.textContent)).toEqual(['Horóscopo', 'Sonhos', 'Atrasados']);
+    expect(tools.getByRole('link', { name: 'Horóscopo' })).toHaveAttribute('href', '/loterias/horoscopo');
+    expect(tools.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sonhos', 'Atrasados']);
   });
 
   it('fluxo completo até o carrinho, com as etapas e o resumo de cada uma', async () => {
@@ -230,11 +231,73 @@ describe('Loterias', () => {
     expect(heading()).toBe('Modalidade');
   });
 
+  it('Tradicional 1/10: só as loterias da 1/10, colocações até o 10º e a compra vai com o jogo', async () => {
+    place.mockResolvedValue({ ok: false, code: 'INSUFFICIENT_FUNDS', message: 'Saldo indisponível' });
+    renderScreen();
+    await click(/^Tradicional 1\/10\s*Oficiais 1\/10/);
+    expect(heading()).toBe('Data');
+    expect(screen.getByText('Oficiais 1/10')).toBeInTheDocument();
+    // A Federal não é da 1/10: sem a etiqueta nos dias dela.
+    const days = within(screen.getByRole('list', { name: 'Datas' })).getAllByRole('button');
+    expect(days[2]).toHaveAttribute('aria-label', 'Quarta, 30/09/2026');
+    await userEvent.click(days[1]!);
+    await click(/^MILHARs*8000x/);
+
+    const placements = within(screen.getByRole('list', { name: 'Colocações' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '');
+    expect(placements).toHaveLength(55);
+    expect(placements.slice(0, 4).map((p) => p.match(/^[\d/e ]+PRÊMIO/)?.[0])).toEqual([
+      '1 PRÊMIO',
+      '1/5 PRÊMIO',
+      '1/10 PRÊMIO',
+      '1 e 1/5 PRÊMIO',
+    ]);
+    expect(placements.some((p) => p.startsWith('10 PRÊMIO'))).toBe(true);
+    expect(placements.some((p) => p.startsWith('6/9 PRÊMIO'))).toBe(false);
+    await click(/^8 PRÊMIO/);
+    expect(screen.getByText(/^Tradicional 1\/10 · Milhar/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Digite seu palpite'), '3452');
+    await click('Avançar');
+    await userEvent.type(screen.getByLabelText('Valor da aposta'), '100');
+    await click('Avançar');
+    // Só a Bahia é da 1/10 no cadastro de teste.
+    expect(screen.queryByRole('button', { name: /^RIO\/FEDERAL/ })).not.toBeInTheDocument();
+    await click(/^BAHIA/);
+    await userEvent.click(screen.getByRole('checkbox', { name: /LT BAHIA 15HS/ }));
+    await click('Avançar');
+    await click('Avançar');
+    expect(screen.getByRole('article', { name: 'Resumo LT BAHIA 15HS' })).toHaveTextContent(
+      /Jogo\s*Tradicional 1\/10.*MILHAR 8 PRÊMIO/,
+    );
+    await click('Finalizar');
+    expect(place).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        game: 'tradicional_10',
+        draws: [{ name: 'LT BAHIA 15HS', hour: 15 }],
+        items: [expect.objectContaining({ modality: 'milhar', placement: 'p8' })],
+      }),
+    );
+  });
+
+  it('voltar e escolher o outro jogo troca resumo e datas', async () => {
+    renderScreen();
+    await click(/^Tradicional 1\/10\s*Oficiais 1\/10/);
+    expect(screen.queryByRole('button', { name: /com Federal/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect(heading()).toBe('Nova aposta');
+    await click(/^Tradicional\s*Tradicionais 1\/7/);
+    expect(screen.getByText('Tradicionais 1/7')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /com Federal/ })).toHaveLength(2);
+  });
+
   it('finalizar: resumo, compra com a cotação vista e recibo com o número do pule', async () => {
     const data: PlaceLotteryTicketsResponse = {
       tickets: [
         {
           puleNumber: 300000001,
+          game: 'tradicional',
           drawDate: '2026-09-29',
           lottery: 'LT PT RIO 14HS',
           hour: 14,
@@ -275,6 +338,7 @@ describe('Loterias', () => {
     await click('Finalizar');
     expect(place).toHaveBeenCalledExactlyOnceWith({
       idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      game: 'tradicional',
       drawDate: '2026-09-29',
       draws: [{ name: 'LT PT RIO 14HS', hour: 14 }],
       items: [
@@ -298,7 +362,8 @@ describe('Loterias', () => {
 
     await click('Nova aposta');
     expect(heading()).toBe('Nova aposta');
-  });
+    // Fluxo mais longo do web (as 9 etapas da compra): folga para rodar com a suíte inteira.
+  }, 15_000);
 
   it('saldo indisponível e cotação alterada aparecem no aviso; nada é perdido do carrinho', async () => {
     place.mockResolvedValueOnce({ ok: false, code: 'INSUFFICIENT_FUNDS', message: 'Saldo indisponível' });

@@ -12,6 +12,7 @@ const draw = (id: string, name: string, drawTime: string, extra: Partial<PublicD
   closesAt: drawTime,
   weekdays: ALL_DAYS,
   games: ['lotteries'],
+  result: null,
   ...extra,
 });
 

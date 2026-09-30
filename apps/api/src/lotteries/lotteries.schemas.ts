@@ -1,4 +1,4 @@
-import { LOTTERY_LIMITS, LOTTERY_SPLITS, MAX_PULE_NUMBER } from '@sysjb/contracts';
+import { LOTTERY_GAMES, LOTTERY_LIMITS, LOTTERY_SPLITS, MAX_PULE_NUMBER } from '@sysjb/contracts';
 import { z } from 'zod';
 
 /**
@@ -7,6 +7,8 @@ import { z } from 'zod';
  */
 const idempotencyKey = z.uuid('Chave inválida.');
 const drawDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.');
+/** Jogo: Tradicional 1/7 (padrão: clientes antigos não mandam) ou 1/10. */
+const game = z.enum(LOTTERY_GAMES, { error: 'Jogo inválido.' }).default('tradicional');
 const draws = z
   .array(z.strictObject({ name: z.string().min(1).max(40), hour: z.number().int().min(0).max(23) }))
   .min(1, 'Escolha pelo menos uma loteria.')
@@ -14,6 +16,7 @@ const draws = z
 
 export const placeLotteryTicketsSchema = z.strictObject({
   idempotencyKey,
+  game,
   drawDate,
   draws,
   items: z
@@ -39,6 +42,7 @@ export type PlaceLotteryTicketsInput = z.infer<typeof placeLotteryTicketsSchema>
 export const repeatLotteryTicketSchema = z.strictObject({
   idempotencyKey,
   puleNumber: z.number().int().min(1, 'Pule inválida.').max(MAX_PULE_NUMBER, 'Pule inválida.'),
+  game,
   drawDate,
   draws,
 });

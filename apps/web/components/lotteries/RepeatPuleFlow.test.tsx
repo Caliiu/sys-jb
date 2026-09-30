@@ -22,6 +22,7 @@ const RECEIPT: PlaceLotteryTicketsResponse = {
   tickets: [
     {
       puleNumber: 562910578,
+      game: 'tradicional',
       drawDate: '2026-09-29',
       lottery: 'LT PT RIO 14HS',
       hour: 14,
@@ -124,6 +125,27 @@ describe('Repetir pule', () => {
     expect(summary).toHaveTextContent(/Tradicional.*Loterias · 1.*LT PT RIO 14HS.*Data · 1.*Terça 29\/09\/2026/);
   });
 
+  it('Tradicional 1/10: só as loterias da 1/10 e o pedido vai com o jogo', async () => {
+    repeat.mockResolvedValue({ ok: false, code: 'CONFLICT', message: 'Esta pule é da Tradicional 1/7.' });
+    renderScreen();
+    await click(/Repetir pule/);
+    await click(/^TRADICIONAL 1\/10\s*Repetir pule/);
+    expect(screen.getByText('Repetir Pule').closest('div')).toHaveTextContent(/Oficiais 1\/10\s*3\/7/);
+    await click('Terça, 29/09/2026');
+    expect(screen.queryByRole('button', { name: /^RIO\/FEDERAL/ })).not.toBeInTheDocument();
+    await click(/^BAHIA/);
+    await userEvent.click(screen.getByRole('checkbox', { name: /LT BAHIA 15HS/ }));
+    await click('Avançar');
+    expect(screen.getByRole('region', { name: 'Resumo da pule' })).toHaveTextContent(/Tradicional 1\/10/);
+    await userEvent.type(codeInput(), '562910577');
+    await userEvent.click(advance());
+    expect(repeat).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ game: 'tradicional_10', draws: [{ name: 'LT BAHIA 15HS', hour: 15 }] }),
+    );
+    // Pule de outro jogo: a mensagem da API explica qual escolher.
+    expect(screen.getByText('Esta pule é da Tradicional 1/7.')).toBeInTheDocument();
+  });
+
   it('código: só dígitos, até 10; Avançar só com código válido; limpar', async () => {
     await toCodeStep();
     expect(advance()).toBeDisabled();
@@ -161,6 +183,7 @@ describe('Repetir pule', () => {
 
     expect(repeat).toHaveBeenCalledExactlyOnceWith({
       idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
+      game: 'tradicional',
       puleNumber: 562910577,
       drawDate: '2026-09-29',
       draws: [{ name: 'LT PT RIO 14HS', hour: 14 }],

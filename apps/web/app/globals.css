@@ -28,24 +28,20 @@
   --color-brand-soft: var(--brand-secondary);
 
   /*
-   * Painel administrativo (visual de painel clássico: menu lateral escuro, fundo cinza-azulado, caixas brancas).
-   * accent e success escurecidos para contraste AA com texto branco pequeno; -dark é o estado pressionado.
+   * Painel administrativo (visual claro, estilo shadcn/ui): fundo quase branco, caixas brancas com borda fina,
+   * texto zinco e destaque azul. accent e success/danger com contraste AA em texto pequeno.
    */
-  --color-admin-bg: #ecf0f5;
+  --color-admin-bg: #fafafa;
   --color-admin-surface: #ffffff;
-  --color-admin-border: #dde1e6;
-  --color-admin-text: #333a44;
-  --color-admin-muted: #6b7280;
-  --color-admin-accent: #2f6fa7;
-  --color-admin-accent-dark: #245a88;
-  --color-admin-danger: #c41e24;
-  --color-admin-success: #1e7a4d;
-  /* Menu lateral: fundo, fundo do item atual, texto, ícone dos subitens e fundo do submenu. */
-  --color-admin-sidebar: #222d32;
-  --color-admin-sidebar-dark: #1a2226;
-  --color-admin-sidebar-text: #b8c7ce;
-  --color-admin-sidebar-bullet: #3fb877;
-  --color-admin-sidebar-sub: #2c3b41;
+  --color-admin-border: #e4e4e7;
+  --color-admin-text: #18181b;
+  --color-admin-muted: #71717a;
+  --color-admin-accent: #2563eb;
+  --color-admin-accent-dark: #1d4ed8;
+  --color-admin-danger: #dc2626;
+  --color-admin-success: #15803d;
+  /* Fundo de item com o mouse/selecionado (menu, botões contornados). */
+  --color-admin-hover: #f4f4f5;
 
   --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.15);
   --shadow-admin: 0 1px 3px rgba(15, 23, 42, 0.08);

@@ -1,6 +1,6 @@
 'use server';
 
-import { type ApiErrorCode, MAX_PULE_NUMBER, type PlaceLotteryTicketsResponse } from '@sysjb/contracts';
+import { type ApiErrorCode, LOTTERY_GAMES, MAX_PULE_NUMBER, type PlaceLotteryTicketsResponse } from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { apiRequest } from '@/lib/api-client';
@@ -17,6 +17,7 @@ export type PlaceLotteryResult =
 
 const purchaseSchema = z.strictObject({
   idempotencyKey: z.uuid(),
+  game: z.enum(LOTTERY_GAMES),
   drawDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   draws: z
     .array(z.strictObject({ name: z.string().min(1).max(40), hour: z.number().int() }))
@@ -52,6 +53,7 @@ const MESSAGES: Partial<Record<ApiErrorCode, string>> = {
 const repeatSchema = z.strictObject({
   idempotencyKey: z.uuid(),
   puleNumber: z.number().int().min(1).max(MAX_PULE_NUMBER),
+  game: z.enum(LOTTERY_GAMES),
   drawDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   draws: purchaseSchema.shape.draws,
 });

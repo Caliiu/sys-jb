@@ -14,7 +14,7 @@ export interface SectionMenu {
 /** Telas de listas de atalhos (Resultados, Relatórios e Premiadas). */
 export const RESULTS_MENU: SectionMenu = {
   title: 'Resultados',
-  items: [{ label: 'Resultado loterias' }],
+  items: [{ label: 'Resultado loterias', href: ROUTES.lotteryResults }],
 };
 
 export const REPORTS_MENU: SectionMenu = {

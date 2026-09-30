@@ -130,6 +130,7 @@ const lottery: PuleDetail = {
   cancellable: true,
   ticket: {
     puleNumber: 562361031,
+    game: 'tradicional',
     drawDate: '2026-09-29',
     lottery: 'LT PT RIO 14HS',
     hour: 14,

@@ -1,4 +1,4 @@
-import { DRAW_EXCEPTION_KINDS, DRAW_GAMES, DRAW_LIMITS } from '@sysjb/contracts';
+import { DRAW_EXCEPTION_KINDS, DRAW_GAMES, DRAW_LIMITS, isResultSource } from '@sysjb/contracts';
 import { z } from 'zod';
 
 const time = (label: string) => z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, `${label}: use HH:MM.`);
@@ -36,6 +36,11 @@ export const saveDrawSchema = z.strictObject({
     .min(1, 'Escolha pelo menos um jogo.')
     .max(DRAW_GAMES.length)
     .refine((games) => new Set(games).size === games.length, 'Jogos repetidos.'),
+  // Loteria + extração do provedor (catálogo); null = sem ligação com resultado.
+  result: z
+    .strictObject({ lottery: z.string(), extraction: z.number().int() })
+    .refine(isResultSource, 'Escolha um resultado da lista.')
+    .nullable(),
   active: z.boolean(),
   sortOrder: z.number().int().min(0).max(DRAW_LIMITS.sortOrderMax),
 });

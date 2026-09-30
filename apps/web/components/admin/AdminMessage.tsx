@@ -4,7 +4,7 @@ import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 interface AdminMessageProps {
   title: string;
   children: string;
-  /** Mostra o atalho de volta à lista de usuários. */
+  /** Mostra o atalho de volta à lista de apostadores. */
   backToUsers?: boolean;
 }
 
@@ -16,7 +16,7 @@ export default function AdminMessage({ title, children, backToUsers = false }: A
       <p className="mt-2 text-[13px] text-admin-muted">{children}</p>
       {backToUsers && (
         <Link href={ADMIN_ROUTES.users} className="mt-4 inline-block text-[13px] font-semibold text-admin-accent">
-          Voltar para usuários
+          Voltar para apostadores
         </Link>
       )}
     </section>

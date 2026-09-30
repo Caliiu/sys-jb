@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AdminAuditEntry, AdminAuditSummary, AuditAction, Page } from '@sysjb/contracts';
+import type { AdminAuditEntry, AuditAction, Page } from '@sysjb/contracts';
 import type { Prisma } from '@sysjb/database';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
-import type { AuditSummaryQuery, ListAuditQuery } from './admin.schemas.js';
+import type { ListAuditQuery } from './admin.schemas.js';
 import { auditPeriodStart } from './audit-period.js';
 
 type AuditDetails = AdminAuditEntry['details'];
@@ -54,23 +54,10 @@ export class AuditService {
       totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
     };
   }
-
-  /** Quantos registros hoje, nos últimos 7 e 30 dias e no total (mesmo "agora" para os três períodos). */
-  async summary(tenant: ResolvedTenant, query: AuditSummaryQuery): Promise<AdminAuditSummary> {
-    const where = filterWhere(tenant.id, query);
-    const now = new Date();
-    const since = (period: 'today' | '7d' | '30d') => ({ ...where, createdAt: { gte: auditPeriodStart(period, now) } });
-    return this.db.withTenant(tenant.id, async (tx) => ({
-      today: await tx.auditLog.count({ where: since('today') }),
-      last7Days: await tx.auditLog.count({ where: since('7d') }),
-      last30Days: await tx.auditLog.count({ where: since('30d') }),
-      total: await tx.auditLog.count({ where }),
-    }));
-  }
 }
 
 /** Filtros de ação e usuário afetado (sempre da banca do operador). */
-function filterWhere(tenantId: string, query: AuditSummaryQuery): Prisma.AuditLogWhereInput {
+function filterWhere(tenantId: string, query: Pick<ListAuditQuery, 'action' | 'userId'>): Prisma.AuditLogWhereInput {
   return {
     tenantId,
     ...(query.action ? { action: query.action } : {}),

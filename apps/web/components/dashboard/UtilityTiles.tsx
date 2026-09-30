@@ -9,7 +9,7 @@ import { arrangeCards } from './modality-tiles';
 
 /** Sem rota, o atalho avisa que a ferramenta vem em breve. */
 const ITEMS: Array<{ id: string; label: string; icon: string; href?: string }> = [
-  { id: 'horoscopo', label: 'Horóscopo', icon: '/icons/horoscopo.png' },
+  { id: 'horoscopo', label: 'Horóscopo', icon: '/icons/horoscopo.png', href: ROUTES.horoscope },
   { id: 'calcular', label: 'Calcular', icon: '/icons/calcular.png', href: ROUTES.prizeCalculator },
   { id: 'sonhos', label: 'Sonhos', icon: '/icons/sonhos.png' },
   { id: 'atrasados', label: 'Atrasados', icon: '/icons/atrasados.png' },

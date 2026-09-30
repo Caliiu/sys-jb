@@ -13,6 +13,8 @@
     "db:seed": "pnpm --filter @sysjb/database seed",
     "operator:create": "pnpm --filter @sysjb/api operator:create",
     "wallet:adjust": "pnpm --filter @sysjb/api wallet:adjust",
+    "results:fetch": "pnpm --filter @sysjb/api results:fetch",
+    "horoscope:fetch": "pnpm --filter @sysjb/api horoscope:fetch",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

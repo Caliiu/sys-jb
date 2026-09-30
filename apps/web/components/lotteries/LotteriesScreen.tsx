@@ -1,7 +1,10 @@
 'use client';
 
 import {
+  LOTTERY_GAME_DRAWS,
+  LOTTERY_GAME_LABELS,
   LOTTERY_LIMITS,
+  type LotteryGame,
   type LotteryModality,
   type LotteryPlacement,
   type LotterySplit,
@@ -12,6 +15,7 @@ import {
   type PublicWallet,
   formatGuess,
   isDrawOpenOn,
+  lotteryGameType,
   lotteryQuoteCents,
   placementsFor,
 } from '@sysjb/contracts';
@@ -93,8 +97,9 @@ interface LotteriesScreenProps {
 }
 
 /**
- * Loterias (Tradicional) numa rota só: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor →
- * Loterias → Carrinho → Finalizar, e o recibo. "Mais apostas" volta à Modalidade mantendo data e loterias.
+ * Loterias (Tradicional 1/7 e 1/10) numa rota só: Nova aposta → Data → Modalidade → Colocação → Palpites → Valor →
+ * Loterias → Carrinho → Finalizar, e o recibo. "Mais apostas" volta à Modalidade mantendo data e loterias. O jogo
+ * escolhido na primeira etapa define as colocações e as loterias (sorteios marcados para ele no cadastro).
  * "Repetir pule" (primeira tela) abre o próprio fluxo (RepeatPuleFlow) na mesma rota.
  */
 export default function LotteriesScreen({
@@ -109,7 +114,9 @@ export default function LotteriesScreen({
   const toast = useToast();
   // Horário do servidor, avançando com a página aberta (lista de loterias e o "Hoje" depois da meia-noite).
   const { now, clock, refresh } = useServerNow(nowIso);
-  const days = useMemo(() => lotteryDays(now, schedule), [now, schedule]);
+  const [game, setGame] = useState<LotteryGame>('tradicional');
+  const gameType = lotteryGameType(game);
+  const days = useMemo(() => lotteryDays(now, schedule, LOTTERY_GAME_DRAWS[game]), [now, schedule, game]);
   const [step, setStep] = useState<Step>('type');
   const [day, setDay] = useState<LotteryDay | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -209,6 +216,7 @@ export default function LotteriesScreen({
     try {
       const result = await placeLotteryTicketsAction({
         idempotencyKey: purchaseKey.current,
+        game,
         drawDate: day.date,
         draws: selectedDraws.map((d) => ({ name: d.name, hour: d.hour })),
         items: items.map((item) => ({
@@ -301,6 +309,7 @@ export default function LotteriesScreen({
               stampIso={nowIso}
               drawDate={day.date}
               quoteTable={quotes.tableLabel}
+              gameLabel={LOTTERY_GAME_LABELS[game]}
               lottery={draw.name}
               items={items.map((item) => ({
                 title: `${item.modality.label} ${item.placement.label}`,
@@ -365,7 +374,7 @@ export default function LotteriesScreen({
   const summary = (
     <SummaryCard
       title={[
-        'Tradicional',
+        gameType.label,
         draft.modality && draft.modality.label.charAt(0) + draft.modality.label.slice(1).toLowerCase(),
       ]
         .filter(Boolean)
@@ -375,7 +384,7 @@ export default function LotteriesScreen({
           ? `${draft.placement?.label ?? ''} · ${day ? weekdayOf(day.date) : ''} · ${draft.guesses.length} palpite${draft.guesses.length === 1 ? '' : 's'}`
           : day
             ? `${day.label} · ${weekdayOf(day.date)}`
-            : 'Tradicionais 1/7'
+            : gameType.description
       }
       step={current.n}
     />
@@ -393,7 +402,18 @@ export default function LotteriesScreen({
       />
       {step === 'type' && (
         <TypeStep
-          onPick={() => go('date')}
+          onPick={(picked) => {
+            // Outro jogo: carrinho, data e loterias recomeçam (as colocações e os sorteios mudam).
+            if (picked !== game) {
+              setGame(picked);
+              setDay(null);
+              setDraft(EMPTY_DRAFT);
+              setItems([]);
+              setDraws([]);
+              purchaseKey.current = null;
+            }
+            go('date');
+          }}
           onRepeat={() => go('repeat')}
           onComingSoon={(label) => toast.comingSoon(label)}
         />
@@ -409,7 +429,7 @@ export default function LotteriesScreen({
             }}
           />
           <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-[480px] px-3 pb-3">
-            <SummaryCard title="Tradicional" subtitle="Tradicionais 1/7" step={2} />
+            <SummaryCard title={gameType.label} subtitle={gameType.description} step={2} />
           </div>
         </>
       )}
@@ -418,7 +438,7 @@ export default function LotteriesScreen({
           quotes={quotes}
           footer={summary}
           onPick={(modality) => {
-            const placements = placementsFor(modality);
+            const placements = placementsFor(modality, game);
             setDraft({ ...EMPTY_DRAFT, modality, placement: placements.length === 1 ? placements[0]! : null });
             go(placements.length === 1 ? 'guesses' : 'placement');
           }}
@@ -426,7 +446,7 @@ export default function LotteriesScreen({
       )}
       {step === 'placement' && draft.modality && (
         <PlacementStep
-          placements={placementsFor(draft.modality)}
+          placements={placementsFor(draft.modality, game)}
           footer={summary}
           onPick={(placement) => {
             setDraft((d) => ({ ...d, placement }));
@@ -460,6 +480,7 @@ export default function LotteriesScreen({
           nowIso={now}
           schedule={schedule}
           drawDate={day.date}
+          game={LOTTERY_GAME_DRAWS[game]}
           selected={draws}
           onChange={changeCart(setDraws)}
           onNext={() => go('cart')}

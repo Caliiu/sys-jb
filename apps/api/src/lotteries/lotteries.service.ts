@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  LOTTERY_GAME_DRAWS,
+  LOTTERY_GAME_LABELS,
+  type LotteryGame,
   type PlaceLotteryTicketsResponse,
   type PublicDraw,
   type PublicLotteryTicket,
@@ -8,6 +11,7 @@ import {
   findLotteryModality,
   findLotteryPlacement,
   isDrawOpenAt,
+  isLotteryGame,
   isValidLotteryGuess,
   lotteryItemTotalCents,
   lotteryPossiblePrizeCents,
@@ -32,6 +36,14 @@ const drawClosed = () => new AppError(409, 'DRAW_CLOSED', 'Extração encerrada.
 const invalidPule = () => new AppError(404, 'NOT_FOUND', 'Pule inválida.');
 const modalityUnavailable = () =>
   new AppError(409, 'CONFLICT', 'Esta pule tem uma modalidade que não está mais disponível.');
+const otherGame = (game: LotteryGame) =>
+  new AppError(409, 'CONFLICT', `Esta pule é da ${LOTTERY_GAME_LABELS[game]}. Escolha esse jogo para repetir.`);
+
+/** Jogo gravado no pule (o banco só aceita os dois; outro valor seria dado corrompido). */
+const gameOf = (ticket: Pick<LotteryTicket, 'game'>): LotteryGame => {
+  if (!isLotteryGame(ticket.game)) throw Errors.internal();
+  return ticket.game;
+};
 
 const toDate = (drawDate: string) => new Date(`${drawDate}T00:00:00Z`);
 /** Horário limite no dia da extração, em Brasília (sem horário de verão: sempre -03:00). O trigger grava o do cadastro. */
@@ -60,8 +72,8 @@ const sameItem = (a: ItemRow, b: PlaceLotteryTicketsInput['items'][number]) =>
   a.guesses.join(',') === b.guesses.join(',');
 
 /**
- * Venda de loterias (Tradicional): valida contra o cadastro de sorteios e a cotação da banca, grava um pule por extração
- * e debita cada um, tudo numa transação.
+ * Venda de loterias (Tradicional 1/7 e 1/10): valida contra o cadastro de sorteios (do jogo) e a cotação da banca, grava
+ * um pule por extração e debita cada um, tudo numa transação.
  */
 @Injectable()
 export class LotteriesService {
@@ -93,7 +105,13 @@ export class LotteriesService {
     try {
       // Uma transação para tudo: sorteios, cotação, pules e débitos (poucas idas ao banco, leitura consistente).
       return await this.db.withTenant(tenant.id, async (tx) => {
-        const found = await this.drawsService.forSale(tx, tenant.id, input.draws, 'lotteries', input.drawDate);
+        const found = await this.drawsService.forSale(
+          tx,
+          tenant.id,
+          input.draws,
+          LOTTERY_GAME_DRAWS[input.game],
+          input.drawDate,
+        );
         const draws = found.map((draw, i) => {
           if (!draw) throw invalid(`draws.${i}`, 'Loteria inexistente ou sem sorteio nesse dia.');
           return draw;
@@ -101,7 +119,7 @@ export class LotteriesService {
         if (draws.some((d) => !isDrawOpenAt(now, dayOffset, d.closesAt))) throw drawClosed();
 
         const quotes = await this.quotes.loadForSale(tx, tenant.id);
-        const items = input.items.map((item, i) => toItemRow(item, i, quotes));
+        const items = input.items.map((item, i) => toItemRow(item, i, quotes, input.game));
         const ticketTotal = items.reduce((sum, item) => sum + item.totalCents, 0n);
         if (ticketTotal * BigInt(draws.length) > BigInt(Number.MAX_SAFE_INTEGER)) {
           throw invalid('items', 'Valor muito alto.');
@@ -122,6 +140,7 @@ export class LotteriesService {
               closesAt: closesAtOf(input.drawDate, draw),
               totalCents: ticketTotal,
               quoteTable: quotes.tableLabel,
+              game: input.game,
             },
           });
           await tx.lotteryTicketItem.createMany({
@@ -164,6 +183,7 @@ export class LotteriesService {
       const original = await tx.lotteryTicket.findFirst({
         where: { tenantId: tenant.id, userId: session.userId, puleNumber: input.puleNumber },
         select: {
+          game: true,
           items: {
             orderBy: { position: 'asc' },
             select: { modality: true, placement: true, guesses: true, amountCents: true, split: true },
@@ -171,6 +191,9 @@ export class LotteriesService {
         },
       });
       if (!original || original.items.length === 0) throw invalidPule();
+      // A pule só se repete no jogo dela (as colocações da 1/10 não existem na 1/7).
+      const originalGame = gameOf(original);
+      if (originalGame !== input.game) throw otherGame(originalGame);
       const quotes = await this.quotes.loadForSale(tx, tenant.id);
       return original.items.map((item) => {
         const modality = findLotteryModality(item.modality);
@@ -188,6 +211,7 @@ export class LotteriesService {
     });
     return this.place(tenant, session, {
       idempotencyKey: input.idempotencyKey,
+      game: input.game,
       drawDate: input.drawDate,
       draws: input.draws,
       items,
@@ -219,6 +243,7 @@ export class LotteriesService {
       ordered.every(
         (t) =>
           t !== undefined &&
+          t.game === input.game &&
           t.drawDate.getTime() === toDate(input.drawDate).getTime() &&
           t.items.length === input.items.length &&
           t.items.every((item, i) => sameItem(item, input.items[i]!)),
@@ -250,12 +275,17 @@ export class LotteriesService {
 }
 
 /** Confere e monta um item com a cotação atual da banca (nunca vende por prêmio diferente do que o jogador viu). */
-function toItemRow(item: PlaceLotteryTicketsInput['items'][number], i: number, quotes: PublicQuotes): ItemRow {
+function toItemRow(
+  item: PlaceLotteryTicketsInput['items'][number],
+  i: number,
+  quotes: PublicQuotes,
+  game: LotteryGame,
+): ItemRow {
   const modality = findLotteryModality(item.modality);
   if (!modality) throw invalid(`items.${i}.modality`, 'Modalidade inexistente.');
   const placement = findLotteryPlacement(item.placement);
-  if (!placement || !placementsFor(modality).includes(placement)) {
-    throw invalid(`items.${i}.placement`, 'Colocação não aceita para esta modalidade.');
+  if (!placement || !placementsFor(modality, game).includes(placement)) {
+    throw invalid(`items.${i}.placement`, 'Colocação não aceita para esta modalidade neste jogo.');
   }
   if (new Set(item.guesses).size !== item.guesses.length) throw invalid(`items.${i}.guesses`, 'Palpites repetidos.');
   if (!item.guesses.every((g) => isValidLotteryGuess(modality, g))) {
@@ -289,6 +319,7 @@ function toItemRow(item: PlaceLotteryTicketsInput['items'][number], i: number, q
 export function toPublicTicket(ticket: TicketWithItems, sellerId: number): PublicLotteryTicket {
   return {
     puleNumber: ticket.puleNumber,
+    game: gameOf(ticket),
     drawDate: ticket.drawDate.toISOString().slice(0, 10),
     lottery: ticket.lottery,
     hour: ticket.drawHour,

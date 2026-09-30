@@ -51,16 +51,6 @@ const DATE_TIME_SECONDS = new Intl.DateTimeFormat('pt-BR', {
   second: '2-digit',
 });
 
-const CLOCK = new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'America/Sao_Paulo',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
-
-/** ISO 8601 -> "16:02:43" (relógio do painel) */
-export const formatClock = (iso: string): string => CLOCK.format(new Date(iso));
-
 /** ISO 8601 -> "28/09/2026 20:18:40" (cabeçalho dos comprovantes) */
 export const formatDateTimeSeconds = (iso: string): string =>
   DATE_TIME_SECONDS.format(new Date(iso)).replace(', ', ' ');

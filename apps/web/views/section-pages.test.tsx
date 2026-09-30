@@ -48,6 +48,11 @@ describe('SectionMenuPage', () => {
     expect(screen.getByRole('link', { name: '28/09/2026' })).toHaveAttribute('href', '/premiadas/consultar/2026-09-28');
   });
 
+  it('Resultados: Resultado loterias leva à escolha da data', () => {
+    renderWithProviders(<SectionMenuPage tenant={tenant} user={user} menu={RESULTS_MENU} />);
+    expect(screen.getByRole('link', { name: 'Resultado loterias' })).toHaveAttribute('href', '/resultados/loterias');
+  });
+
   it('Relatórios: saldo, pule e movimento levam às próprias páginas', () => {
     renderWithProviders(<SectionMenuPage tenant={tenant} user={user} menu={REPORTS_MENU} />);
     expect(screen.getByRole('link', { name: 'Consultar saldo' })).toHaveAttribute('href', '/relatorios/saldo');

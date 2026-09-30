@@ -2,11 +2,13 @@
 
 import {
   type DrawSchedule,
-  LOTTERY_GAME_TYPES,
+  LOTTERY_GAME_DRAWS,
+  type LotteryGame,
   type PlaceLotteryTicketsResponse,
   type PublicDraw,
   type PublicWallet,
   isDrawOpenOn,
+  lotteryGameType,
 } from '@sysjb/contracts';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -33,15 +35,13 @@ const STEPS: Record<Exclude<Step, 'receipt'>, { n: number; title: string }> = {
   code: { n: 6, title: 'Código da pule' },
 };
 
-/** Único tipo disponível hoje (os outros avisam "em breve" na primeira etapa). */
-const GAME = LOTTERY_GAME_TYPES.find((type) => type.id === 'tradicional')!;
-
 interface RepeatPuleFlowProps {
   /** Horário do servidor avançando com a página (lista de loterias abertas). */
   now: string;
   /** Leitura na hora do relógio do servidor (confere o fechamento antes de enviar). */
   clock: () => string;
   refresh: () => void;
+  /** Hoje e os próximos dias (as datas são as mesmas nos dois jogos). */
   days: LotteryDay[];
   schedule: DrawSchedule;
   wallet: PublicWallet;
@@ -54,8 +54,8 @@ interface RepeatPuleFlowProps {
 }
 
 /**
- * Repetir pule: modalidade → data → loterias → código da pule → recibo. As apostas vêm da pule (a API só aceita
- * pule do próprio jogador e usa a cotação de agora); a compra passa pelas mesmas travas da venda.
+ * Repetir pule: jogo → data → loterias (do jogo) → código da pule → recibo. As apostas vêm da pule (a API só aceita
+ * pule do próprio jogador, do jogo escolhido, e usa a cotação de agora); a compra passa pelas mesmas travas da venda.
  */
 export default function RepeatPuleFlow({
   now,
@@ -72,6 +72,8 @@ export default function RepeatPuleFlow({
   const router = useRouter();
   const toast = useToast();
   const [step, setStep] = useState<Step>('modality');
+  const [game, setGame] = useState<LotteryGame>('tradicional');
+  const gameType = lotteryGameType(game);
   const [day, setDay] = useState<LotteryDay | null>(null);
   const [draws, setDraws] = useState<string[]>([]);
   const [code, setCode] = useState('');
@@ -147,6 +149,7 @@ export default function RepeatPuleFlow({
       const result = await repeatLotteryTicketAction({
         idempotencyKey: purchaseKey.current,
         puleNumber,
+        game,
         drawDate: day.date,
         draws: selectedDraws.map((d) => ({ name: d.name, hour: d.hour })),
       });
@@ -188,7 +191,7 @@ export default function RepeatPuleFlow({
     }
   };
   const summary = (
-    <SummaryCard title="Repetir Pule" subtitle={GAME.description} step={current.n} total={REPEAT_STEP_COUNT} />
+    <SummaryCard title="Repetir Pule" subtitle={gameType.description} step={current.n} total={REPEAT_STEP_COUNT} />
   );
 
   return (
@@ -203,7 +206,17 @@ export default function RepeatPuleFlow({
         stepCount={REPEAT_STEP_COUNT}
       />
       {step === 'modality' && (
-        <RepeatModalityStep onPick={() => show('date')} onComingSoon={(label) => toast.comingSoon(label)} />
+        <RepeatModalityStep
+          onPick={(picked) => {
+            // Outro jogo: as loterias escolhidas eram do outro (a lista muda).
+            if (picked !== game) {
+              setGame(picked);
+              changeDraws([]);
+            }
+            show('date');
+          }}
+          onComingSoon={(label) => toast.comingSoon(label)}
+        />
       )}
       {step === 'date' && (
         <RepeatDateStep
@@ -221,6 +234,7 @@ export default function RepeatPuleFlow({
           nowIso={now}
           schedule={schedule}
           drawDate={day.date}
+          game={LOTTERY_GAME_DRAWS[game]}
           selected={draws}
           onChange={changeDraws}
           onNext={() => show('code')}
@@ -228,7 +242,7 @@ export default function RepeatPuleFlow({
       )}
       {step === 'code' && day && (
         <RepeatCodeStep
-          gameLabel={GAME.label}
+          gameLabel={gameType.label}
           draws={selectedDraws}
           day={day}
           code={code}

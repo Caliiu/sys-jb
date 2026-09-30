@@ -9,7 +9,7 @@ import { parseUsersQuery, usersHref } from '@/lib/admin/users-query';
 import UsersPage from '@/views/admin/UsersPage';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Unidades' };
+export const metadata = { title: 'Apostadores' };
 
 export default async function Page({
   searchParams,
@@ -20,7 +20,7 @@ export default async function Page({
   if (!gate.ok) return <AdminUnavailable message={gate.message} />;
   const { session } = gate;
   if (!can(session.operator, 'users.read')) {
-    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar as unidades.</AdminMessage>;
+    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar os apostadores.</AdminMessage>;
   }
 
   const query = parseUsersQuery(await searchParams);
@@ -31,7 +31,7 @@ export default async function Page({
   if (!res.ok) {
     const failure = toAdminFailure(res.status, res.error);
     if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
-    return <AdminMessage title="Não foi possível carregar as unidades">{failure.message}</AdminMessage>;
+    return <AdminMessage title="Não foi possível carregar os apostadores">{failure.message}</AdminMessage>;
   }
   // Página além do fim (ex.: filtro mudou): leva à última página existente.
   if (query.page > res.data.totalPages) redirect(usersHref({ ...query, page: res.data.totalPages }));

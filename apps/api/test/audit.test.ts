@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import type { AdminAuditEntry, AdminAuditSummary, Page } from '@sysjb/contracts';
+import type { AdminAuditEntry, Page } from '@sysjb/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { auditPeriodStart } from '../src/admin/audit-period.js';
 import {
@@ -98,7 +98,7 @@ describe('GET /v1/admin/audit', () => {
     expect((await list(boreal)).total).toBe(1);
   });
 
-  it('filtra por período (dias de Brasília) e resume hoje, 7 dias, 30 dias e total com os mesmos filtros', async () => {
+  it('filtra por período (dias de Brasília), junto com os outros filtros', async () => {
     const session = await loginOperator(app, 'aurora');
     const users = [await createUser(app, 'aurora'), await createUser(app, 'aurora'), await createUser(app, 'aurora')];
     for (const user of users) await session.http.patch(`/v1/admin/users/${user.id}/status`, { status: 'BLOCKED' });
@@ -118,17 +118,8 @@ describe('GET /v1/admin/audit', () => {
     expect(await ids('7d')).toEqual([users[0]!.id, users[1]!.id]);
     expect(await ids('30d')).toEqual([users[0]!.id, users[1]!.id, users[2]!.id]);
 
-    const summary = await session.http.get('/v1/admin/audit/summary');
-    expect(summary.status).toBe(200);
-    expect(summary.headers['cache-control']).toBe('no-store');
-    expect(summary.body as AdminAuditSummary).toEqual({ today: 1, last7Days: 2, last30Days: 3, total: 3 });
-    expect((await session.http.get(`/v1/admin/audit/summary?userId=${users[1]!.id}`)).body).toEqual({
-      today: 0,
-      last7Days: 1,
-      last30Days: 1,
-      total: 1,
-    });
-    expect((await session.http.get('/v1/admin/audit/summary?action=user.update')).body.total).toBe(0);
+    expect((await list(session, `?period=7d&userId=${users[1]!.id}`)).total).toBe(1);
+    expect((await list(session, '?period=30d&action=user.update')).total).toBe(0);
   });
 
   it('o dia começa à meia-noite de Brasília (UTC-3)', () => {
@@ -146,14 +137,10 @@ describe('GET /v1/admin/audit', () => {
     for (const role of ['SUPPORT', 'FINANCE'] as const) {
       const operator = await loginOperator(app, 'aurora', { role });
       expect((await operator.http.get('/v1/admin/audit')).status, role).toBe(403);
-      expect((await operator.http.get('/v1/admin/audit/summary')).status, role).toBe(403);
     }
     const session = await loginOperator(app, 'aurora');
     for (const bad of ['?action=user.delete', '?userId=123', '?page=0', '?pageSize=500', '?extra=1', '?period=1y']) {
       expect((await session.http.get(`/v1/admin/audit${bad}`)).status, bad).toBe(400);
-    }
-    for (const bad of ['?period=today', '?page=2', '?userId=123']) {
-      expect((await session.http.get(`/v1/admin/audit/summary${bad}`)).status, bad).toBe(400);
     }
   });
 });

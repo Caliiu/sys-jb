@@ -41,6 +41,46 @@ describe('SideMenu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it('cada item leva à sua página; Cassino e Bingo (sem página) avisam "em breve"', async () => {
+    renderWithProviders(<SideMenu id="menu" open onClose={vi.fn()} />);
+    const destinations: Array<[string, string]> = [
+      ['Início', '/'],
+      ['Perfil', '/perfil'],
+      ['Loterias', '/loterias'],
+      ['Premiadas', '/premiadas'],
+      ['Resultados', '/resultados'],
+      ['Relatórios', '/relatorios'],
+      ['Recarga PIX', '/recarga-pix'],
+      ['Solicitar saque', '/saques'],
+      ['Como jogar', '/como-jogar'],
+      ['Configurações', '/configuracoes'],
+    ];
+    for (const [label, path] of destinations) {
+      router.push.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: label }));
+      expect(router.push, label).toHaveBeenCalledExactlyOnceWith(path);
+    }
+    for (const label of ['Cassino', 'Bingo']) {
+      router.push.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: label }));
+      expect(router.push).not.toHaveBeenCalled();
+      expect(screen.getByRole('status')).toHaveTextContent(`${label}: disponível em breve.`);
+    }
+  });
+
+  it('"Como jogar" fica logo abaixo de "Solicitar saque" e abre a página', async () => {
+    const onClose = vi.fn();
+    renderWithProviders(<SideMenu id="menu" open onClose={onClose} />);
+    const items = within(screen.getByRole('navigation', { name: 'Menu principal' }))
+      .getAllByRole('button')
+      .map((b) => b.textContent);
+    expect(items.indexOf('Como jogar')).toBe(items.indexOf('Solicitar saque') + 1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Como jogar' }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(router.push).toHaveBeenCalledWith('/como-jogar');
+  });
+
   it('item sem página avisa "em breve"; Início navega; Sair encerra a sessão', async () => {
     const onClose = vi.fn();
     renderWithProviders(<SideMenu id="menu" open onClose={onClose} />);
@@ -196,6 +236,7 @@ describe('SorteioBanner', () => {
         closesAt: '19:40',
         weekdays: [0, 1, 2, 3, 4, 5, 6],
         games: ['lotteries'],
+        result: null,
       },
       {
         id: 'b',
@@ -206,6 +247,7 @@ describe('SorteioBanner', () => {
         closesAt: '20:40',
         weekdays: [0, 1, 2, 3, 4, 5, 6],
         games: ['fazendinha'],
+        result: null,
       },
     ],
     exceptions: [],
@@ -240,8 +282,8 @@ describe('Toast', () => {
   it('some sozinho depois de alguns segundos', () => {
     vi.useFakeTimers();
     renderWithProviders(<SideMenu id="menu" open onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Loterias' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Loterias: disponível em breve.');
+    fireEvent.click(screen.getByRole('button', { name: 'Cassino' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Cassino: disponível em breve.');
     act(() => {
       vi.advanceTimersByTime(3000);
     });

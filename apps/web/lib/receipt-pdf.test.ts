@@ -61,6 +61,25 @@ describe('comprovante em PDF', () => {
     expect(pdf).toContain('/Im1 Do');
   });
 
+  it('valor da direita em negrito; "›" sai no código do WinAnsi e o que o encoding não tem vira "?"', () => {
+    const pdf = decode(
+      buildReceiptPdf({
+        ...input,
+        sections: [
+          [
+            { left: [{ text: '› ' }, { text: 'LT PT RIO 09HS', bold: true }] },
+            { left: '1:', right: 'Leão', rightBold: true },
+          ],
+          [{ left: 'Sorte 🍀' }],
+        ],
+      }),
+    );
+    expect(pdf).toContain(String.raw`(\233 )`);
+    expect(pdf).toMatch(/\/F2 10 Tf [\d.]+ [\d.]+ Td \(LE\\303O\) Tj/);
+    expect(pdf).toContain('(SORTE ?)');
+    expect(textWidth('›', false)).toBeCloseTo(3.33);
+  });
+
   it('mede o texto com as larguras da Helvetica (para alinhar os valores à direita)', () => {
     expect(textWidth('R$ 20,00', false)).toBeCloseTo((722 + 556 + 278 + 556 * 2 + 278 + 556 * 2) / 100);
     expect(textWidth('Á', false)).toBe(textWidth('A', false));
