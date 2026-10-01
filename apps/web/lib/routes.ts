@@ -1,9 +1,12 @@
+import { resultsViewPath } from '@sysjb/contracts';
+
 /** Rotas do app do cliente (fonte única para links, menu lateral e navegação inferior). */
 export const ROUTES = {
   home: '/',
   lotteries: '/loterias',
   prizeCalculator: '/loterias/calcular',
   horoscope: '/loterias/horoscopo',
+  overdue: '/loterias/atrasados',
   fazendinha: '/fazendinha',
   results: '/resultados',
   lotteryResults: '/resultados/loterias',
@@ -28,9 +31,8 @@ export const ROUTES = {
 export const resultsOfDate = (date: string, drawIds: readonly string[] = []) =>
   `${ROUTES.lotteryResults}/${date}${drawIds.length > 0 ? `?sorteios=${drawIds.join(',')}` : ''}`;
 
-/** Resultado das extrações escolhidas (ids dos sorteios da banca) num dia. */
-export const resultsViewOf = (date: string, drawIds: readonly string[]) =>
-  `${ROUTES.lotteryResults}/${date}/resultado?sorteios=${drawIds.join(',')}`;
+/** Resultado das extrações escolhidas (ids dos sorteios da banca) num dia (o mesmo caminho das notificações). */
+export const resultsViewOf = resultsViewPath;
 
 /** Máximo de extrações num resultado (a banca tem poucas dezenas; protege a URL digitada). */
 const MAX_RESULT_DRAWS = 200;
@@ -44,6 +46,15 @@ export function parseResultDrawIds(raw: string | string[] | undefined): string[]
     .map((id) => id.trim().toLowerCase())
     .filter((id) => UUID.test(id));
   return [...new Set(ids)].slice(0, MAX_RESULT_DRAWS);
+}
+
+/** Atrasados de um sorteio da banca (id). */
+export const overdueOf = (drawId: string) => `${ROUTES.overdue}?sorteio=${encodeURIComponent(drawId)}`;
+
+/** Id de `?sorteio=` (a URL é digitável): só um UUID; o resto vira null. */
+export function parseOverdueDrawId(raw: string | string[] | undefined): string | null {
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase() ?? '';
+  return UUID.test(value) ? value : null;
 }
 
 /** Premiadas de um dia (YYYY-MM-DD). */

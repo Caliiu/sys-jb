@@ -94,13 +94,13 @@ describe('RechargePage: valor e destino', () => {
     const ui = setup();
     renderWithProviders(<RechargePage tenant={tenant} user={user} />);
     await ui.click(advance());
-    expect(screen.getByRole('alert')).toHaveTextContent('Informe um valor mínimo de R$ 1,00.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Informe um valor mínimo de R$ 1,00.');
 
     await ui.click(screen.getByRole('button', { name: 'Adicionar R$ 30,00' }));
     expect(screen.queryByRole('alert')).toBeNull();
 
     await ui.click(advance());
-    expect(screen.getByRole('alert')).toHaveTextContent('Escolha onde usar o crédito.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Escolha onde usar o crédito.');
 
     await ui.click(screen.getByRole('radio', { name: /Loterias/ }));
     expect(screen.queryByRole('alert')).toBeNull();
@@ -159,7 +159,7 @@ describe('RechargePage: gerar a cobrança', () => {
       message: 'Pix indisponível no momento.',
     });
     await goToPayment(setup());
-    expect(screen.getByRole('alert')).toHaveTextContent('Pix indisponível no momento.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pix indisponível no momento.');
     expect(screen.getByRole('heading', { level: 1, name: 'Recarga Pix' })).toBeInTheDocument();
     expect(advance()).toBeEnabled();
   });
@@ -167,7 +167,7 @@ describe('RechargePage: gerar a cobrança', () => {
   it('falha inesperada não quebra a tela', async () => {
     createPixChargeAction.mockRejectedValue(new Error('rede'));
     await goToPayment(setup());
-    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível gerar o Pix. Tente novamente.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível gerar o Pix. Tente novamente.');
   });
 
   it('sessão expirada leva ao login', async () => {
@@ -210,7 +210,8 @@ describe('RechargePage: pagamento', () => {
     await openPayment(ui);
     await ui.click(screen.getByRole('button', { name: 'Copiar chave' }));
     expect(writeText).toHaveBeenCalledWith(code);
-    expect(screen.getByRole('button', { name: 'Chave copiada!' })).toBeInTheDocument();
+    // O rótulo muda quando a cópia (assíncrona) termina.
+    expect(await screen.findByRole('button', { name: 'Chave copiada!' })).toBeInTheDocument();
   });
 
   it('falha ao copiar não quebra: orienta a cópia manual', async () => {
@@ -221,7 +222,7 @@ describe('RechargePage: pagamento', () => {
     });
     await openPayment(ui);
     await ui.click(screen.getByRole('button', { name: 'Copiar chave' }));
-    expect(screen.getAllByText(/Copie a chave selecionada/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/Copie a chave selecionada/)).length).toBeGreaterThan(0);
   });
 
   it('Ver/Ocultar QR Code mostra o QR real da chave', async () => {
@@ -252,7 +253,7 @@ describe('RechargePage: pagamento', () => {
     act(() => {
       vi.advanceTimersByTime(272_000);
     });
-    expect(screen.getByRole('alert')).toHaveTextContent('Pagamento expirado');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pagamento expirado');
     expect(screen.queryByRole('timer')).toBeNull();
     expect(screen.getByRole('button', { name: 'Copiar chave' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Ver QR Code' })).toBeDisabled();

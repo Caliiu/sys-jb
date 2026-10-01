@@ -104,6 +104,13 @@ export function resultFullPrizes(
 /** "09h": extração com 2 dígitos. */
 export const extractionLabel = (extraction: number) => `${String(extraction).padStart(2, '0')}h`;
 
+/**
+ * Caminho da tela com o resultado das extrações escolhidas num dia (YYYY-MM-DD) no app da banca. Fica aqui porque a
+ * notificação de "resultado saiu", montada pela API, abre a mesma tela.
+ */
+export const resultsViewPath = (date: string, drawIds: readonly string[]) =>
+  `/resultados/loterias/${date}/resultado?sorteios=${drawIds.join(',')}`;
+
 /** Resultado do provedor que vale para um sorteio da banca: sigla + extração (a hora do provedor, não a da banca). */
 export interface ResultSource {
   lottery: string;
@@ -130,6 +137,76 @@ export function resultOfDraw<T extends Pick<PublicLotteryResult, 'lottery' | 'ex
 ): T | null {
   if (!source) return null;
   return results.find((r) => r.lottery === source.lottery && r.extraction === source.extraction) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Atrasados (Loterias > Atrasados)
+// ---------------------------------------------------------------------------
+
+/**
+ * Atrasados pelo nosso próprio histórico (quando a API de atrasados do provedor está desligada ou não oferece a
+ * loteria): quantos dias para trás olhar; grupo que não saiu nesse período fica "sem registro".
+ */
+export const OVERDUE_DAYS_BACK = 365;
+
+/** Quantos grupos tem o jogo do bicho (1 = Avestruz … 25 = Vaca). */
+export const BICHO_GROUPS = 25;
+
+/** Há quanto tempo um grupo não sai na cabeça (1º prêmio) de um sorteio. */
+export interface OverdueGroup {
+  /** Grupo do bicho (1–25). */
+  group: number;
+  /** Último dia (YYYY-MM-DD, Brasília) em que saiu; null = sem registro de saída no histórico. */
+  lastDate: string | null;
+  /** Dias desde `lastDate` (0 = hoje); null junto com `lastDate`. */
+  days: number | null;
+}
+
+/** De onde vieram os atrasados: API do provedor (Loteria Integrada) ou os resultados guardados aqui. */
+export type OverdueSource = 'provider' | 'history';
+
+/** GET /v1/draws/:id/overdue: os 25 grupos do mais atrasado ao mais recente. */
+export interface DrawOverdueResponse {
+  drawId: string;
+  drawName: string;
+  /** Hoje em Brasília (YYYY-MM-DD): a base da contagem de dias. */
+  date: string;
+  source: OverdueSource;
+  groups: OverdueGroup[];
+}
+
+const daysBetween = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
+/**
+ * Os 25 grupos a partir do último dia de saída de cada um (índice 0 = grupo 1; null = sem registro). Os dias contam até
+ * `today`, então a lista continua certa depois da meia-noite; data depois de hoje conta como hoje. Ordem: sem registro
+ * primeiro, depois do mais atrasado ao mais recente; empate pelo número do grupo.
+ */
+export function overdueFromLastDates(lastDates: ReadonlyArray<string | null>, today: string): OverdueGroup[] {
+  return Array.from({ length: BICHO_GROUPS }, (_, i): OverdueGroup => {
+    const lastDate = lastDates[i] ?? null;
+    return { group: i + 1, lastDate, days: lastDate ? Math.max(0, daysBetween(lastDate, today)) : null };
+  }).sort((a, b) => (b.days ?? Number.POSITIVE_INFINITY) - (a.days ?? Number.POSITIVE_INFINITY) || a.group - b.group);
+}
+
+/**
+ * Atrasados pelos resultados guardados: para cada grupo, o último dia em que ele deu na cabeça (1º prêmio), entre os
+ * resultados informados (qualquer ordem; resultado sem prêmio ou depois de hoje é ignorado).
+ */
+export function overdueGroups(
+  results: ReadonlyArray<{ date: string; prizes: readonly string[] }>,
+  today: string,
+): OverdueGroup[] {
+  const last: Array<string | null> = Array.from({ length: BICHO_GROUPS }, () => null);
+  for (const { date, prizes } of results) {
+    const head = prizes[0];
+    if (!head || date > today) continue;
+    const index = resultGroupOf(head) - 1;
+    const seen = last[index];
+    if (!seen || date > seen) last[index] = date;
+  }
+  return overdueFromLastDates(last, today);
 }
 
 export interface PublicLotteryResult {

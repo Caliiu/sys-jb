@@ -17,7 +17,11 @@ const nextConfig: NextConfig = {
   devIndicators: { position: 'bottom-right' },
   // A CSP (com nonce) é montada por requisição no proxy.ts.
   async headers() {
-    return [{ source: '/:path*', headers: staticSecurityHeaders(process.env.NODE_ENV === 'development') }];
+    return [
+      { source: '/:path*', headers: staticSecurityHeaders(process.env.NODE_ENV === 'development') },
+      // Service worker: o navegador confere se mudou a cada abertura; sem isso, uma versão velha ficaria no cache.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
+    ];
   },
   // No host do painel (admin.<domínio>) os caminhos são curtos (/login, /usuarios) e as páginas vivem em
   // app/admin. O prefixo /admin digitado direto não funciona em host nenhum (o layout do painel dá 404).

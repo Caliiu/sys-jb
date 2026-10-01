@@ -11,7 +11,7 @@ export default function AuthInput({ icon, className, ...props }: AuthInputProps)
       <input
         {...props}
         aria-label={props['aria-label'] ?? props.placeholder}
-        className={`w-full h-14 rounded-2xl bg-white pl-4 pr-11 text-[14px] text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-orange ${
+        className={`w-full h-14 rounded-2xl bg-white pl-4 pr-11 text-[16px] text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-orange ${
           className ?? ''
         }`}
       />

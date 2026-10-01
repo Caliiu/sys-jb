@@ -30,7 +30,7 @@ export default async function Page() {
   return (
     <div>
       <AdminPageTitle title="Personalização: Cards do início" />
-      <PersonalizationTabs active="home" />
+      <PersonalizationTabs active="home" permissions={session.operator.permissions} />
       <HomeLayoutEditor
         initial={res.data}
         canManage={can(session.operator, 'branding.manage')}

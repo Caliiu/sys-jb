@@ -11,7 +11,7 @@ import {
   lotteryQuoteCents,
   placementsFor,
 } from '@sysjb/contracts';
-import { Calculator, ChevronRight, Star, X } from 'lucide-react';
+import { Calculator, Star, X } from 'lucide-react';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { formatBrl, formatCents, parseCurrencyInput } from '@/lib/currency';
@@ -19,8 +19,7 @@ import { ROUTES } from '@/lib/routes';
 import SectionBar from '../section/SectionBar';
 import BottomSheet from '../ui/BottomSheet';
 import LotteryToolsNav from './LotteryToolsNav';
-
-const cardClass = 'rounded-xl bg-white shadow-card';
+import StepButton, { StepBadge, stepCardClass as cardClass } from './StepButton';
 
 /**
  * Palpite usado na conta: só importa nas invertidas, em que o valor é dividido entre as combinações do
@@ -46,57 +45,6 @@ export function simulatePrize(
 }
 
 type Picker = 'quote' | 'modality' | 'placement' | null;
-
-function StepBadge({ n, state }: { n: number; state: 'done' | 'pending' | 'disabled' }) {
-  const tone =
-    state === 'done'
-      ? 'bg-brand-primary text-white'
-      : state === 'pending'
-        ? 'bg-brand-primary/10 text-brand-primary'
-        : 'bg-gray-100 text-gray-300';
-  return (
-    <span
-      aria-hidden
-      className={`flex w-9 h-9 shrink-0 items-center justify-center rounded-full text-[15px] font-bold ${tone}`}
-    >
-      {n}
-    </span>
-  );
-}
-
-function StepButton({
-  n,
-  label,
-  value,
-  disabled = false,
-  onClick,
-}: {
-  n: number;
-  label: string;
-  /** null = ainda não escolhido ("Selecionar"). */
-  value: string | null;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={`${label}: ${value ?? 'Selecionar'}`}
-      className={`${cardClass} flex w-full items-center gap-3 px-4 py-3.5 text-left active:scale-[0.99] transition-transform disabled:opacity-50 disabled:active:scale-100`}
-    >
-      <StepBadge n={n} state={disabled ? 'disabled' : value ? 'done' : 'pending'} />
-      <span className="flex-1 min-w-0">
-        <span className="block text-[12px] font-bold uppercase tracking-wide text-gray-500">{label}</span>
-        <span className={`block truncate text-[16px] ${value ? 'font-bold text-gray-900' : 'text-gray-400'}`}>
-          {value ?? 'Selecionar'}
-        </span>
-      </span>
-      <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" aria-hidden />
-    </button>
-  );
-}
 
 /** Lista de opções numa folha inferior ("Escolha a modalidade" etc.), com X para fechar. */
 function OptionsSheet<T>({

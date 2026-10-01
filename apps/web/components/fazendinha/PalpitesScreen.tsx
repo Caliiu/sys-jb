@@ -18,6 +18,7 @@ import {
 import ConfirmPurchaseDialog from './ConfirmPurchaseDialog';
 import ErrorDialog from './ErrorDialog';
 import { MODE_STYLE } from './mode-style';
+import { randomUuid } from '@/lib/uuid';
 
 const HUNDREDS = Array.from({ length: 10 }, (_, i) => i);
 
@@ -58,7 +59,7 @@ export default function PalpitesScreen({ ticket, sold, onPurchased, onSoldOut, o
   }
 
   async function confirmPurchase() {
-    idempotencyKey.current ??= crypto.randomUUID();
+    idempotencyKey.current ??= randomUuid();
     setPending(true);
     try {
       const result = await placeFazendinhaBetAction({

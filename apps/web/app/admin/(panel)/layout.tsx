@@ -17,6 +17,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
       <div style={brandStyle(tenant)}>
         <AdminShell
           tenantName={tenant.name}
+          tenantLogoUrl={tenant.logoUrl}
           operatorName={operator.name}
           roleLabel={ROLE_LABELS[operator.role]}
           permissions={operator.permissions}

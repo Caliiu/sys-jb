@@ -9,7 +9,7 @@ import { auditHref, parseAuditQuery } from '@/lib/admin/audit-query';
 import AuditPage from '@/views/admin/AuditPage';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Auditoria' };
+export const metadata = { title: 'Log de auditoria' };
 
 export default async function Page({
   searchParams,

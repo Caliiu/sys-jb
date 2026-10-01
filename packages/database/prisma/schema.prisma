@@ -70,6 +70,8 @@ model Tenant {
   murals               Mural[]
   muralViews           MuralView[]
   logo                 TenantLogo?
+  pushSubscriptions    PushSubscription[]
+  pulePrizes           PulePrize[]
 
   @@map("tenants")
 }
@@ -108,6 +110,8 @@ model User {
   walletEntries     WalletEntry[]
   commissionPayouts CommissionPayout[]
   muralViews        MuralView[]
+  pushSubscriptions PushSubscription[]
+  pulePrizes        PulePrize[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -604,6 +608,57 @@ model MuralView {
   @@map("mural_views")
 }
 
+// Pule premiada: um registro por pule (Loterias ou Fazendinha), gravado pela apuração de prêmios quando ela existir.
+// Guarda o sorteio e o apostado como na venda, para a consulta do painel não depender dos pules. A role de runtime só lê
+// por enquanto; a apuração dará a permissão de inclusão na migration dela.
+model PulePrize {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  // lotteries ou fazendinha (cada jogo tem a sua numeração de pule).
+  game        String
+  puleNumber  Int      @map("pule_number")
+  drawDate    DateTime @map("draw_date") @db.Date
+  // Nome, hora e código do sorteio na venda.
+  lottery     String
+  drawHour    Int      @map("draw_hour") @db.SmallInt
+  drawCode    String   @default("") @map("draw_code")
+  stakeCents  BigInt   @map("stake_cents")
+  prizeCents  BigInt   @map("prize_cents")
+  settledAt   DateTime @default(now()) @map("settled_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, game, puleNumber])
+  @@index([tenantId, drawDate])
+  @@index([tenantId, userId, drawDate])
+  @@map("pule_prizes")
+}
+
+// Aparelho do jogador inscrito nas notificações (Web Push). Um por banca e endpoint: o mesmo aparelho que entra com
+// outra conta passa a ser dela. Inscrição recusada pelo serviço de push (expirada) é apagada no envio.
+model PushSubscription {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  // Endereço do serviço de push (HTTPS de um serviço conhecido, conferido pela API).
+  endpoint   String
+  // Chave pública P-256 e segredo do aparelho (base64url), usados para cifrar o conteúdo.
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Última vez que o app confirmou a inscrição (a cada abertura com a conta).
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, endpoint])
+  @@index([tenantId, userId])
+  @@map("push_subscriptions")
+}
+
 // Logo enviada pelo painel (PNG/JPEG/WebP até 1 MB, conferidos por CHECK). Uma por banca.
 model TenantLogo {
   tenantId  String   @id @map("tenant_id") @db.Uuid
@@ -656,6 +711,8 @@ model LotteryResult {
   revisions LotteryResultRevision[]
 
   @@unique([drawDate, lottery, extraction])
+  // Histórico de uma loteria/extração (Atrasados), do dia mais recente para trás.
+  @@index([lottery, extraction, drawDate(sort: Desc)])
   @@map("lottery_results")
 }
 
@@ -678,6 +735,22 @@ model LotteryResultRevision {
 
   @@unique([resultId, revision])
   @@map("lottery_result_revisions")
+}
+
+// Atrasados de grupo na cabeça (API de atrasados da Loteria Integrada): cache por loteria/extração do provedor,
+// global (sem banca). A API busca quando o jogador pede e o cache venceu (resultado novo ou prazo).
+model OverdueSnapshot {
+  // Sigla e extração do provedor (as do resultado ligado ao sorteio).
+  lottery        String
+  extraction     Int      @db.SmallInt
+  // Último dia de saída de cada grupo (índice 0 = grupo 1), YYYY-MM-DD; '' = nunca saiu no histórico do provedor.
+  lastDates      String[] @map("last_dates")
+  // Data de referência informada pelo provedor.
+  referenceDate  DateTime @map("reference_date") @db.Date
+  fetchedAt      DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+
+  @@id([lottery, extraction])
+  @@map("overdue_snapshots")
 }
 
 // Consulta feita à API de resultados do provedor (somente inclusão). Serve para não repetir consulta recente

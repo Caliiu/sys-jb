@@ -506,9 +506,74 @@ Tela em `/loterias/horoscopo` (barra de ferramentas das Loterias e atalho do in�
 - **Palpites com a previsão do provedor**: as dezenas dele; grupo da 1ª dezena; centena e milhar de cada dezena com os algarismos da frente sorteados pela data e pelo signo.
 - **Segurança**: token só no servidor da API (a varredura do bundle confere que não chega ao navegador), HTTPS, sem seguir redirecionamento, tempo limite, resposta de até 256 KB. Com mais de uma instância da API, cada uma agenda a sua busca (gravação idempotente: no máximo uma requisição a mais por dia por instância).
 
+## Atrasados
+
+Tela em `/loterias/atrasados` (barra de ferramentas das Loterias e atalho do início): o jogador escolhe a loteria (sorteios da banca com resultado ligado, em sanfona por grupo) e vê os 25 bichos do que está há mais tempo sem dar na **cabeça** (1º prêmio) ao mais recente, com "Toque para copiar" (grupo com 2 dígitos) e "Apostar agora". O sorteio escolhido fica na URL (`?sorteio=<id>`).
+
+**Integração** (API de atrasados da Loteria Integrada, `OVERDUE_API_URL` e `OVERDUE_API_TOKEN`): `tipo_busca=grupo`, `posicao=1` e a extração do resultado ligado ao sorteio. O endpoint real é `https://api.lotoserv.com/atrasados/v1/`; o da documentação (`/atrasados/consulta/v1/`) dá 404.
+
+- **Cache por loteria/extração** em `overdue_snapshots` (global; o último dia de saída de cada grupo, CHECKs de formato). O jogador nunca chama o provedor: a API busca só quando o cache venceu, por resultado novo (ou correção) do sorteio ou depois de `OVERDUE_CACHE_MINUTES` (padrão 30). Os dias são contados aqui pela data, então o cache continua certo depois da meia-noite. Uma busca por vez por loteria/extração (pedidos simultâneos esperam a mesma); cache de busca mais antiga não substitui o de outra instância.
+- **Falhas**: provedor fora do ar, token recusado ou resposta inválida usam o cache vencido; sem cache, `503 SERVICE_UNAVAILABLE` e a tela pede para tentar de novo. Loteria fora do plano (`403`) usa os resultados guardados aqui (o último ano) e não pergunta de novo até o prazo do cache. Integração desligada: sempre os resultados guardados.
+- **Validação da resposta**: mesma loteria, extração e posição pedidas; os 25 grupos sem repetição (grupo como número ou texto, como o provedor manda); data da última saída válida e não depois da data de referência, ou "nunca saiu". Resposta inválida não entra no cache.
+- **Segurança**: token só no servidor da API (a varredura do bundle confere), HTTPS, sem seguir redirecionamento, tempo limite de 8 s, resposta de até 128 KB. Do provedor só as datas chegam ao jogador.
+
+| Método | Rota                    | Acesso                                  | Comportamento                                                                                                                                                                        |
+| ------ | ----------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/v1/draws/:id/overdue` | credencial da banca + sessão do jogador | Os 25 grupos (`lastDate`, `days`) e `source` (`provider`/`history`). `404` igual para sorteio de outra banca, inativo ou sem resultado ligado; `503` provedor indisponível sem cache |
+
+## Pules premiadas (painel)
+
+Operação > Prêmios (`/premios` no painel; `tickets.read`, todos os perfis): filtros por período da data do jogo (atalhos Ontem, Hoje, 7D, 30D, Mês e Mês Ant., até 93 dias e até hoje), extração, promotor, apostador e faixa de prêmio em reais; Seção, Rota e Grupo de Cobrança ficam visíveis mas sem efeito até os cadastros existirem. Resultado: quantidade, total em prêmios e a lista (maiores prêmios primeiro, paginada).
+
+- **Dados**: `pule_prizes`, um registro por pule premiada (jogo, número, sorteio e apostado como na venda, prêmio e quando foi apurado), com RLS por banca. **A apuração de prêmios ainda não existe**: até ela gravar aqui, a lista vem vazia. A role de runtime só lê; a migration da apuração dará a permissão de inclusão (ninguém altera nem apaga um prêmio).
+- `GET /v1/admin/prizes?from=&to=` (+ `promoterId`, `userId`, `drawId`, `minPrizeCents`, `maxPrizeCents`, `page`, `pageSize`): `400` para período inválido, futuro, invertido ou acima de 93 dias, e faixa de prêmio invertida.
+
+## Resumo da Operação (painel)
+
+Operação > Resumo da Operação (`/resumo-operacao`; `operation.read`: Gerente e Financeiro): abre no mês até hoje, com filtro de período (atalhos, até 366 dias) e promotor (só os indicados dele; a comissão é a que ele recebeu). `GET /v1/admin/operation-summary?from=&to=&promoterId=`, uma consulta só ao banco.
+
+- **Novos usuários**: cadastros no período. **Resultado**: jogado (pules de Loterias e Fazendinha pela data da venda), prêmios (pules premiadas apuradas no período), bruto, comissão (pagamentos `COMMISSION` creditados no período) e líquido. **Loterias**: turnover e payout. **Saldos**: soma das carteiras agora, lançamentos e bônus creditados no período (crédito pelo painel e ajustes manuais, só a parte positiva).
+- **Ainda sem origem no sistema** (vêm zerados, listados em `unavailable` e numa nota na tela): depósitos e saques (sem integração de pagamento), FTD/% FTD/média (dependem do primeiro depósito) e cassino. "Disponível para saques" é 0 enquanto não houver regra de saque.
+
+## Relatório geral (painel)
+
+Relatórios > Relatório geral (`/relatorios/geral`; `operation.read`): uma linha por usuário com movimento no período, do ponto de vista da banca. Abre em hoje, ordenado pelas maiores vendas; colunas ordenáveis (o Líquido Geral não), paginado. Filtros: período (atalhos, até 366 dias), promotor (ele e os indicados), apostador e tipo (Apostador/Promotor); Seção, Rota e Grupo de Cobrança aguardam os cadastros. `GET /v1/admin/reports/general?from=&to=` (+ `promoterId`, `userId`, `type`, `sort`, `dir`, `page`, `pageSize`); a ordenação vem de uma lista fixa (nunca vai para o SQL como texto).
+
+- **Vendas**: pules de Loterias e Fazendinha pela data da venda. **Comissão / Comissão Amigo**: pagamentos de comissão creditados no período (fechamento do mês), divididos como no cálculo do fechamento: amigo = apostado × % indique e ganhe; o resto do pagamento é a parte de promotor (a soma bate com o creditado). **Prêmios**: pules premiadas apuradas no período. **Outros**: créditos pelo painel e ajustes manuais (todas as bolsas).
+- **Líquido** = vendas − prêmios − comissão − comissão amigo. **Líquido Geral** = líquido − outros.
+
+## Vendas por extração (painel)
+
+Relatórios > Loterias > Vendas por extração (`/relatorios/loterias/vendas-por-extracao`; `operation.read`): os dados só aparecem depois de pesquisar. Filtros: período pela **data do jogo** (atalhos; até 366 dias e até o fim da janela de apostas, hoje + 6, porque as vendas para os próximos dias também contam), promotor (os indicados) e apostador; Seção e Rota aguardam os cadastros. Uma linha por extração (nome e hora da venda, por horário), com pules, vendas de Loterias e Fazendinha, total, prêmios (apuração) e líquido (vendas − prêmios), e o total; "Filtrar extração" procura por nome, código ou horário na própria tela e recalcula o total. Sorteio excluído do cadastro continua aparecendo, sem horário. `GET /v1/admin/reports/sales-by-draw?from=&to=` (+ `promoterId`, `userId`).
+
+## Extrato do apostador (painel)
+
+Carteira > Extrato apostador (`/extrato`; `users.read`, todos os perfis): período (atalhos, até 366 dias e até hoje) e o apostador (obrigatório; o campo não tem "Todos"). Depois de pesquisar: saldo inicial, entradas, saídas e saldo final do período e os lançamentos da carteira (`wallet_entries`), mais recentes primeiro e paginados: data/hora, tipo (aposta Loterias/Fazendinha com o número do pule, crédito pelo painel com o motivo e o operador, ajuste manual, comissão, saldo anterior), o movimento de cada bolsa, o total e a **carteira de apostas depois do lançamento**. `GET /v1/admin/users/:id/statement?from=&to=` (+ `page`, `pageSize`); apostador de outra banca ou inexistente = `404`.
+
+- Os saldos são da carteira de apostas (saldo + bônus + prêmios), que o banco mantém igual à soma dos lançamentos: o saldo de cada linha = o que havia antes do período + os lançamentos até ela (calculado antes da paginação, então vale em qualquer página). Games aparece à parte, sem entrar no saldo.
+
+## Depósitos e Saques (painel)
+
+Carteira > Depósitos (`/depositos`) e Carteira > Saques (`/saques`) (`users.read`): por enquanto **só as telas**. Mesmos filtros nas duas (apostador, status do tipo, período com atalhos até 366 dias, promotor; Seção, Rota e Grupo de Cobrança aguardam os cadastros), na URL; depois de pesquisar, a lista vem vazia com o aviso de que os pedidos dependem da integração de pagamento, que ainda não existe (nenhuma chamada à API para dados que não existem). Os status ficam em `apps/web/lib/admin/wallet-movements-query.ts` até virarem contrato da API.
+
+## Notificações (app instalado)
+
+Notificações Web Push para quem usa o app instalado na tela inicial (PWA). Chaves VAPID em `WEB_PUSH_VAPID_PUBLIC_KEY` / `WEB_PUSH_VAPID_PRIVATE_KEY` (geradas pelo `pnpm setup:env`; trocar o par invalida as inscrições) e contato em `WEB_PUSH_SUBJECT`. Sem as chaves, tudo fica desligado.
+
+- **Permissão no login**: no app instalado, o toque em "Entrar" abre a janela de permissão do sistema (precisa ser no toque: o iPhone só permite assim, e só no app instalado, iOS 16.4+). Só aparece se o jogador ainda não respondeu; o login não espera a resposta. Numa aba do navegador não pede.
+- **Inscrição do aparelho**: com a conta aberta, o app (service worker `public/sw.js`, só notificações, sem cache de páginas) inscreve o aparelho e manda para `POST /v1/me/push-subscriptions`, a cada abertura. Guardada em `push_subscriptions` (por banca e jogador, RLS; o mesmo aparelho com outra conta passa a ser dela; até 10 aparelhos por jogador). **Sair da conta** tira o aparelho (`DELETE`) e cancela a inscrição.
+- **"Resultado saiu"**: resultado novo recebido pelo webhook avisa, em cada banca, quem apostou (Loterias ou Fazendinha) nos sorteios ligados àquela extração no dia: uma notificação por jogador e sorteio, que abre o resultado. Em segundo plano (o webhook responde sem esperar). Reenvio igual, correção e resultado de antes de ontem não avisam; o `results:fetch` (recuperação manual) também não.
+- **"Pule premiada"**: depende da apuração de prêmios, que ainda não existe; o envio (`PushService.sendToUsers`) já está pronto para ela.
+- **Segurança**: a API só aceita endpoint HTTPS dos serviços de push dos navegadores (Google, Apple, Mozilla, Microsoft), sem porta nem credenciais (sem isso, um endpoint forjado faria a API chamar qualquer endereço). A chave privada fica só na API (a varredura do bundle confere). Conteúdo cifrado de ponta a ponta pelo protocolo; o service worker só abre caminhos do próprio app. Inscrição expirada (404/410) é apagada no envio; o log nunca traz o endpoint.
+
+| Método | Rota                        | Acesso                                  | Comportamento                                                                       |
+| ------ | --------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
+| POST   | `/v1/me/push-subscriptions` | credencial da banca + sessão do jogador | `{endpoint, keys: {p256dh, auth}}` → `204`; `400` formato/serviço; `503` desligadas |
+| DELETE | `/v1/me/push-subscriptions` | credencial da banca + sessão do jogador | `{endpoint}` → `204` (só o aparelho do próprio jogador)                             |
+
 ## Personalização
 
-Grupo do menu do painel com **Identidade visual**, **Cards do início** e **Mural**. Só o Gerente vê e altera (`branding.read`/`branding.manage`, `murals.read`/`murals.manage`).
+Configurações > Personalização, em abas: **Identidade visual**, **Cards do início** (só o Gerente: `branding.read`/`branding.manage`) e **Valores** (o percentual do "Indique e ganhe": `commissions.read`/`commissions.manage`, Gerente altera e o Financeiro consulta). Cada perfil vê só as abas que pode abrir; o item do menu aparece para quem pode ver alguma (o Financeiro abre direto em Valores). O endereço antigo `/comissoes` leva para `/personalizacao/valores`. O **Mural** fica em Configurações (`murals.read`/`murals.manage`).
 
 ### Identidade visual
 
@@ -600,10 +665,10 @@ Tabela de prêmios por banca, editada pelo Gerente em **Cotações** no painel (
 Promotor ≠ Indicação. Todo jogador tem no máximo um "indicado por": o dono do link de convite (`?convite=CDYGE`) usado no cadastro, jogador comum ou promotor (usuário ativo da banca; código desconhecido ou de usuário bloqueado é ignorado). O vínculo nunca muda.
 
 - **Código de convite**: 5 caracteres de um alfabeto sem ambíguos (sem O/0/I/1), gerado pelo banco no cadastro, **único no sistema todo** (índice UNIQUE; em colisão o cadastro tenta de novo) e fixo (a API não altera). Aceito em maiúsculas ou minúsculas. Links antigos com o ID exibido (`?convite=100008`) continuam valendo. O painel mostra o código no detalhe do usuário e busca por ele.
-- **Indique e ganhe (X%)**: igual para a banca toda, definido pelo Gerente em **Comissões** no painel (`tenant_settings`, com auditoria). 0% desliga.
+- **Indique e ganhe (X%)**: igual para a banca toda, definido pelo Gerente em **Personalização > Valores** no painel (`tenant_settings`, com auditoria). 0% desliga.
 - **Promotor (Y%)**: a comissão de cada promotor. Se quem indicou é promotor no fechamento, recebe **X% + Y%** (ex.: 3% + 7% = 10%).
 - **Base**: o valor apostado pelos indicados no mês (Brasília, pela data da aposta). Ganho arredondado para baixo no centavo.
-- **Fechamento mensal**: o Gerente vê a prévia e clica em "Fechar mês" (só meses encerrados; uma vez por mês). A função `commission_close_month` grava o fechamento e cada pagamento e **credita o Saldo** na mesma transação (movimentação `COMMISSION`). Quem indicou e está **bloqueado** não recebe (fica como "não recebeu"). Mês fechado fica congelado: mudar percentuais depois não altera o que foi pago.
+- **Fechamento mensal**: **sem tela no painel por enquanto** (a prévia e o "Fechar mês" saíram da Personalização > Valores); a API continua oferecendo a prévia e o fechamento (`/v1/admin/commissions/months/:mes` e `/close`, só meses encerrados, uma vez por mês). Enquanto não houver tela, nenhuma comissão é paga. A função `commission_close_month` grava o fechamento e cada pagamento e **credita o Saldo** na mesma transação (movimentação `COMMISSION`). Quem indicou e está **bloqueado** não recebe (fica como "não recebeu"). Mês fechado fica congelado: mudar percentuais depois não altera o que foi pago.
 - **Perfis**: Gerente altera o X% e fecha; Financeiro só consulta; Suporte não vê. O banco confere de novo que quem fecha é Gerente ativo.
 - **Painel**: lista de usuários com as colunas "Indicado por" e "Promotor"; no detalhe, "Indicado por" e "Promotor do jogador" separados.
 

@@ -23,6 +23,7 @@ import LotteryReceipt from './LotteryReceipt';
 import { SummaryCard } from './PickSteps';
 import { RepeatCodeStep, RepeatDateStep, RepeatModalityStep, onlyPuleDigits, parsePuleCode } from './RepeatSteps';
 import RepeatSuccessDialog from './RepeatSuccessDialog';
+import { randomUuid } from '@/lib/uuid';
 
 type Step = 'modality' | 'date' | 'draws' | 'code' | 'receipt';
 
@@ -143,7 +144,7 @@ export default function RepeatPuleFlow({
       });
     }
 
-    purchaseKey.current ??= crypto.randomUUID();
+    purchaseKey.current ??= randomUuid();
     setPending(true);
     try {
       const result = await repeatLotteryTicketAction({

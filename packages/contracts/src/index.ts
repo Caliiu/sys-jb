@@ -143,6 +143,7 @@ export type ApiErrorCode =
   | 'DRAW_CLOSED'
   | 'QUOTE_CHANGED'
   | 'DRAW_HAS_BETS'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 
 export interface ApiError {
@@ -165,4 +166,5 @@ export * from './branding.js';
 export * from './home-layout.js';
 export * from './horoscope.js';
 export * from './results.js';
+export * from './push.js';
 export * from './validation.js';

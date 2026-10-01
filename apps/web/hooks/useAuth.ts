@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import { type LoginInput, loginAction, logoutAction, type RegisterInput, registerAction } from '../app/auth-actions';
+import { leavePush } from '../lib/push-client';
 import { ApiError } from '../services/http';
 
 /** Cadastro, login e logout do cliente. Falhas viram ApiError com mensagem pronta para exibir. */
@@ -22,6 +23,8 @@ export function useAuth() {
         router.refresh();
       },
       async logout(): Promise<void> {
+        // Antes de encerrar a sessão (a API precisa dela para tirar o aparelho da conta).
+        await leavePush();
         await logoutAction();
         router.refresh();
       },

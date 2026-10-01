@@ -14,6 +14,10 @@ interface PlayerComboboxProps {
   name: string;
   /** Apostador já escolhido (vindo da URL). */
   initial: PlayerOption | null;
+  /** Obrigatório (ex.: extrato): sem a opção "Todos"; sem escolha, mostra "Selecione um apostador". */
+  required?: boolean;
+  /** Texto sem escolha (padrão: "Todos"; obrigatório: "Selecione um apostador"). A opção "Todos" continua na lista. */
+  placeholder?: string;
 }
 
 const MIN_CHARS = 2;
@@ -25,7 +29,14 @@ const optionLabel = (player: PlayerOption) => `${player.displayId} - ${player.na
  * Escolha do apostador nos filtros: parece um select, mas busca no servidor (nome, CPF, telefone ou ID) conforme
  * se digita. Com milhares de apostadores, uma lista completa seria pesada. Esc ou clique fora fecham.
  */
-export default function PlayerCombobox({ id, label, name, initial }: PlayerComboboxProps) {
+export default function PlayerCombobox({
+  id,
+  label,
+  name,
+  initial,
+  required = false,
+  placeholder = required ? 'Selecione um apostador' : 'Todos',
+}: PlayerComboboxProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<PlayerOption | null>(initial);
   const [open, setOpen] = useState(false);
@@ -99,7 +110,9 @@ export default function PlayerCombobox({ id, label, name, initial }: PlayerCombo
         aria-controls={listId}
         className={`${controlClass} flex items-center justify-between gap-2 text-left`}
       >
-        <span className="truncate">{selected ? optionLabel(selected) : 'Todos'}</span>
+        <span className={`truncate ${selected || placeholder === 'Todos' ? '' : 'text-admin-muted'}`}>
+          {selected ? optionLabel(selected) : placeholder}
+        </span>
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-admin-muted" aria-hidden />
       </button>
 
@@ -134,18 +147,20 @@ export default function PlayerCombobox({ id, label, name, initial }: PlayerCombo
             />
           </div>
           <ul id={listId} role="listbox" aria-label={label} className="max-h-64 overflow-y-auto p-1">
-            <li role="presentation">
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected === null}
-                onClick={() => choose(null)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[14px] hover:bg-admin-hover"
-              >
-                <Check className={`h-4 w-4 ${selected === null ? '' : 'invisible'}`} aria-hidden />
-                Todos
-              </button>
-            </li>
+            {!required && (
+              <li role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected === null}
+                  onClick={() => choose(null)}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[14px] hover:bg-admin-hover"
+                >
+                  <Check className={`h-4 w-4 ${selected === null ? '' : 'invisible'}`} aria-hidden />
+                  Todos
+                </button>
+              </li>
+            )}
             {!short &&
               results.map((player) => (
                 <li key={player.id} role="presentation">

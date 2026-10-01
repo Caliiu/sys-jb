@@ -41,6 +41,8 @@ for (const name of [
   'RESULTS_WEBHOOK_TOKEN',
   'RESULTS_API_TOKEN',
   'HOROSCOPE_API_TOKEN',
+  'OVERDUE_API_TOKEN',
+  'WEB_PUSH_VAPID_PRIVATE_KEY',
 ]) {
   if ((process.env[name] ?? '').length >= 16) secrets.add(process.env[name]);
 }

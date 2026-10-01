@@ -23,7 +23,7 @@ import { type TicketsQuery, ticketsHref } from '@/lib/admin/tickets-query';
 import { formatBrl } from '@/lib/currency';
 import { formatCalendarDate, formatShortDateTime } from '@/lib/datetime';
 
-/** O que a pesquisa trouxe: a lista do dia (paginada) ou os bilhetes de um número. */
+/** O que a pesquisa trouxe: a lista do dia (paginada) ou os pules de um número. */
 export type TicketsResult =
   | { kind: 'list'; page: Page<AdminTicketListItem> & { totalCents: number } }
   | { kind: 'ticket'; items: AdminTicketListItem[] };
@@ -45,7 +45,7 @@ const GAME_LABELS: Record<AdminTicketGame, string> = { lotteries: 'Loterias', fa
 /** Filtro de um cadastro que ainda não existe: igual aos outros, mas sem nome (não vai para a URL). */
 const UNAVAILABLE = 'Cadastro ainda não disponível.';
 
-const COLUMNS = ['Bilhete', 'Data/Hora', 'Apostador', 'Extração', 'Sorteio', 'Valor'];
+const COLUMNS = ['Pule', 'Data/Hora', 'Apostador', 'Extração', 'Sorteio', 'Valor'];
 
 function PlayerLink({ ticket }: { ticket: AdminTicketListItem }) {
   return (
@@ -56,14 +56,14 @@ function PlayerLink({ ticket }: { ticket: AdminTicketListItem }) {
   );
 }
 
-/** Tabela (e, no celular, cartões) dos bilhetes. */
+/** Tabela (e, no celular, cartões) dos pules. */
 function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: string }) {
   if (items.length === 0) return <p className="py-10 text-center text-[14px] text-admin-muted">{empty}</p>;
   return (
     <>
       <div className="hidden overflow-x-auto md:block print:block">
         <table className="w-full min-w-[760px] text-left text-[14px]">
-          <caption className="sr-only">Bilhetes</caption>
+          <caption className="sr-only">Pules</caption>
           <thead>
             <tr className="border-b border-admin-border text-[13px] text-admin-muted">
               {COLUMNS.map((header) => (
@@ -103,7 +103,7 @@ function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: st
         </table>
       </div>
 
-      <ul aria-label="Bilhetes" className="divide-y divide-admin-border md:hidden print:hidden">
+      <ul aria-label="Pules" className="divide-y divide-admin-border md:hidden print:hidden">
         {items.map((ticket) => (
           <li key={`${ticket.game}:${ticket.puleNumber}`} className="py-3">
             <div className="flex items-start justify-between gap-2">
@@ -129,15 +129,15 @@ function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: st
 }
 
 /**
- * Operação > Bilhetes: filtros (data da venda, promotor, apostador, extração) e a pesquisa por número. Os
+ * Operação > Pules: filtros (data da venda, promotor, apostador, extração) e a pesquisa por número. Os
  * resultados só aparecem depois de pesquisar. Componente de servidor.
  */
 export default function TicketsPage({ query, today, promoters, draws, player, result }: TicketsPageProps) {
   return (
     <div className="space-y-6">
-      <AdminPageTitle title="Bilhetes" />
+      <AdminPageTitle title="Pules" />
       <FiltersCard>
-        <FilterForm action={ADMIN_ROUTES.tickets} aria-label="Filtrar bilhetes">
+        <FilterForm action={ADMIN_ROUTES.tickets} aria-label="Filtrar pules">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <DateField id="tickets-date" label="Data" name="data" defaultValue={query.date} max={today} />
             <FilterSelect id="tickets-promoter" label="Promotor" name="promotor" defaultValue={query.promoterId}>
@@ -221,7 +221,7 @@ export default function TicketsPage({ query, today, promoters, draws, player, re
           </div>
           <div className="mx-4 mt-4 border-t border-admin-border">
             {result.kind === 'ticket' ? (
-              <TicketsList items={result.items} empty="Nenhum bilhete com esse número." />
+              <TicketsList items={result.items} empty="Nenhum pule com esse número." />
             ) : (
               <TicketsList items={result.page.items} empty="Nenhum resultado encontrado" />
             )}

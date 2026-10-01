@@ -29,6 +29,7 @@ export const PERMISSIONS = [
   'branding.read',
   'branding.manage',
   'tickets.read',
+  'operation.read',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -47,6 +48,7 @@ export type Permission = (typeof PERMISSIONS)[number];
  * Comissões: `commissions.manage` define a % do "Indique e ganhe" e fecha o mês (o banco confere o perfil
  * MANAGER de novo no fechamento).
  * Bilhetes: `tickets.read` consulta os pules vendidos (todos os perfis; ninguém altera pule pelo painel).
+ * Resumo da operação: `operation.read` vê os números financeiros da banca no período (Gerente e Financeiro).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -68,9 +70,18 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'branding.read',
     'branding.manage',
     'tickets.read',
+    'operation.read',
   ],
   SUPPORT: ['users.read', 'users.update', 'tickets.read'],
-  FINANCE: ['users.read', 'promoters.read', 'commissions.read', 'quotes.read', 'draws.read', 'tickets.read'],
+  FINANCE: [
+    'users.read',
+    'promoters.read',
+    'commissions.read',
+    'quotes.read',
+    'draws.read',
+    'tickets.read',
+    'operation.read',
+  ],
 };
 
 export function hasPermission(role: OperatorRole, permission: Permission): boolean {
@@ -247,6 +258,296 @@ export interface AdminTicketDrawOption {
   name: string;
   /** HH:MM. */
   drawTime: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pules premiadas (Operação > Prêmios)
+// ---------------------------------------------------------------------------
+
+/** Maior período (dias, contando o primeiro e o último) de uma consulta de pules premiadas. */
+export const ADMIN_PRIZES_MAX_DAYS = 93;
+/** Maior prêmio aceito nos filtros (R$ 10 milhões, em centavos). */
+export const ADMIN_PRIZE_FILTER_MAX_CENTS = 1_000_000_000;
+
+/** Pule premiada na apuração (um registro por pule; a numeração é própria de cada jogo). */
+export interface AdminPrizeListItem {
+  game: AdminTicketGame;
+  puleNumber: number;
+  /** Data do jogo (sorteio), YYYY-MM-DD. */
+  drawDate: string;
+  /** Nome do sorteio na venda (ex.: LT PT RIO 09HS). */
+  lottery: string;
+  /** Código da extração na venda (ex.: PTRIO09). */
+  drawCode: string;
+  /** Valor apostado no pule. */
+  stakeCents: number;
+  /** Prêmio pago ao pule. */
+  prizeCents: number;
+  /** ISO 8601 da apuração. */
+  settledAt: string;
+  player: { id: string; displayId: number; name: string };
+}
+
+/** GET /v1/admin/prizes: pules premiadas no período (data do jogo), maiores prêmios primeiro, e as somas do filtro. */
+export interface AdminPrizeList extends Page<AdminPrizeListItem> {
+  /** Soma dos prêmios de todo o filtro (não só da página). */
+  totalPrizeCents: number;
+}
+
+export interface AdminPrizeListQuery {
+  /** Período pela data do jogo (YYYY-MM-DD, Brasília), inclusivo; até ADMIN_PRIZES_MAX_DAYS dias. */
+  from: string;
+  to: string;
+  page?: number;
+  pageSize?: number;
+  /** Só os pules dos indicados deste promotor. */
+  promoterId?: string;
+  /** Só os pules deste apostador. */
+  userId?: string;
+  /** Só os pules deste sorteio (pelo nome e hora da venda). */
+  drawId?: string;
+  /** Faixa do prêmio (centavos, inclusiva). */
+  minPrizeCents?: number;
+  maxPrizeCents?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Resumo da Operação
+// ---------------------------------------------------------------------------
+
+/** Maior período (dias, contando o primeiro e o último) do resumo da operação. */
+export const OPERATION_SUMMARY_MAX_DAYS = 366;
+
+/** Entradas e saídas de um jogo no período. */
+export interface OperationGameTotals {
+  /** Total apostado. */
+  turnoverCents: number;
+  /** Total pago em prêmios. */
+  payoutCents: number;
+  /** Turnover menos payout. */
+  netCents: number;
+}
+
+/**
+ * GET /v1/admin/operation-summary: números da banca no período (dias de Brasília, inclusivos), de todos os jogadores ou
+ * só dos indicados de um promotor. Valores em centavos. Os saldos são de agora (não do período).
+ */
+export interface AdminOperationSummary {
+  from: string;
+  to: string;
+  /** Promotor do filtro; null = todos. */
+  promoter: AdminPromoterOption | null;
+  newUsers: {
+    /** Cadastros no período. */
+    signups: number;
+    /** Cadastros do período que já fizeram o primeiro depósito. */
+    firstDeposits: number;
+    /** firstDeposits / signups, em centésimos de % (0 a 10000). */
+    firstDepositRateBps: number;
+    /** Média do primeiro depósito. */
+    firstDepositAverageCents: number;
+  };
+  cashflow: { depositsCents: number; withdrawalsCents: number; netCents: number };
+  balances: {
+    /** Disponível para saque agora. */
+    withdrawableCents: number;
+    /** Soma das carteiras agora (saldo, bônus e prêmios, Loterias e games). */
+    totalCents: number;
+    /** Lançamentos creditados pelo painel e ajustes manuais no período (sem bônus). */
+    creditedCents: number;
+    /** Bônus creditados no período. */
+    bonusCreditedCents: number;
+  };
+  result: {
+    wageredCents: number;
+    prizesCents: number;
+    /** Jogado menos prêmios. */
+    grossCents: number;
+    /** Comissões pagas no período. */
+    commissionCents: number;
+    /** Bruto menos comissão. */
+    netCents: number;
+  };
+  lotteries: OperationGameTotals;
+  casino: OperationGameTotals;
+  /**
+   * Números que ainda não têm origem no sistema (vêm zerados): depósitos e saques (sem integração de pagamento),
+   * primeiro depósito (depende dos depósitos) e cassino (sem cassino).
+   */
+  unavailable: Array<'deposits' | 'withdrawals' | 'casino'>;
+}
+
+// ---------------------------------------------------------------------------
+// Relatório geral (Relatórios > Relatório geral)
+// ---------------------------------------------------------------------------
+
+/** Tipo do usuário no relatório: promotor (tem comissão de promotor) ou apostador comum. */
+export const GENERAL_REPORT_TYPES = ['player', 'promoter'] as const;
+export type GeneralReportType = (typeof GENERAL_REPORT_TYPES)[number];
+
+/** Colunas que ordenam o relatório. */
+export const GENERAL_REPORT_SORTS = [
+  'name',
+  'type',
+  'sales',
+  'commission',
+  'referralCommission',
+  'prizes',
+  'other',
+  'net',
+] as const;
+export type GeneralReportSort = (typeof GENERAL_REPORT_SORTS)[number];
+
+/** Uma linha por usuário com movimento no período. Valores em centavos, do ponto de vista da banca. */
+export interface AdminGeneralReportRow {
+  player: { id: string; displayId: number; name: string };
+  type: GeneralReportType;
+  /** Pules vendidos (Loterias e Fazendinha), pela data da venda. */
+  salesCents: number;
+  /** Parte de promotor da comissão creditada no período. */
+  commissionCents: number;
+  /** Parte "Indique e ganhe" da comissão creditada no período. */
+  referralCommissionCents: number;
+  /** Prêmios apurados no período. */
+  prizesCents: number;
+  /** Créditos e ajustes pelo painel no período (todas as bolsas, inclusive bônus). */
+  otherCents: number;
+  /** Vendas − prêmios − comissão − comissão amigo. */
+  netCents: number;
+  /** Líquido − outros. */
+  grossNetCents: number;
+}
+
+/** GET /v1/admin/reports/general: o relatório do período (dias de Brasília, inclusivos), paginado e ordenado. */
+export interface AdminGeneralReport extends Page<AdminGeneralReportRow> {
+  from: string;
+  to: string;
+}
+
+export interface AdminGeneralReportQuery {
+  /** Período (YYYY-MM-DD, Brasília), inclusivo; até OPERATION_SUMMARY_MAX_DAYS dias. */
+  from: string;
+  to: string;
+  page?: number;
+  pageSize?: number;
+  /** O promotor e os indicados dele. */
+  promoterId?: string;
+  userId?: string;
+  type?: GeneralReportType;
+  /** Padrão: vendas, decrescente. */
+  sort?: GeneralReportSort;
+  dir?: 'asc' | 'desc';
+}
+
+// ---------------------------------------------------------------------------
+// Vendas por extração (Relatórios > Loterias > Vendas por extração)
+// ---------------------------------------------------------------------------
+
+/** Valores de uma extração (ou do total) no período, em centavos. */
+export interface SalesByDrawTotals {
+  /** Pules vendidos (Loterias e Fazendinha). */
+  tickets: number;
+  lotteriesCents: number;
+  fazendinhaCents: number;
+  /** Loterias + Fazendinha. */
+  salesCents: number;
+  /** Prêmios dos pules da extração (apuração). */
+  prizesCents: number;
+  /** Vendas − prêmios. */
+  netCents: number;
+}
+
+/** Uma extração: o sorteio pelo nome e hora da venda (não mudam depois de vender). */
+export interface SalesByDrawRow extends SalesByDrawTotals {
+  /** Nome do sorteio (ex.: LT PT RIO 09HS). */
+  lottery: string;
+  /** Hora do sorteio (0–23). */
+  hour: number;
+  /** Código da extração na venda (ex.: PTRIO09); vazio se não houver. */
+  drawCode: string;
+  /** HH:MM do cadastro atual; null se o sorteio não existe mais. */
+  drawTime: string | null;
+}
+
+/** GET /v1/admin/reports/sales-by-draw: vendas por extração no período (data do jogo), por horário. */
+export interface AdminSalesByDrawReport {
+  from: string;
+  to: string;
+  rows: SalesByDrawRow[];
+  totals: SalesByDrawTotals;
+}
+
+export interface AdminSalesByDrawQuery {
+  /** Período pela data do jogo (YYYY-MM-DD, Brasília), inclusivo; até OPERATION_SUMMARY_MAX_DAYS dias. */
+  from: string;
+  to: string;
+  /** Só os pules dos indicados deste promotor. */
+  promoterId?: string;
+  userId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Extrato do apostador (Carteira > Extrato apostador)
+// ---------------------------------------------------------------------------
+
+/** Tipos de lançamento da carteira (wallet_entries.kind). */
+export const STATEMENT_KINDS = [
+  'LOTTERY_BET',
+  'FAZENDINHA_BET',
+  'OPERATOR_CREDIT',
+  'MANUAL_ADJUSTMENT',
+  'COMMISSION',
+  'OPENING_BALANCE',
+] as const;
+export type StatementKind = (typeof STATEMENT_KINDS)[number];
+
+/** Um lançamento da carteira. Valores em centavos (positivo = entrou, negativo = saiu). */
+export interface AdminStatementEntry {
+  id: string;
+  /** ISO 8601. */
+  createdAt: string;
+  kind: StatementKind;
+  /** Número do pule (apostas); null nos outros lançamentos. */
+  puleNumber: number | null;
+  /** Motivo (crédito pelo painel, ajuste, comissão, saldo anterior). */
+  note: string | null;
+  /** Operador que creditou pelo painel. */
+  operatorName: string | null;
+  balanceCents: number;
+  bonusCents: number;
+  prizesCents: number;
+  /** Disponível em games. */
+  gamesCents: number;
+  /** Saldo + bônus + prêmios (a carteira de apostas). */
+  totalCents: number;
+  /** Carteira de apostas (saldo + bônus + prêmios) depois deste lançamento. */
+  balanceAfterCents: number;
+}
+
+/**
+ * GET /v1/admin/users/:id/statement: lançamentos da carteira do apostador no período (dias de Brasília, inclusivos),
+ * mais recentes primeiro, paginados. Os saldos são da carteira de apostas (saldo + bônus + prêmios), que o banco
+ * mantém igual à soma dos lançamentos.
+ */
+export interface AdminPlayerStatement extends Page<AdminStatementEntry> {
+  from: string;
+  to: string;
+  player: { id: string; displayId: number; name: string };
+  /** Carteira de apostas antes do primeiro dia do período. */
+  openingCents: number;
+  /** Carteira de apostas no fim do período. */
+  closingCents: number;
+  /** Soma do que entrou e do que saiu (carteira de apostas) em todo o período. */
+  creditsCents: number;
+  debitsCents: number;
+}
+
+export interface AdminPlayerStatementQuery {
+  /** Período (YYYY-MM-DD, Brasília), inclusivo; até OPERATION_SUMMARY_MAX_DAYS dias e até hoje. */
+  from: string;
+  to: string;
+  page?: number;
+  pageSize?: number;
 }
 
 /** Ações registradas na trilha de auditoria (sempre sobre um usuário da banca). */

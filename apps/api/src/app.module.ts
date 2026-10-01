@@ -12,6 +12,16 @@ import { MuralsAdminController } from './admin/murals-admin.controller.js';
 import { BrandingAdminController } from './admin/branding-admin.controller.js';
 import { TicketsAdminController } from './admin/tickets-admin.controller.js';
 import { TicketsAdminService } from './admin/tickets-admin.service.js';
+import { PrizesAdminController } from './admin/prizes-admin.controller.js';
+import { OperationSummaryController } from './admin/operation-summary.controller.js';
+import { OperationSummaryService } from './admin/operation-summary.service.js';
+import { GeneralReportController } from './admin/general-report.controller.js';
+import { GeneralReportService } from './admin/general-report.service.js';
+import { SalesByDrawController } from './admin/sales-by-draw.controller.js';
+import { SalesByDrawService } from './admin/sales-by-draw.service.js';
+import { PlayerStatementController } from './admin/player-statement.controller.js';
+import { PlayerStatementService } from './admin/player-statement.service.js';
+import { PrizesAdminService } from './admin/prizes-admin.service.js';
 import { BrandingService } from './branding/branding.service.js';
 import { HomeLayoutService } from './branding/home-layout.service.js';
 import { MuralsController } from './murals/murals.controller.js';
@@ -48,6 +58,10 @@ import { ResultsController, ResultsWebhookController } from './results/results.c
 import { ResultsService } from './results/results.service.js';
 import { HoroscopeController } from './horoscope/horoscope.controller.js';
 import { HoroscopeService } from './horoscope/horoscope.service.js';
+import { OverdueService } from './overdue/overdue.service.js';
+import { PushController } from './push/push.controller.js';
+import { PushService } from './push/push.service.js';
+import { ResultNotifier } from './push/result-notifier.js';
 import { ResultsWebhookGuard } from './results/results-webhook.guard.js';
 import { FazendinhaController } from './fazendinha/fazendinha.controller.js';
 import { FazendinhaService } from './fazendinha/fazendinha.service.js';
@@ -82,6 +96,11 @@ export class AppModule {
         MuralsAdminController,
         BrandingAdminController,
         TicketsAdminController,
+        PrizesAdminController,
+        OperationSummaryController,
+        GeneralReportController,
+        SalesByDrawController,
+        PlayerStatementController,
         MuralsController,
         DrawsController,
         QuotesController,
@@ -94,6 +113,7 @@ export class AppModule {
         ResultsController,
         ResultsWebhookController,
         HoroscopeController,
+        PushController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -119,6 +139,11 @@ export class AppModule {
         AuditService,
         CommissionsService,
         TicketsAdminService,
+        PrizesAdminService,
+        OperationSummaryService,
+        GeneralReportService,
+        SalesByDrawService,
+        PlayerStatementService,
         QuotesService,
         PrizesService,
         ReportsService,
@@ -133,6 +158,9 @@ export class AppModule {
         ResultsService,
         ResultsWebhookGuard,
         HoroscopeService,
+        OverdueService,
+        PushService,
+        ResultNotifier,
       ],
     };
   }

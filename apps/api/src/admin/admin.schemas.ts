@@ -1,7 +1,13 @@
 import {
+  ADMIN_PRIZE_FILTER_MAX_CENTS,
+  ADMIN_PRIZES_MAX_DAYS,
   AUDIT_ACTIONS,
   AUDIT_PERIODS,
   dayOffsetOf,
+  DRAW_MAX_DAY_OFFSET,
+  GENERAL_REPORT_SORTS,
+  GENERAL_REPORT_TYPES,
+  OPERATION_SUMMARY_MAX_DAYS,
   FAZENDINHA_MODE_IDS,
   FAZENDINHA_STAKES_CENTS,
   MAX_QUOTE_PRIZE_CENTS,
@@ -160,6 +166,123 @@ export const listTicketsQuerySchema = z.strictObject({
   userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
   drawId: z.uuid({ error: 'drawId deve ser um UUID.' }).optional(),
 });
+
+const prizeFilterCents = z.coerce
+  .number({ error: 'Valor de prêmio inválido.' })
+  .int('Valor de prêmio inválido.')
+  .min(0, 'Valor de prêmio inválido.')
+  .max(ADMIN_PRIZE_FILTER_MAX_CENTS, 'Valor de prêmio alto demais.');
+
+/** Pules premiadas: período pela data do jogo (até hoje, no máximo ADMIN_PRIZES_MAX_DAYS dias) e faixa de prêmio. */
+export const listPrizesQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+    userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+    drawId: z.uuid({ error: 'drawId deve ser um UUID.' }).optional(),
+    minPrizeCents: prizeFilterCents.optional(),
+    maxPrizeCents: prizeFilterCents.optional(),
+  })
+  .superRefine((query, ctx) => {
+    const now = new Date().toISOString();
+    const from = dayOffsetOf(now, query.from);
+    const to = dayOffsetOf(now, query.to);
+    if (from === null || query.from < '2000-01-01')
+      ctx.addIssue({ code: 'custom', path: ['from'], message: 'Data inválida.' });
+    if (to === null || to > 0) ctx.addIssue({ code: 'custom', path: ['to'], message: 'Data inválida ou futura.' });
+    if (from !== null && to !== null) {
+      if (from > to) ctx.addIssue({ code: 'custom', path: ['from'], message: 'O início vem depois do fim.' });
+      else if (to - from + 1 > ADMIN_PRIZES_MAX_DAYS) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['from'],
+          message: `Escolha um período de até ${ADMIN_PRIZES_MAX_DAYS} dias.`,
+        });
+      }
+    }
+    if (
+      query.minPrizeCents !== undefined &&
+      query.maxPrizeCents !== undefined &&
+      query.minPrizeCents > query.maxPrizeCents
+    ) {
+      ctx.addIssue({ code: 'custom', path: ['minPrizeCents'], message: 'O prêmio mínimo passa do máximo.' });
+    }
+  });
+export type ListPrizesQuery = z.output<typeof listPrizesQuerySchema>;
+
+/**
+ * Período de dias de Brasília: datas reais, início antes do fim, até `maxDays` dias (contando os dois) e fim até hoje
+ * (ou até `futureDays` dias à frente, para o que é pela data do jogo).
+ */
+function checkPeriod(query: { from: string; to: string }, ctx: z.RefinementCtx, maxDays: number, futureDays = 0): void {
+  const now = new Date().toISOString();
+  const from = dayOffsetOf(now, query.from);
+  const to = dayOffsetOf(now, query.to);
+  if (from === null || query.from < '2000-01-01') {
+    ctx.addIssue({ code: 'custom', path: ['from'], message: 'Data inválida.' });
+  }
+  if (to === null || to > futureDays) {
+    ctx.addIssue({ code: 'custom', path: ['to'], message: 'Data inválida ou futura.' });
+  }
+  if (from !== null && to !== null) {
+    if (from > to) ctx.addIssue({ code: 'custom', path: ['from'], message: 'O início vem depois do fim.' });
+    else if (to - from + 1 > maxDays) {
+      ctx.addIssue({ code: 'custom', path: ['from'], message: `Escolha um período de até ${maxDays} dias.` });
+    }
+  }
+}
+
+/** Resumo da operação: período (até hoje, no máximo OPERATION_SUMMARY_MAX_DAYS dias) e promotor. */
+export const operationSummaryQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+  })
+  .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS));
+export type OperationSummaryQuery = z.output<typeof operationSummaryQuerySchema>;
+
+/** Relatório geral: o mesmo período do resumo da operação, mais paginação, filtros e ordenação. */
+export const generalReportQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+    userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+    type: z.enum(GENERAL_REPORT_TYPES, { error: 'Tipo inválido.' }).optional(),
+    sort: z.enum(GENERAL_REPORT_SORTS, { error: 'Ordenação inválida.' }).default('sales'),
+    dir: z.enum(['asc', 'desc'], { error: 'Direção inválida.' }).default('desc'),
+  })
+  .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS));
+
+export type GeneralReportQuery = z.output<typeof generalReportQuerySchema>;
+
+/** Vendas por extração: período pela data do jogo (até o fim da janela de apostas), promotor e apostador. */
+export const salesByDrawQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+    userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+  })
+  .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS, DRAW_MAX_DAY_OFFSET));
+export type SalesByDrawQuery = z.output<typeof salesByDrawQuerySchema>;
+
+/** Extrato do apostador: período (até hoje) e paginação. */
+export const playerStatementQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    page: z.coerce.number().int().min(1).max(1_000_000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS));
+export type PlayerStatementQuery = z.output<typeof playerStatementQuerySchema>;
 
 /** Número do bilhete (pule): inteiro positivo dentro do int do banco. */
 export const ticketNumberSchema = z.coerce

@@ -8,6 +8,7 @@ import {
 } from '@sysjb/contracts';
 import { AppError } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
+import { ResultNotifier } from '../push/result-notifier.js';
 import { type NormalizedResult, normalizeWebhook } from './result-normalizer.js';
 import { type StoreOutcome, storeResult } from './results.store.js';
 
@@ -28,11 +29,15 @@ export const resultKey = (r: Pick<NormalizedResult, 'date' | 'lottery' | 'extrac
 export class ResultsService {
   private readonly logger = new Logger('Results');
 
-  constructor(@Inject(DatabaseService) private readonly db: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly db: DatabaseService,
+    @Inject(ResultNotifier) private readonly notifier: ResultNotifier,
+  ) {}
 
   /**
    * Resultado enviado pelo provedor. Inválido = 422 (o provedor reenvia até receber 200/201). Repetido = 200 sem
-   * alterar nada; diferente do gravado = correção (nova revisão, a anterior fica no histórico).
+   * alterar nada; diferente do gravado = correção (nova revisão, a anterior fica no histórico). Resultado novo avisa
+   * quem apostou (em segundo plano; a resposta ao provedor não espera os envios).
    */
   async receiveWebhook(body: unknown): Promise<WebhookAck> {
     const normalized = normalizeWebhook(body, new Date().toISOString());
@@ -42,6 +47,10 @@ export class ResultsService {
     }
     const outcome = await storeResult(this.db.client, normalized.result, 'WEBHOOK');
     this.logOutcome(normalized.result, outcome);
+    if (outcome.status === 'created') {
+      const { date, lottery, extraction } = normalized.result;
+      this.notifier.resultArrived({ date, lottery, extraction });
+    }
     return outcome.status === 'created'
       ? { codigo: 201, mensagem: 'Resultado recebido e armazenado.' }
       : { codigo: 200, mensagem: 'Resultado recebido com sucesso.' };

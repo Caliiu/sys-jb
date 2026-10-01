@@ -83,7 +83,7 @@ function SearchBox({ label, value, onChange }: { label: string; value: string; o
         onChange={(e) => onChange(e.target.value)}
         placeholder={`${label}...`}
         aria-label={label}
-        className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
+        className="flex-1 bg-transparent text-[16px] outline-none placeholder:text-gray-400"
       />
     </label>
   );

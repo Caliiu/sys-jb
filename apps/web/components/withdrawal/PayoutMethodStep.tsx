@@ -11,7 +11,7 @@ import RecentKeys from './RecentKeys';
 
 const labelClass = 'text-[11.5px] font-semibold uppercase tracking-wide text-gray-500';
 const fieldClass =
-  'mt-2 h-11 w-full rounded-xl border border-gray-200 bg-[#F6F6F6] px-3.5 text-[14px] font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/40 read-only:cursor-default read-only:focus:ring-0';
+  'mt-2 h-11 w-full rounded-xl border border-gray-200 bg-[#F6F6F6] px-3.5 text-[16px] font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-brand-primary/40 read-only:cursor-default read-only:focus:ring-0';
 
 function Card({ children }: { children: ReactNode }) {
   return <section className="rounded-2xl bg-white p-4 shadow-sm">{children}</section>;

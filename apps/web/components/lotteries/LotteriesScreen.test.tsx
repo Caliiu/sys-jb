@@ -55,7 +55,9 @@ async function buildCart() {
   await click('Avançar');
 }
 
-describe('Loterias', () => {
+// Fluxos inteiros de compra (muitos cliques): sozinhos levam ~1,5 s, mas com a suíte toda em paralelo passavam dos 5 s
+// do padrão. O limite maior só evita falso negativo; uma tela travada continua falhando.
+describe('Loterias', { timeout: 20_000 }, () => {
   it('primeira tela: tipos de jogo (só o Tradicional abre), Repetir pule e ferramentas "em breve"', async () => {
     renderScreen();
     expect(heading()).toBe('Nova aposta');
@@ -70,10 +72,11 @@ describe('Loterias', () => {
     await click('Voltar às loterias');
     expect(heading()).toBe('Nova aposta');
     const tools = within(screen.getByRole('navigation', { name: 'Ferramentas' }));
-    // Prêmio e Horóscopo abrem as páginas deles; as outras ainda são "em breve".
+    // Prêmio, Horóscopo e Atrasados abrem as páginas deles; Sonhos ainda é "em breve".
     expect(tools.getByRole('link', { name: 'Prêmio' })).toHaveAttribute('href', '/loterias/calcular');
     expect(tools.getByRole('link', { name: 'Horóscopo' })).toHaveAttribute('href', '/loterias/horoscopo');
-    expect(tools.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sonhos', 'Atrasados']);
+    expect(tools.getByRole('link', { name: 'Atrasados' })).toHaveAttribute('href', '/loterias/atrasados');
+    expect(tools.getAllByRole('button').map((b) => b.textContent)).toEqual(['Sonhos']);
   });
 
   it('fluxo completo até o carrinho, com as etapas e o resumo de cada uma', async () => {

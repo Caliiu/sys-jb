@@ -1,10 +1,13 @@
-import ComingSoonRoute, { comingSoonMetadata } from '@/components/admin/ComingSoonRoute';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
+import WalletMovementsRoute from '@/components/admin/WalletMovementsRoute';
 
 export const dynamic = 'force-dynamic';
-export const metadata = comingSoonMetadata(ADMIN_ROUTES.withdrawals);
+export const metadata = { title: 'Saques' };
 
-/** Página ainda não construída: "Em breve" (com sessão e permissão conferidas). */
-export default function Page() {
-  return <ComingSoonRoute href={ADMIN_ROUTES.withdrawals} />;
+/** Carteira > Saques: filtros sempre; a lista só depois de pesquisar. */
+export default function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <WalletMovementsRoute kind="withdrawals" searchParams={searchParams} />;
 }

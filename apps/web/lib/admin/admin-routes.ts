@@ -15,8 +15,9 @@ export const ADMIN_ROUTES = {
   operationSummary: '/resumo-operacao',
   // Relatórios
   generalReport: '/relatorios/geral',
-  commissions: '/comissoes',
-  audit: '/auditoria',
+  casinoGeneralReport: '/relatorios/cassino/geral',
+  casinoClosingReport: '/relatorios/cassino/fechamento',
+  salesByDrawReport: '/relatorios/loterias/vendas-por-extracao',
   // Carteira
   deposits: '/depositos',
   statement: '/extrato',
@@ -36,4 +37,8 @@ export const ADMIN_ROUTES = {
   /** Personalização: abas Identidade visual e Cards do início. */
   branding: '/personalizacao',
   homeLayout: '/personalizacao/cards-inicio',
+  /** Valores: "Indique e ganhe" e o fechamento mensal das comissões (antes, Carteira > Comissões em /comissoes). */
+  values: '/personalizacao/valores',
+  // Administração (rodapé do menu)
+  audit: '/auditoria',
 } as const;

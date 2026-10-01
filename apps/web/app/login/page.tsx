@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { TenantUnavailable } from '@/components/ui/Notice';
 import { TenantProvider } from '@/components/tenant/TenantProvider';
 import { resolveRequest } from '@/lib/request-context';
+import { webPushPublicKey } from '@/lib/server-env';
 import LoginPage from '@/views/LoginPage';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,7 @@ export default async function Page() {
 
   return (
     <TenantProvider tenant={ctx.tenant}>
-      <LoginPage />
+      <LoginPage pushPublicKey={webPushPublicKey()} />
     </TenantProvider>
   );
 }

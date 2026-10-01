@@ -1,6 +1,6 @@
 'use client';
 
-import { Calculator, Moon, Sparkles, Timer } from 'lucide-react';
+import { Calculator, Clock, Moon, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ROUTES } from '@/lib/routes';
@@ -8,22 +8,20 @@ import { useToast } from '../ui/Toast';
 
 const itemClass = 'flex flex-1 flex-col items-center gap-1 pt-2.5 pb-2 text-white';
 
-type Tool = 'prize' | 'horoscope';
+type Tool = 'prize' | 'horoscope' | 'overdue';
 
 const LINKS: Array<{ id: Tool; label: string; href: string; icon: typeof Calculator }> = [
   { id: 'prize', label: 'Prêmio', href: ROUTES.prizeCalculator, icon: Calculator },
   { id: 'horoscope', label: 'Horóscopo', href: ROUTES.horoscope, icon: Sparkles },
+  { id: 'overdue', label: 'Atrasados', href: ROUTES.overdue, icon: Clock },
 ];
 
-const COMING_SOON = [
-  { label: 'Sonhos', icon: Moon },
-  { label: 'Atrasados', icon: Timer },
-];
+const COMING_SOON = [{ label: 'Sonhos', icon: Moon }];
 
 /**
- * Barra de ferramentas das Loterias (fixa no rodapé, na cor da banca): Prêmio, Horóscopo, Sonhos e Atrasados.
- * Prêmio e Horóscopo abrem as páginas deles; as outras ainda avisam "em breve". `active` marca a ferramenta da página
- * atual; `above` fica fixo logo acima da barra (ex.: os signos do Horóscopo).
+ * Barra de ferramentas das Loterias (fixa no rodapé, na cor da banca): Prêmio, Horóscopo, Atrasados e Sonhos.
+ * Prêmio, Horóscopo e Atrasados abrem as páginas deles; Sonhos ainda avisa "em breve". `active` marca a ferramenta da
+ * página atual; `above` fica fixo logo acima da barra (ex.: os signos do Horóscopo).
  */
 export default function LotteryToolsNav({ active, above }: { active?: Tool; above?: ReactNode }) {
   const toast = useToast();

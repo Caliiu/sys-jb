@@ -53,7 +53,7 @@ const NOW = '2026-09-30T15:00:00.000Z';
 describe('Registro de auditoria', () => {
   it('mostra quando e quem alterou, a ação (selo), o apostador (link) e o que mudou', () => {
     renderWithProviders(<AuditPage query={noFilter} result={page(entries)} nowIso={NOW} />);
-    expect(screen.getByRole('heading', { level: 1, name: 'Auditoria' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Log de auditoria' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Registro de auditoria' });
     expect(

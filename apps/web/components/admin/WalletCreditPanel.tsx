@@ -8,6 +8,7 @@ import { creditWalletAction } from '@/app/admin/actions';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { formatBrl, formatCents, parseCurrencyInput } from '@/lib/currency';
 import ConfirmDialog from './ConfirmDialog';
+import { randomUuid } from '@/lib/uuid';
 
 /** Rótulo do botão e nome da bolsa na confirmação. */
 export const CREDIT_BUCKETS: Record<WalletCreditBucket, { action: string; noun: string }> = {
@@ -67,7 +68,7 @@ export default function WalletCreditPanel({ userId, userName }: WalletCreditPane
 
   async function confirm() {
     if (!bucket || pending) return;
-    key.current ??= crypto.randomUUID();
+    key.current ??= randomUuid();
     setPending(true);
     setError(null);
     try {

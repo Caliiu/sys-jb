@@ -54,3 +54,13 @@ export function adminHostname(): string {
 export function isAdminHost(hostname: string | null): boolean {
   return hostname !== null && hostname === adminHostname();
 }
+
+/**
+ * Chave pública VAPID das notificações (WEB_PUSH_VAPID_PUBLIC_KEY), que o navegador usa para inscrever o aparelho. É
+ * pública por definição; a privada nunca é lida pelo web. null = notificações desligadas (ou chave fora do formato).
+ */
+export function webPushPublicKey(): string | null {
+  ensureEnv();
+  const key = process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ?? '';
+  return /^[A-Za-z0-9_-]{87}$/.test(key) ? key : null;
+}

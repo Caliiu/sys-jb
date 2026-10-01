@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { can, requireAdmin } from '@/lib/admin/admin-context';
+import { requireAdmin } from '@/lib/admin/admin-context';
 import AdminMessage from './AdminMessage';
 import { AdminUnavailable } from './AdminUnavailable';
 import ComingSoon from './ComingSoon';
-import { findNavItem } from './admin-nav';
+import { canSeeNavLink, findNavItem } from './admin-nav';
 
 /** Título da aba da página "Em breve" (o nome do item no menu). */
 export function comingSoonMetadata(href: string): Metadata {
@@ -20,7 +20,7 @@ export default async function ComingSoonRoute({ href }: { href: string }) {
   if (!found?.item.soon) notFound();
   const gate = await requireAdmin();
   if (!gate.ok) return <AdminUnavailable message={gate.message} />;
-  if (!can(gate.session.operator, found.item.permission)) {
+  if (!canSeeNavLink(gate.session.operator.permissions, found.item)) {
     return <AdminMessage title="Sem permissão">Seu perfil não pode acessar esta página.</AdminMessage>;
   }
   return <ComingSoon title={found.item.label} icon={found.item.icon} />;

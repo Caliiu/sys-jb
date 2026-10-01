@@ -75,7 +75,7 @@ export default function PasswordPanel({ open, onOpen, onClose, value, onChange, 
           spellCheck={false}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'profile-password-error' : 'profile-password-hint'}
-          className={`h-11 w-full rounded-xl border bg-white pl-3.5 pr-11 text-[14px] text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-primary/40 ${
+          className={`h-11 w-full rounded-xl border bg-white pl-3.5 pr-11 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-primary/40 ${
             error ? 'border-red-400' : 'border-gray-200'
           }`}
         />

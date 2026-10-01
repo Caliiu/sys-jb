@@ -23,6 +23,8 @@ export function buildContentSecurityPolicy(nonce: string, isDev: boolean): strin
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
     "connect-src 'self'",
+    // Service worker das notificações (public/sw.js); sem isto valeria o script-src, que com 'strict-dynamic' ignora 'self'.
+    "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

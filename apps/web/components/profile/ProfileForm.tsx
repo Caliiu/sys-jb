@@ -15,7 +15,7 @@ type FieldErrors = { phone?: string; email?: string; password?: string };
 
 const labelClass = 'text-[14px] font-bold text-gray-900';
 const inputClass =
-  'h-12 w-full rounded-xl border bg-white px-3.5 text-[14px] text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-primary/40 read-only:cursor-default read-only:text-gray-500 read-only:focus:ring-0';
+  'h-12 w-full rounded-xl border bg-white px-3.5 text-[16px] text-gray-900 outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-brand-primary/40 read-only:cursor-default read-only:text-gray-500 read-only:focus:ring-0';
 
 function Field({ id, label, children }: { id: string; label: ReactNode; children: ReactNode }) {
   return (

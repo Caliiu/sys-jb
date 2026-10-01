@@ -33,7 +33,7 @@ export default function PuleCodeForm({ action, defaultValue = '', error }: PuleC
           placeholder="Código da pule"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'pule-error' : undefined}
-          className="h-12 w-full rounded-xl bg-white px-4 text-[15px] text-gray-900 placeholder:text-slate-400 outline-none focus-visible:ring-2 focus-visible:ring-brand-orange aria-invalid:ring-2 aria-invalid:ring-red-500"
+          className="h-12 w-full rounded-xl bg-white px-4 text-[16px] text-gray-900 placeholder:text-slate-400 outline-none focus-visible:ring-2 focus-visible:ring-brand-orange aria-invalid:ring-2 aria-invalid:ring-red-500"
         />
         {error && (
           <p id="pule-error" role="alert" className="px-1 text-[13px] font-semibold text-red-700">

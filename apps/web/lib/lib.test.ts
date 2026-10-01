@@ -3,6 +3,18 @@ import { formatCountdown } from '@/hooks/useCountdown';
 import { formatCents } from './currency';
 import { tenantIcon, tenantInitial } from './favicon';
 import { birthDateBrToIso, maskBirthDateInput, maskCpfInput, maskPhoneInput } from './masks';
+import { overdueOf, parseOverdueDrawId } from './routes';
+
+describe('rota dos atrasados', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+
+  it('?sorteio= só aceita um UUID (o primeiro, sem espaços e em minúsculas)', () => {
+    expect(overdueOf(ID)).toBe(`/loterias/atrasados?sorteio=${ID}`);
+    expect(parseOverdueDrawId(` ${ID.toUpperCase()} `)).toBe(ID);
+    expect(parseOverdueDrawId([ID, 'outro'])).toBe(ID);
+    for (const raw of [undefined, '', 'abc', `${ID},${ID}`, `${ID}'--`, []]) expect(parseOverdueDrawId(raw)).toBeNull();
+  });
+});
 
 describe('máscaras', () => {
   it('telefone: celular, fixo e digitação parcial', () => {

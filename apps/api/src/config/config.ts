@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { type RateLimitConfig, loadRateLimitConfig } from '../rate-limit/rate-limit.rules.js';
 import { type HoroscopeConfig, loadHoroscopeConfig } from '../horoscope/horoscope.config.js';
+import { type OverdueConfig, loadOverdueConfig } from '../overdue/overdue.config.js';
+import { type PushConfig, loadPushConfig } from '../push/push.config.js';
 import { parseResultsWebhookToken } from '../results/results.config.js';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -30,6 +32,10 @@ export interface AppConfig {
   resultsWebhookTokenDigest: Buffer | null;
   /** API de horóscopo (HOROSCOPE_API_*); null = desligada (a tela usa o texto local). */
   horoscope: HoroscopeConfig | null;
+  /** API de atrasados (OVERDUE_API_*); null = desligada (os atrasados saem dos resultados guardados). */
+  overdue: OverdueConfig | null;
+  /** Notificações Web Push (WEB_PUSH_*); null = desligadas (a inscrição é recusada e nada é enviado). */
+  push: PushConfig | null;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -123,5 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     rateLimit: loadRateLimitConfig(env),
     resultsWebhookTokenDigest: parseResultsWebhookToken(env.RESULTS_WEBHOOK_TOKEN),
     horoscope: loadHoroscopeConfig(env),
+    overdue: loadOverdueConfig(env),
+    push: loadPushConfig(env),
   };
 }

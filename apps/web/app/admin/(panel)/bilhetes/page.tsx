@@ -10,9 +10,9 @@ import { parseTicketsQuery, ticketsHref } from '@/lib/admin/tickets-query';
 import TicketsPage, { type TicketsResult } from '@/views/admin/TicketsPage';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Bilhetes' };
+export const metadata = { title: 'Pules' };
 
-/** Operação > Bilhetes: filtros sempre; a lista (ou a pesquisa por ticket) só depois de pesquisar. */
+/** Operação > Pules: filtros sempre; a lista (ou a pesquisa por ticket) só depois de pesquisar. */
 export default async function Page({
   searchParams,
 }: {
@@ -22,7 +22,7 @@ export default async function Page({
   if (!gate.ok) return <AdminUnavailable message={gate.message} />;
   const { session } = gate;
   if (!can(session.operator, 'tickets.read')) {
-    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar os bilhetes.</AdminMessage>;
+    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar os pules.</AdminMessage>;
   }
 
   const nowIso = new Date().toISOString();
@@ -40,7 +40,7 @@ export default async function Page({
   if (main && !main.ok) {
     const failure = toAdminFailure(main.status, main.error);
     if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
-    return <AdminMessage title="Não foi possível carregar os bilhetes">{failure.message}</AdminMessage>;
+    return <AdminMessage title="Não foi possível carregar os pules">{failure.message}</AdminMessage>;
   }
   if (searched?.ok) result = { kind: 'ticket', items: searched.data };
   if (listed?.ok) {

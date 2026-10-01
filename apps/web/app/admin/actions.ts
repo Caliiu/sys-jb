@@ -1,7 +1,6 @@
 'use server';
 
 import type {
-  AdminCommissionMonth,
   AdminCommissionSettings,
   AdminDrawsResponse,
   AdminBranding,
@@ -187,20 +186,6 @@ export async function setReferralRateAction(bps: unknown): Promise<AdminActionRe
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.setCommissionSettings(caller, rate.data);
-  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
-}
-
-/** Fecha o mês (YYYY-MM): paga as comissões no Saldo. Só uma vez por mês; a API e o banco conferem. */
-export async function closeCommissionMonthAction(month: unknown): Promise<AdminActionResult<AdminCommissionMonth>> {
-  const value = z
-    .string()
-    .regex(/^20\d{2}-(0[1-9]|1[0-2])$/)
-    .safeParse(month);
-  if (!value.success) return invalidInput;
-  const caller = await operatorCaller();
-  if (isFailure(caller)) return caller;
-
-  const res = await adminApi.closeCommissionMonth(caller, value.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

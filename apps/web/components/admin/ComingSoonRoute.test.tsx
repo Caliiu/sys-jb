@@ -24,10 +24,10 @@ beforeEach(() => vi.clearAllMocks());
 describe('páginas "Em breve"', () => {
   it('com a permissão do item: título, ícone e o aviso', async () => {
     as(ROLE_PERMISSIONS.FINANCE);
-    render(await ComingSoonRoute({ href: '/saques' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Saques' })).toBeInTheDocument();
+    render(await ComingSoonRoute({ href: '/crm/nunca-depositantes' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Nunca depositantes' })).toBeInTheDocument();
     expect(screen.getByText('Em breve')).toBeInTheDocument();
-    expect(comingSoonMetadata('/saques')).toEqual({ title: 'Saques' });
+    expect(comingSoonMetadata('/crm/nunca-depositantes')).toEqual({ title: 'Nunca depositantes' });
   });
 
   it('sem a permissão (endereço digitado): bloqueia no servidor', async () => {
@@ -39,7 +39,7 @@ describe('páginas "Em breve"', () => {
 
   it('fora do painel disponível: mostra o aviso de indisponível', async () => {
     gate.mockResolvedValue({ ok: false, hostname: null, message: 'Indisponível neste endereço.' });
-    render(await ComingSoonRoute({ href: '/premios' }));
+    render(await ComingSoonRoute({ href: '/crm/inativos' }));
     expect(screen.getByText('Indisponível neste endereço.')).toBeInTheDocument();
   });
 

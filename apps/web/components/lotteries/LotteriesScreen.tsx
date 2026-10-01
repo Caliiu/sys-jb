@@ -49,6 +49,7 @@ import { DateStep, ModalityStep, PlacementStep, SummaryCard, TypeStep } from './
 import RepeatPuleFlow from './RepeatPuleFlow';
 import SuccessDialog from './SuccessDialog';
 import TicketCard from './TicketCard';
+import { randomUuid } from '@/lib/uuid';
 
 type Step =
   | 'type'
@@ -227,7 +228,7 @@ export default function LotteriesScreen({
         afterClose: () => go('draws'),
       });
     }
-    purchaseKey.current ??= crypto.randomUUID();
+    purchaseKey.current ??= randomUuid();
     setPending(true);
     try {
       const result = await placeLotteryTicketsAction({

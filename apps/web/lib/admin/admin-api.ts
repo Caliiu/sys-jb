@@ -1,8 +1,6 @@
 import 'server-only';
 import type {
   AdminAuditEntry,
-  AdminCommissionClosing,
-  AdminCommissionMonth,
   AdminCommissionSettings,
   AdminDrawsResponse,
   AdminBranding,
@@ -11,6 +9,11 @@ import type {
   AdminPromoterListItem,
   AdminPromoterOption,
   AdminTicketDrawOption,
+  AdminGeneralReport,
+  AdminOperationSummary,
+  AdminPlayerStatement,
+  AdminPrizeList,
+  AdminSalesByDrawReport,
   AdminTicketList,
   AdminTicketListItem,
   AdminUserDetail,
@@ -28,6 +31,11 @@ import type {
 import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import type { AuditQuery } from './audit-query';
+import type { GeneralReportQuery } from './general-report-query';
+import type { OperationSummaryQuery } from './operation-summary-query';
+import type { PrizesQuery } from './prizes-query';
+import type { SalesByDrawQuery } from './sales-by-draw-query';
+import type { StatementQuery } from './statement-query';
 import type { TicketsQuery } from './tickets-query';
 import type { UsersQuery } from './users-query';
 
@@ -64,6 +72,58 @@ export const adminApi = {
     call<AdminTicketListItem[]>(session, 'GET', `/v1/admin/tickets/${encodeURIComponent(String(puleNumber))}`),
 
   /** Sorteios da banca para o filtro "Horário (Extração)". */
+  listPrizes(session: Caller, query: PrizesQuery) {
+    const params = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.userId) params.set('userId', query.userId);
+    if (query.drawId) params.set('drawId', query.drawId);
+    if (query.minPrizeCents !== null) params.set('minPrizeCents', String(query.minPrizeCents));
+    if (query.maxPrizeCents !== null) params.set('maxPrizeCents', String(query.maxPrizeCents));
+    return call<AdminPrizeList>(session, 'GET', `/v1/admin/prizes?${params}`);
+  },
+  playerStatement(session: Caller, query: StatementQuery) {
+    const params = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    return call<AdminPlayerStatement>(
+      session,
+      'GET',
+      `/v1/admin/users/${encodeURIComponent(query.userId)}/statement?${params}`,
+    );
+  },
+  salesByDraw(session: Caller, query: SalesByDrawQuery) {
+    const params = new URLSearchParams({ from: query.from, to: query.to });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.userId) params.set('userId', query.userId);
+    return call<AdminSalesByDrawReport>(session, 'GET', `/v1/admin/reports/sales-by-draw?${params}`);
+  },
+  generalReport(session: Caller, query: GeneralReportQuery) {
+    const params = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+      sort: query.sort,
+      dir: query.dir,
+    });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.userId) params.set('userId', query.userId);
+    if (query.type) params.set('type', query.type);
+    return call<AdminGeneralReport>(session, 'GET', `/v1/admin/reports/general?${params}`);
+  },
+  operationSummary(session: Caller, query: OperationSummaryQuery) {
+    const params = new URLSearchParams({ from: query.from, to: query.to });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    return call<AdminOperationSummary>(session, 'GET', `/v1/admin/operation-summary?${params}`);
+  },
   ticketDrawOptions: (session: Caller) =>
     call<AdminTicketDrawOption[]>(session, 'GET', '/v1/admin/tickets/draw-options'),
 
@@ -93,15 +153,6 @@ export const adminApi = {
 
   setCommissionSettings: (session: Caller, referralCommissionBps: number) =>
     call<AdminCommissionSettings>(session, 'PUT', '/v1/admin/commissions/settings', { referralCommissionBps }),
-
-  getCommissionMonth: (session: Caller, month: string) =>
-    call<AdminCommissionMonth>(session, 'GET', `/v1/admin/commissions/months/${encodeURIComponent(month)}`),
-
-  closeCommissionMonth: (session: Caller, month: string) =>
-    call<AdminCommissionMonth>(session, 'POST', `/v1/admin/commissions/months/${encodeURIComponent(month)}/close`, {}),
-
-  listCommissionClosings: (session: Caller) =>
-    call<AdminCommissionClosing[]>(session, 'GET', '/v1/admin/commissions/closings'),
 
   getQuotes: (session: Caller) => call<PublicQuotes>(session, 'GET', '/v1/admin/quotes'),
 

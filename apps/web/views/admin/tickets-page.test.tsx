@@ -46,12 +46,12 @@ const show = (raw: Record<string, string>, extra: Partial<Parameters<typeof Tick
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('Bilhetes', () => {
+describe('Pules', () => {
   it('filtros na ordem da referência, com Pesquisar e Limpar; sem pesquisar, nenhum resultado', () => {
     show({});
-    expect(screen.getByRole('heading', { level: 1, name: 'Bilhetes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Pules' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Filtros' })).toBeInTheDocument();
-    const form = screen.getByRole('form', { name: 'Filtrar bilhetes' });
+    const form = screen.getByRole('form', { name: 'Filtrar pules' });
     expect(form).toHaveAttribute('method', 'get');
     expect(form).toHaveAttribute('action', '/bilhetes');
     const labels = [...form.querySelectorAll('label')].map((l) => l.textContent);
@@ -78,7 +78,7 @@ describe('Bilhetes', () => {
 
   it('Seção, Rota e Grupo de Cobrança não vão para a URL (cadastros ainda não existem)', () => {
     show({});
-    const form = screen.getByRole<HTMLFormElement>('form', { name: 'Filtrar bilhetes' });
+    const form = screen.getByRole<HTMLFormElement>('form', { name: 'Filtrar pules' });
     let sent: string[] = [];
     // No document (depois do onSubmit do React): vê os campos como o navegador os enviaria.
     const capture = (event: Event) => {
@@ -106,12 +106,12 @@ describe('Bilhetes', () => {
     const results = screen.getByRole('region', { name: 'Resultados' });
     expect(within(results).getByText(/Data:/)).toHaveTextContent('Data: 29/09/2026');
     expect(within(results).getByText(/Total:/)).toHaveTextContent('Total: R$ 42,50');
-    const table = within(results).getByRole('table', { name: 'Bilhetes' });
+    const table = within(results).getByRole('table', { name: 'Pules' });
     expect(
       within(table)
         .getAllByRole('columnheader')
         .map((th) => th.textContent),
-    ).toEqual(['Bilhete', 'Data/Hora', 'Apostador', 'Extração', 'Sorteio', 'Valor']);
+    ).toEqual(['Pule', 'Data/Hora', 'Apostador', 'Extração', 'Sorteio', 'Valor']);
     const [first, second] = within(table).getAllByRole('row').slice(1);
     expect(first).toHaveTextContent('#10001');
     expect(first).toHaveTextContent('Loterias');
@@ -149,7 +149,7 @@ describe('Bilhetes', () => {
     expect(screen.getByText('Nenhum resultado encontrado')).toBeInTheDocument();
     unmount();
     show({ ticket: '9' }, { result: { kind: 'ticket', items: [] } });
-    expect(screen.getByText('Nenhum bilhete com esse número.')).toBeInTheDocument();
+    expect(screen.getByText('Nenhum pule com esse número.')).toBeInTheDocument();
   });
 });
 
@@ -168,7 +168,7 @@ describe('Apostador (busca no servidor)', () => {
     await ui.click(await screen.findByRole('option', { name: '100002 - Ana Souza Lima' }));
     expect(searchPlayersAction).toHaveBeenLastCalledWith('ana');
     expect(screen.queryByRole('listbox')).toBeNull();
-    const form = screen.getByRole<HTMLFormElement>('form', { name: 'Filtrar bilhetes' });
+    const form = screen.getByRole<HTMLFormElement>('form', { name: 'Filtrar pules' });
     expect(form.querySelector<HTMLInputElement>('input[name="apostador"]')!.value).toBe(PLAYER.id);
   });
 

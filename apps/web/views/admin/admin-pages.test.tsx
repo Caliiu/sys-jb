@@ -5,7 +5,7 @@ import {
   type Permission,
   ROLE_PERMISSIONS,
 } from '@sysjb/contracts';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, router, tenant } from '@/test/render';
@@ -457,14 +457,16 @@ describe('menu do painel', () => {
       <AdminShell tenantName="Banca Teste" operatorName="Maria Souza" roleLabel="Gerente" permissions={permissions} />,
     );
 
-  it('estrutura da imagem: Início, Operação, Relatórios, Carteira, CRM e Configurações, com os traços', () => {
+  it('estrutura da imagem: Início, Operação, Relatórios (painel), Carteira, CRM, Configurações e Administração no rodapé', () => {
     renderSidebar(ROLE_PERMISSIONS.MANAGER);
     const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
     expect(within(nav).getByRole('link', { name: 'Início' })).toHaveAttribute('href', '/');
     const groups = within(nav)
       .getAllByRole('group')
       .map((g) => within(g).getAllByRole('button')[0]!.textContent);
-    expect(groups).toEqual(['Operação', 'Relatórios', 'Carteira', 'CRM', 'Configurações']);
+    expect(groups).toEqual(['Operação', 'Carteira', 'CRM', 'Configurações', 'Administração']);
+    // Relatórios não abre dentro do menu: o botão abre o painel ao lado.
+    expect(within(nav).getByRole('button', { name: 'Relatórios' })).toHaveAttribute('aria-expanded', 'false');
     // Traços: depois de Início, antes de Carteira e, dentro de Configurações, antes de Mural (fechado aqui).
     expect(within(nav).getAllByRole('separator')).toHaveLength(2);
     // O grupo da página atual já vem aberto, com os itens na ordem da imagem.
@@ -473,7 +475,7 @@ describe('menu do painel', () => {
       within(operation)
         .getAllByRole('link')
         .map((a) => a.textContent),
-    ).toEqual(['Apostadores', 'Bilhetes', 'Prêmios', 'Resumo da Operação']);
+    ).toEqual(['Apostadores', 'Pules', 'Pules Premiadas', 'Resumo da Operação']);
   });
 
   it('mostra o operador com o perfil e marca a página atual (Apostadores)', () => {
@@ -487,25 +489,106 @@ describe('menu do painel', () => {
     expect(screen.getAllByText('Gerente').length).toBeGreaterThan(0);
   });
 
+  it('selo da conta: a logo da banca; sem logo ou se a imagem falhar, a inicial do operador', () => {
+    const badge = () => screen.getAllByRole('button', { name: /Maria Souza/ })[0]!.firstElementChild!;
+    const { unmount } = renderSidebar(['users.read']);
+    expect(badge().querySelector('img')).toBeNull();
+    expect(badge()).toHaveTextContent('M');
+    unmount();
+
+    renderWithProviders(
+      <AdminShell
+        tenantName="Banca Teste"
+        tenantLogoUrl="/marca/logo?v=abc"
+        operatorName="Maria Souza"
+        roleLabel="Gerente"
+        permissions={['users.read']}
+      />,
+    );
+    const img = badge().querySelector('img')!;
+    expect(img).toHaveAttribute('src', '/marca/logo?v=abc');
+    expect(img).toHaveAttribute('alt', '');
+    fireEvent.error(img);
+    expect(badge().querySelector('img')).toBeNull();
+    expect(badge()).toHaveTextContent('M');
+  });
+
   it('sem permissão de consulta, nada aparece', () => {
     renderSidebar([]);
     expect(screen.queryByRole('link', { name: 'Início' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Operação' })).toBeNull();
   });
 
-  it('Auditoria (em Relatórios) só aparece com a permissão de consultá-la', async () => {
-    const openReports = async () => {
-      const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
-      await userEvent.click(within(nav).getByRole('button', { name: 'Relatórios' }));
-      return within(nav).getByRole('group', { name: 'Relatórios' });
-    };
+  it('Log de auditoria (Administração) e Personalização (com Valores) só aparecem com a permissão', async () => {
+    const nav = () => screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
     const { unmount } = renderSidebar(ROLE_PERMISSIONS.SUPPORT);
-    expect(within(await openReports()).queryByRole('link', { name: 'Auditoria' })).toBeNull();
+    expect(within(nav()).queryByRole('group', { name: 'Administração' })).toBeNull();
+    // Suporte não tem nenhum item de Configurações: o grupo nem aparece.
+    expect(within(nav()).queryByRole('button', { name: 'Configurações' })).toBeNull();
+    expect(within(nav()).queryByRole('link', { name: 'Personalização' })).toBeNull();
     unmount();
+
+    // Financeiro: sem a identidade visual, mas vê Personalização por causa da aba Valores.
+    const finance = renderSidebar(ROLE_PERMISSIONS.FINANCE);
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Configurações' }));
+    expect(within(nav()).getByRole('link', { name: 'Personalização' })).toHaveAttribute('href', '/personalizacao');
+    finance.unmount();
+
     renderSidebar(ROLE_PERMISSIONS.MANAGER);
-    const reports = await openReports();
-    expect(within(reports).getByRole('link', { name: 'Auditoria' })).toHaveAttribute('href', '/auditoria');
-    expect(within(reports).getByRole('link', { name: 'Comissões' })).toHaveAttribute('href', '/comissoes');
+    const admin = within(nav()).getByRole('group', { name: 'Administração' });
+    await userEvent.click(within(admin).getByRole('button', { name: 'Administração' }));
+    expect(within(admin).getByRole('link', { name: 'Log de auditoria' })).toHaveAttribute('href', '/auditoria');
+    // Comissões saiu da Carteira (virou Personalização > Valores).
+    const wallet = within(nav()).getByRole('group', { name: 'Carteira' });
+    await userEvent.click(within(wallet).getByRole('button', { name: 'Carteira' }));
+    expect(within(wallet).queryByRole('link', { name: 'Comissões' })).toBeNull();
+  });
+
+  it('Relatórios abre o painel ao lado com os subgrupos; fecha com Esc, clique fora ou no próprio botão', async () => {
+    renderSidebar(ROLE_PERMISSIONS.FINANCE);
+    const nav = screen.getAllByRole('navigation', { name: 'Menu do painel' })[0]!;
+    const toggle = within(nav).getByRole('button', { name: 'Relatórios' });
+    expect(screen.queryByRole('region', { name: 'Relatórios' })).toBeNull();
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panel = screen.getByRole('region', { name: 'Relatórios' });
+    expect(toggle).toHaveAttribute('aria-controls', panel.id);
+    expect(
+      within(panel)
+        .getAllByRole('link')
+        .map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([
+      ['Relatório geral', '/relatorios/geral'],
+      ['Geral cassino', '/relatorios/cassino/geral'],
+      ['Fechamento cassino', '/relatorios/cassino/fechamento'],
+      ['Vendas por extração', '/relatorios/loterias/vendas-por-extracao'],
+    ]);
+    // Subgrupo abre e fecha.
+    const casino = within(panel).getByRole('group', { name: 'Cassino' });
+    await userEvent.click(within(casino).getByRole('button', { name: 'Cassino' }));
+    expect(within(casino).queryByRole('link', { name: 'Geral cassino' })).toBeNull();
+
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('region', { name: 'Relatórios' })).toBeNull();
+    await userEvent.click(toggle);
+    expect(screen.getByRole('region', { name: 'Relatórios' })).toBeInTheDocument();
+    await userEvent.click(toggle);
+    expect(screen.queryByRole('region', { name: 'Relatórios' })).toBeNull();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByText('Banca Teste'));
+    expect(screen.queryByRole('region', { name: 'Relatórios' })).toBeNull();
+  });
+
+  it('Suporte não vê Relatórios; na gaveta do celular, Relatórios abre dentro do menu', async () => {
+    const { unmount } = renderSidebar(ROLE_PERMISSIONS.SUPPORT);
+    expect(screen.queryByRole('button', { name: 'Relatórios' })).toBeNull();
+    unmount();
+
+    renderSidebar(ROLE_PERMISSIONS.MANAGER);
+    const drawer = screen.getAllByRole('navigation', { name: 'Menu do painel', hidden: true })[1]!;
+    const reports = within(drawer).getByRole('group', { name: 'Relatórios', hidden: true });
+    expect(within(reports).getByRole('group', { name: 'Loterias', hidden: true })).toBeInTheDocument();
   });
 
   it('grupos abrem e fecham; fora da página atual começam fechados', async () => {

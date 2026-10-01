@@ -11,10 +11,12 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 import { loginSchema } from '@/schemas/login.schema';
 import { maskCpfInput } from '@/lib/masks';
+import { askPushOnLogin } from '@/lib/push-client';
 import { ApiError } from '@/services/http';
 
 // Visual do LoginPage original, com login só por CPF ("CPF ou Telefone" -> "CPF").
-export default function LoginPage() {
+// `pushPublicKey`: chave das notificações; com ela, o toque em "Entrar" no app instalado pede a permissão.
+export default function LoginPage({ pushPublicKey = null }: { pushPublicKey?: string | null }) {
   const { login } = useAuth();
   const router = useRouter();
   const toast = useToast();
@@ -36,6 +38,8 @@ export default function LoginPage() {
       return;
     }
 
+    // Ainda dentro do toque (o iPhone só mostra a janela de permissão assim); o login não espera a resposta.
+    askPushOnLogin(pushPublicKey);
     setIsSubmitting(true);
     try {
       await login(parsed.data);

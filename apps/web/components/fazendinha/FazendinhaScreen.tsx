@@ -194,7 +194,7 @@ export default function FazendinhaScreen({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Pesquisar loteria"
             aria-label="Pesquisar loteria"
-            className="flex-1 bg-transparent text-[15px] text-gray-900 placeholder:text-gray-400 outline-none"
+            className="flex-1 bg-transparent text-[16px] text-gray-900 placeholder:text-gray-400 outline-none"
           />
         </label>
 

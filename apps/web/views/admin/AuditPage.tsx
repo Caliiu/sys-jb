@@ -91,7 +91,7 @@ export default function AuditPage({ query, result, nowIso }: AuditPageProps) {
 
   return (
     <div className="space-y-6">
-      <AdminPageTitle title="Auditoria" />
+      <AdminPageTitle title="Log de auditoria" />
 
       <FiltersCard>
         <p className={labelClass}>Período</p>
