@@ -25,12 +25,13 @@ const numberClass =
   'flex h-12 items-center justify-center rounded-lg bg-gray-50 text-[17px] font-bold tabular-nums text-brand-primary active:scale-[0.97] transition-transform';
 
 /**
- * Loterias > Horóscopo: leitura do dia do signo escolhido (abre no signo do jogador) e palpites (grupo, dezenas,
- * centenas e milhares) que o jogador toca para copiar. Signos fixos acima da barra de ferramentas.
+ * Loterias > Horóscopo: leitura do dia do signo do jogador (pela data de nascimento) e palpites (grupo, dezenas,
+ * centenas e milhares) que o jogador toca para copiar. Só sem o signo do jogador aparece a faixa para escolher um.
  */
 export default function HoroscopeScreen({ date, userSign, official }: HoroscopeScreenProps) {
   const toast = useToast();
-  const [sign, setSign] = useState<ZodiacSign>(userSign ?? 'aries');
+  const [picked, setPicked] = useState<ZodiacSign>('aries');
+  const sign = userSign ?? picked;
   const reading = useMemo(
     () =>
       readingFor(
@@ -61,12 +62,10 @@ export default function HoroscopeScreen({ date, userSign, official }: HoroscopeS
   return (
     <>
       <SectionBar title="Horóscopo do dia" back={{ href: ROUTES.lotteries, label: 'Fechar' }} />
-      <main className="px-3 pt-3 pb-52">
+      <main className={`px-3 pt-3 ${userSign ? 'pb-28' : 'pb-52'}`}>
         <article aria-labelledby="horoscope-sign" className="rounded-xl bg-white p-4 shadow-card">
           <header className="flex items-center gap-3">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-primary text-white">
-              <SignGlyph sign={sign} className="h-9 w-9" />
-            </span>
+            <SignGlyph sign={sign} className="h-16 w-16 text-brand-primary" />
             <div>
               <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 <Star className="h-3 w-3 fill-brand-primary text-brand-primary" aria-hidden />
@@ -126,7 +125,7 @@ export default function HoroscopeScreen({ date, userSign, official }: HoroscopeS
                   <h4 className="text-[15px] font-semibold text-gray-900">{row.title}</h4>
                   <button
                     type="button"
-                    onClick={() => copy(row.numbers.join(' '))}
+                    onClick={() => copy(row.numbers.join('-'))}
                     aria-label={`Copiar todas as ${row.title.toLowerCase()}`}
                     className="flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[12px] font-medium text-gray-600"
                   >
@@ -164,12 +163,15 @@ export default function HoroscopeScreen({ date, userSign, official }: HoroscopeS
         </article>
       </main>
 
-      <LotteryToolsNav active="horoscope" above={<SignPicker selected={sign} onSelect={setSign} />} />
+      <LotteryToolsNav
+        active="horoscope"
+        above={userSign ? undefined : <SignPicker selected={sign} onSelect={setPicked} />}
+      />
     </>
   );
 }
 
-/** Signos em faixa rolável; o escolhido fica visível (ao abrir, o do jogador pode estar no fim da lista). */
+/** Signos em faixa rolável (só sem o signo do jogador); o escolhido fica visível. */
 function SignPicker({ selected, onSelect }: { selected: ZodiacSign; onSelect: (sign: ZodiacSign) => void }) {
   const selectedRef = useRef<HTMLButtonElement>(null);
 
@@ -196,11 +198,7 @@ function SignPicker({ selected, onSelect }: { selected: ZodiacSign; onSelect: (s
               checked ? 'bg-brand-primary text-white shadow-card' : 'bg-gray-100 text-gray-700'
             }`}
           >
-            <span
-              className={`flex h-8 w-8 items-center justify-center rounded-full ${checked ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white'}`}
-            >
-              <SignGlyph sign={sign} className="h-5 w-5" />
-            </span>
+            <SignGlyph sign={sign} className={`h-8 w-8 ${checked ? 'text-white' : 'text-brand-primary'}`} />
             {SIGN_INFO[sign].name}
           </button>
         );

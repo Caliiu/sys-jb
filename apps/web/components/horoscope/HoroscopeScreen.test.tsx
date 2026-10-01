@@ -38,7 +38,8 @@ describe('Horóscopo', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Escorpião' })).toBeInTheDocument();
     expect(screen.getByText('Hoje, seu signo')).toBeInTheDocument();
     expect(screen.getByText(reading.text)).toBeInTheDocument();
-    expect(signButton('Escorpião')).toHaveAttribute('aria-pressed', 'true');
+    // O signo vem da data de nascimento: sem faixa para escolher outro.
+    expect(screen.queryByRole('group', { name: 'Signos' })).not.toBeInTheDocument();
 
     const { group, tens, hundreds, thousands } = reading.tips;
     expect(screen.getByRole('button', { name: `Copiar grupo ${group}, ${BICHOS[group - 1]}` })).toBeInTheDocument();
@@ -56,8 +57,8 @@ describe('Horóscopo', () => {
     }
   });
 
-  it('outro signo: troca leitura e destaque; "seu signo" só no do jogador', async () => {
-    show('aries');
+  it('sem o signo do jogador: a faixa permite escolher outro, sem "seu signo"', async () => {
+    show(null);
     await userEvent.click(signButton('Peixes'));
     expect(screen.getByRole('heading', { level: 2, name: 'Peixes' })).toBeInTheDocument();
     expect(screen.queryByText('Hoje, seu signo')).not.toBeInTheDocument();
@@ -74,7 +75,7 @@ describe('Horóscopo', () => {
     expect(within(screen.getByRole('group', { name: 'Signos' })).getAllByRole('button')).toHaveLength(12);
   });
 
-  it('toque copia: um número, o grupo com 2 dígitos e "Copiar todas" separado por espaço', async () => {
+  it('toque copia: um número, o grupo com 2 dígitos e "Copiar todas" separado por traço', async () => {
     show('aries');
     const { group, tens, thousands } = dailyReading('aries', DATE).tips;
 
@@ -85,8 +86,9 @@ describe('Horóscopo', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Copiar grupo/ }));
     expect(writeText).toHaveBeenLastCalledWith(String(group).padStart(2, '0'));
 
+    // Com traço (ex.: 9857-9958-9659-9760): o "Colar" dos Palpites separa os números sozinho.
     await userEvent.click(screen.getByRole('button', { name: 'Copiar todas as milhares' }));
-    expect(writeText).toHaveBeenLastCalledWith(thousands.join(' '));
+    expect(writeText).toHaveBeenLastCalledWith(thousands.join('-'));
   });
 
   it('cópia bloqueada pelo navegador avisa', async () => {
@@ -103,7 +105,8 @@ describe('Horóscopo', () => {
       tens: ['78', '04', '46', '45', '68'],
       colors: ['Verde-pistache-claro'],
     };
-    show('aries', [aries]);
+    // Sem o signo do jogador (abre em Áries), para trocar de signo pela faixa no fim.
+    show(null, [aries]);
     expect(screen.getByText(aries.text)).toBeInTheDocument();
     expect(screen.getByText('Cores do dia:').parentElement).toHaveTextContent('Cores do dia:Verde-pistache-claro');
     const dezenas = screen.getByRole('region', { name: 'Dezenas' });

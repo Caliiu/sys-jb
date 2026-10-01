@@ -22,6 +22,27 @@ export function parseGuesses(modality: LotteryModality, text: string): string[] 
   return guesses.filter((g) => isValidLotteryGuess(modality, g));
 }
 
+const KIND_BY_LENGTH: Record<number, string> = { 2: 'dezenas', 3: 'centenas', 4: 'milhares' };
+
+/**
+ * Aviso de um texto colado sem palpites válidos. Se todos os números têm o mesmo tamanho e não é o da modalidade
+ * (ex.: milhares do Horóscopo colados na Centena), diz o que foi colado e o que a modalidade pede.
+ */
+export function pasteMismatchMessage(modality: LotteryModality, text: string): string {
+  const lengths = new Set(
+    text
+      .split(/\D+/)
+      .filter(Boolean)
+      .map((token) => token.length),
+  );
+  const [only] = lengths;
+  const kind = lengths.size === 1 && only !== undefined ? KIND_BY_LENGTH[only] : undefined;
+  if (modality.parts === 1 && kind && only !== guessLength(modality)) {
+    return `Os números copiados são ${kind} (${only} dígitos); ${modality.label} pede ${guessLength(modality)}.`;
+  }
+  return 'Nenhum palpite válido no texto copiado.';
+}
+
 /** Junta palpites novos aos atuais, sem repetir e respeitando o limite. */
 export function mergeGuesses(current: string[], incoming: string[]): string[] {
   const merged = [...current];

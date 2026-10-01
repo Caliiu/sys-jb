@@ -80,7 +80,7 @@ async function toCodeStep() {
   renderScreen();
   await click(/Repetir pule/);
   await click(/^TRADICIONAL\s*Repetir pule/);
-  await click('Terça, 29/09/2026');
+  await click('Amanhã, 29/09/2026');
   await click(/^RIO\/FEDERAL/);
   await userEvent.click(screen.getByRole('checkbox', { name: /LT PT RIO 14HS/ }));
   await click('Avançar');
@@ -108,11 +108,16 @@ describe('Repetir pule', () => {
     expect(heading()).toBe('Data');
     const dates = within(screen.getByRole('list', { name: 'Datas' })).getAllByRole('button');
     expect(dates).toHaveLength(7);
-    expect(dates[0]).toHaveTextContent('28/09/2026Hoje');
-    expect(dates[1]).toHaveTextContent('29/09/2026Terça');
+    // Os mesmos cartões da aposta nova: título, dia do mês e a etiqueta nos dias com Federal.
+    expect(dates.map((d) => d.getAttribute('aria-label')).slice(0, 3)).toEqual([
+      'Hoje, 28/09/2026',
+      'Amanhã, 29/09/2026',
+      'Quarta, 30/09/2026, com Federal',
+    ]);
+    expect(dates[0]).toHaveTextContent('Hoje28');
     expect(screen.getByText('Repetir Pule').closest('div')).toHaveTextContent(/Tradicionais 1\/7\s*3\/7/);
 
-    await click('Terça, 29/09/2026');
+    await click('Amanhã, 29/09/2026');
     expect(heading()).toBe('Loterias');
     expect(advance()).toBeDisabled();
     await click(/^RIO\/FEDERAL/);
@@ -131,7 +136,7 @@ describe('Repetir pule', () => {
     await click(/Repetir pule/);
     await click(/^TRADICIONAL 1\/10\s*Repetir pule/);
     expect(screen.getByText('Repetir Pule').closest('div')).toHaveTextContent(/Oficiais 1\/10\s*3\/7/);
-    await click('Terça, 29/09/2026');
+    await click('Amanhã, 29/09/2026');
     expect(screen.queryByRole('button', { name: /^RIO\/FEDERAL/ })).not.toBeInTheDocument();
     await click(/^BAHIA/);
     await userEvent.click(screen.getByRole('checkbox', { name: /LT BAHIA 15HS/ }));
@@ -231,7 +236,7 @@ describe('Repetir pule', () => {
     expect(screen.getByRole('button', { name: 'Avançar' })).toBeEnabled();
     await click('Voltar');
     expect(heading()).toBe('Data');
-    await click('Quarta, 30/09/2026');
+    await click('Quarta, 30/09/2026, com Federal');
     expect(heading()).toBe('Loterias');
     expect(advance()).toBeDisabled();
   });

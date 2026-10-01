@@ -199,6 +199,22 @@ export default function LotteriesScreen({
     go(draws.length > 0 ? 'cart' : 'draws');
   }
 
+  /** Volta de Loterias: a última aposta sai do carrinho e reabre no Valor, com tudo o que foi escolhido. */
+  function reopenLastItem() {
+    const last = items.at(-1);
+    if (!last) return go('modality');
+    purchaseKey.current = null;
+    setItems(items.slice(0, -1));
+    setDraft({
+      modality: last.modality,
+      placement: last.placement,
+      guesses: last.guesses,
+      amountCents: last.amountCents,
+      split: last.split,
+    });
+    go('amount');
+  }
+
   async function finalize() {
     if (!day || pending) return;
     // Extrações que fecharam enquanto o jogador revisava saem antes de enviar.
@@ -351,24 +367,27 @@ export default function LotteriesScreen({
 
   // ---------------- Etapas com barra de progresso ----------------
   const current = STEPS[step as keyof typeof STEPS] ?? STEPS.type;
-  const back = (): (() => void) => {
+  /** Voltar da barra: a etapa anterior na ordem do fluxo. */
+  const back = () => {
     switch (step) {
       case 'date':
-        return () => go('type');
+        return go('type');
       case 'modality':
-        return () => go(items.length > 0 ? 'cart' : 'date');
+        return go(items.length > 0 ? 'cart' : 'date');
       case 'placement':
-        return () => go('modality');
+        return go('modality');
       case 'guesses':
-        return () => go('placement');
+        // Combos pulam a colocação (fixa) na ida; a volta também.
+        return go(draft.modality && placementsFor(draft.modality, game).length === 1 ? 'modality' : 'placement');
       case 'amount':
-        return () => go('guesses');
+        return go('guesses');
       case 'draws':
-        return () => go(items.length > 0 && draft.modality === null ? 'cart' : 'amount');
+        // Voltar ao Carrinho daqui fazia Carrinho ⇄ Loterias sem saída: segue a ordem do fluxo (Valor).
+        return reopenLastItem();
       case 'cart':
-        return () => go('draws');
+        return go('draws');
       default:
-        return () => router.push(ROUTES.home);
+        return router.push(ROUTES.home);
     }
   };
   const summary = (
@@ -394,7 +413,7 @@ export default function LotteriesScreen({
     <>
       <LotteryBar
         title={current.title}
-        back={step === 'type' ? { href: ROUTES.home, label: 'Voltar ao início' } : { onClick: back(), label: 'Voltar' }}
+        back={step === 'type' ? { href: ROUTES.home, label: 'Voltar ao início' } : { onClick: back, label: 'Voltar' }}
         wallet={wallet}
         userName={userName}
         displayId={sellerId}

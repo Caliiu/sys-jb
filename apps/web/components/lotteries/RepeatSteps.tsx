@@ -10,6 +10,7 @@ import {
 import { CalendarDays, ChevronRight, ClipboardPaste, Repeat2, Ticket, X } from 'lucide-react';
 import { type ReactNode, useId } from 'react';
 import type { LotteryDay } from '@/lib/lotteries';
+import { DateStep } from './PickSteps';
 
 const cardClass = 'rounded-xl bg-white shadow-card';
 
@@ -84,7 +85,7 @@ export function RepeatModalityStep({
   );
 }
 
-/** Data da nova aposta: hoje e os próximos dias, em lista. */
+/** Data da nova aposta: os mesmos cartões da aposta nova (DateStep), com o resumo fixo no rodapé. */
 export function RepeatDateStep({
   days,
   onPick,
@@ -96,20 +97,7 @@ export function RepeatDateStep({
 }) {
   return (
     <>
-      <main className="px-3 py-3 pb-28">
-        <ul aria-label="Datas" className="space-y-3">
-          {days.map((day) => (
-            <ListCard
-              key={day.date}
-              icon={<CalendarDays className="h-5 w-5 text-brand-primary" aria-hidden />}
-              title={day.label}
-              subtitle={day.weekday}
-              label={`${day.weekday}, ${day.label}`}
-              onClick={() => onPick(day)}
-            />
-          ))}
-        </ul>
-      </main>
+      <DateStep days={days} onPick={onPick} />
       <div className="fixed bottom-0 left-0 right-0 z-20 mx-auto max-w-[480px] px-3 pb-3">{footer}</div>
     </>
   );

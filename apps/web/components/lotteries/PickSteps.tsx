@@ -16,14 +16,14 @@ import { type LotteryDay, quoteBadge } from '@/lib/lotteries';
 import { LOTTERY_STEP_COUNT } from './LotteryBar';
 import LotteryToolsNav from './LotteryToolsNav';
 
-/** Cores do trevo de cada tipo de jogo (como no print). */
-const TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
-  tradicional: { bg: 'bg-green-50', fg: 'text-green-600' },
-  tradicional_10: { bg: 'bg-green-50', fg: 'text-green-600' },
-  uruguaia: { bg: 'bg-yellow-50', fg: 'text-yellow-500' },
-  quininha: { bg: 'bg-indigo-50', fg: 'text-indigo-700' },
-  seninha: { bg: 'bg-fuchsia-50', fg: 'text-fuchsia-600' },
-  super15: { bg: 'bg-orange-50', fg: 'text-orange-500' },
+/** Cores de cada tipo de jogo: faixa do título (header) e trevo (bg/fg), como no print. */
+const TYPE_COLORS: Record<string, { header: string; bg: string; fg: string }> = {
+  tradicional: { header: 'bg-green-700', bg: 'bg-green-50', fg: 'text-green-600' },
+  tradicional_10: { header: 'bg-green-700', bg: 'bg-green-50', fg: 'text-green-600' },
+  uruguaia: { header: 'bg-amber-600', bg: 'bg-yellow-50', fg: 'text-yellow-500' },
+  quininha: { header: 'bg-indigo-700', bg: 'bg-indigo-50', fg: 'text-indigo-700' },
+  seninha: { header: 'bg-fuchsia-700', bg: 'bg-fuchsia-50', fg: 'text-fuchsia-600' },
+  super15: { header: 'bg-orange-600', bg: 'bg-orange-50', fg: 'text-orange-500' },
 };
 
 const cardClass = 'rounded-xl bg-white shadow-card';
@@ -109,13 +109,17 @@ export function TypeStep({
               <button
                 type="button"
                 onClick={() => (type.available && isLotteryGame(type.id) ? onPick(type.id) : onComingSoon(type.label))}
-                className={`${cardClass} relative w-full p-4 text-left active:scale-[0.99] transition-transform`}
+                className={`${cardClass} w-full overflow-hidden text-center active:scale-[0.98] transition-transform`}
               >
-                <span className={`w-9 h-9 rounded-lg ${color.bg} flex items-center justify-center`}>
-                  <Clover className={`w-5 h-5 ${color.fg}`} aria-hidden />
+                <span className={`block ${color.header} px-2 py-1.5`}>
+                  <span className="block truncate text-[16px] font-bold leading-tight text-white">{type.label}</span>
+                  <span className="block truncate text-[12px] leading-tight text-white/75">{type.description}</span>
                 </span>
-                <span className="mt-4 block text-[16px] font-bold text-gray-900">{type.label}</span>
-                <span className="mt-0.5 block text-[13px] text-gray-500">{type.description}</span>
+                <span className="flex justify-center py-4">
+                  <span className={`w-16 h-16 rounded-2xl ${color.bg} flex items-center justify-center`}>
+                    <Clover className={`w-10 h-10 ${color.fg}`} strokeWidth={2.5} aria-hidden />
+                  </span>
+                </span>
               </button>
             </li>
           );

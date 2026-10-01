@@ -5,7 +5,7 @@ import { ClipboardPaste, Dices } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatBrl, formatCents, parseCurrencyInput } from '@/lib/currency';
 import { useToast } from '../ui/Toast';
-import GuessInput, { mergeGuesses, parseGuesses } from './GuessInput';
+import GuessInput, { mergeGuesses, parseGuesses, pasteMismatchMessage } from './GuessInput';
 
 const primaryButton =
   'w-full h-14 rounded-xl bg-gradient-to-r from-brand-primary to-brand-primaryLight text-white text-[17px] font-bold active:scale-[0.99] transition-transform disabled:opacity-40';
@@ -69,7 +69,7 @@ export function GuessesStep({
     try {
       const text = await navigator.clipboard.readText();
       const found = parseGuesses(modality, text);
-      if (found.length === 0) return toast.show('Nenhum palpite válido no texto copiado.');
+      if (found.length === 0) return toast.show(pasteMismatchMessage(modality, text));
       onChange(mergeGuesses(guesses, found));
     } catch {
       toast.show('Não foi possível ler a área de transferência.');

@@ -152,6 +152,80 @@ describe('Loterias', () => {
     expect(bet).toHaveTextContent(/MILHAR · 1 PRÊMIO.*3452.*R\$ 20,00.*\/ CADA/);
   });
 
+  it('Voltar depois do valor segue o fluxo até o início (sem Carrinho ⇄ Loterias) e reabre a aposta', async () => {
+    renderScreen();
+    await buildCart();
+    expect(heading()).toBe('Carrinho');
+    await click('Voltar');
+    expect(heading()).toBe('Loterias');
+    // A aposta sai do carrinho e reabre no Valor com o que foi escolhido.
+    await click('Voltar');
+    expect(heading()).toBe('Valor');
+    expect(screen.getByLabelText('Valor da aposta')).toHaveValue('R$ 1,00');
+    await click('Voltar');
+    expect(heading()).toBe('Palpites');
+    expect(screen.getByRole('button', { name: 'Remover palpite 3452' })).toBeInTheDocument();
+    for (const title of ['Colocação', 'Modalidade', 'Data', 'Nova aposta']) {
+      await click('Voltar');
+      expect(heading()).toBe(title);
+    }
+  });
+
+  it('reabrir a aposta e avançar de novo não a duplica no carrinho', async () => {
+    renderScreen();
+    await buildCart();
+    await click('Voltar');
+    await click('Voltar');
+    expect(heading()).toBe('Valor');
+    // As loterias escolhidas continuam: o Avançar volta direto ao carrinho.
+    await click('Avançar');
+    expect(heading()).toBe('Carrinho');
+    expect(
+      within(screen.getByRole('list', { name: 'Suas apostas' })).getAllByRole('heading', { level: 3 }),
+    ).toHaveLength(1);
+  });
+
+  it('combos voltam dos palpites direto para a modalidade (a colocação é fixa)', async () => {
+    renderScreen();
+    await click(/^Tradicional\s*Tradicionais 1\/7/);
+    await click(/29\/09\/2026/);
+    await click(/^DUQUE GP/);
+    expect(heading()).toBe('Palpites');
+    await click('Voltar');
+    expect(heading()).toBe('Modalidade');
+  });
+
+  it('Colar: separa o "Copiar todas" do Horóscopo (com traço) nos palpites da modalidade', async () => {
+    const readText = vi.fn().mockResolvedValue('9857-9958-9659-9760');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+    renderScreen();
+    await click(/^Tradicional\s*Tradicionais 1\/7/);
+    await click(/29\/09\/2026/);
+    await click(/^MILHARs*8000x/);
+    await click(/^1 PRÊMIO/);
+    await click('Colar');
+    expect(
+      within(screen.getByRole('list', { name: 'Meus palpites' }))
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['9857', '9958', '9659', '9760']);
+  });
+
+  it('Colar: números de outro tamanho avisam o que foi copiado e o que a modalidade pede', async () => {
+    const readText = vi.fn().mockResolvedValue('9857-9958-9659-9760');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+    renderScreen();
+    await click(/^Tradicional\s*Tradicionais 1\/7/);
+    await click(/29\/09\/2026/);
+    await click(/^CENTENAs*800x/);
+    await click(/^1 PRÊMIO/);
+    await click('Colar');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Os números copiados são milhares (4 dígitos); CENTENA pede 3.',
+    );
+    expect(screen.getByText('Seus palpites aparecerão aqui.')).toBeInTheDocument();
+  });
+
   it('hoje só mostra loterias que ainda não fecharam', async () => {
     renderScreen();
     await click(/^Tradicional\s*Tradicionais 1\/7/);
