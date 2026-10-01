@@ -79,7 +79,7 @@ export default function BalanceCard({ initialWallet }: { initialWallet: PublicWa
       </div>
 
       <div className="flex items-center justify-between mt-3 pb-3 border-b border-gray-300">
-        <span className="text-[13px] text-gray-500">Disp. Games</span>
+        <span className="text-[13px] text-gray-500">Disponível Games</span>
         <span className="text-[13px] font-bold text-gray-900 tabular-nums">R$ {amount(amounts.games)}</span>
       </div>
 
