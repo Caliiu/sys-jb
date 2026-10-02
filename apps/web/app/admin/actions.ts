@@ -23,6 +23,7 @@ import {
   MURAL_LIMITS,
   BRANDING_LIMITS,
   HOME_BLOCK_IDS,
+  MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
@@ -133,19 +134,28 @@ export async function setUserStatusAction(
 }
 
 const commissionSchema = z.number().int().min(MIN_COMMISSION_BPS).max(MAX_COMMISSION_BPS);
+const casinoCommissionSchema = z.number().int().min(MIN_CASINO_COMMISSION_BPS).max(MAX_COMMISSION_BPS);
 
-/** Promove o usuário a promotor ou altera a comissão (centésimos de %). A API confere a permissão. */
+/**
+ * Promove o usuário a promotor ou altera as comissões (centésimos de %): a de Loterias e a de cassino (sobre o GGR
+ * mensal). A API confere a permissão.
+ */
 export async function setPromoterAction(
   userId: unknown,
   commissionBps: unknown,
+  casinoCommissionBps: unknown,
 ): Promise<AdminActionResult<AdminPromoterListItem>> {
   const id = userIdSchema.safeParse(userId);
   const bps = commissionSchema.safeParse(commissionBps);
-  if (!id.success || !bps.success) return invalidInput;
+  const casino = casinoCommissionSchema.safeParse(casinoCommissionBps);
+  if (!id.success || !bps.success || !casino.success) return invalidInput;
   const caller = await operatorCaller();
   if (isFailure(caller)) return caller;
 
-  const res = await adminApi.setPromoter(caller, id.data, bps.data);
+  const res = await adminApi.setPromoter(caller, id.data, {
+    commissionBps: bps.data,
+    casinoCommissionBps: casino.data,
+  });
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

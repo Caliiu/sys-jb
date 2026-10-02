@@ -27,10 +27,12 @@ interface StatementPageProps {
 
 export const KIND_LABELS: Record<StatementKind, string> = {
   LOTTERY_BET: 'Aposta Loterias',
+  LOTTERY_REFUND: 'Pule cancelada',
   FAZENDINHA_BET: 'Aposta Fazendinha',
   OPERATOR_CREDIT: 'Crédito pelo painel',
   MANUAL_ADJUSTMENT: 'Ajuste manual',
   COMMISSION: 'Comissão',
+  COMMISSION_REVERSAL: 'Estorno de comissão',
   OPENING_BALANCE: 'Saldo anterior',
 };
 

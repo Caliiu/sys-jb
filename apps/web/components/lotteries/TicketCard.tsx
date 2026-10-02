@@ -41,6 +41,8 @@ interface TicketCardProps {
   totalCents: number;
   /** Formato de Relatórios > Consultar pule: vale com ano curto (29/09/26) e valor com "R$". */
   lookup?: boolean;
+  /** ISO 8601 do cancelamento (Consultar pule): o recibo diz que a pule foi cancelada. */
+  canceledAt?: string;
 }
 
 const row = 'border-b border-dashed border-gray-300 py-3';
@@ -59,6 +61,7 @@ export default function TicketCard(props: TicketCardProps) {
     items,
     totalCents,
     lookup,
+    canceledAt,
   } = props;
   return (
     <article
@@ -73,7 +76,8 @@ export default function TicketCard(props: TicketCardProps) {
         </div>
       </div>
       <div className="px-3 pb-3">
-        <p className="flex items-center gap-3 py-3 text-[13px] text-gray-600 before:h-px before:flex-1 before:border-t before:border-dashed before:border-gray-300 after:h-px after:flex-1 after:border-t after:border-dashed after:border-gray-300">
+        <p
+          className={`flex items-center gap-3 py-3 text-[13px] ${canceledAt ? 'font-bold text-red-600' : 'text-gray-600'} before:h-px before:flex-1 before:border-t before:border-dashed before:border-gray-300 after:h-px after:flex-1 after:border-t after:border-dashed after:border-gray-300">
           {heading}
         </p>
         <dl className={`${row} space-y-1`}>

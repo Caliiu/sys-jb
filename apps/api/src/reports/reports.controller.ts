@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Inject, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, HttpCode, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import type { BalanceReport, LotteryMovementReport, PuleDetail, PuleList } from '@sysjb/contracts';
 import { CurrentSession, SessionGuard } from '../auth/session.guard.js';
 import type { UserSession } from '../auth/session.types.js';
@@ -35,7 +35,7 @@ export class ReportsController {
   }
 }
 
-/** Relatórios > Consultar pule (por data e por código): só as pules do jogador da sessão. */
+/** Relatórios > Consultar pule (por data e por código) e Cancelar pule: só as pules do jogador da sessão. */
 @Controller('v1/me/pules')
 @UseGuards(TenantGuard, SessionGuard)
 export class PulesController {
@@ -59,5 +59,17 @@ export class PulesController {
     @Param('puleNumber', new ZodValidationPipe(puleNumberSchema)) puleNumber: number,
   ): Promise<PuleDetail> {
     return this.reports.pule(tenant, session, puleNumber);
+  }
+
+  /** Cancela a pule de Loterias do jogador (até o horário limite) e devolve o recibo atualizado. */
+  @Post(':puleNumber/cancel')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  cancel(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @CurrentSession() session: UserSession,
+    @Param('puleNumber', new ZodValidationPipe(puleNumberSchema)) puleNumber: number,
+  ): Promise<PuleDetail> {
+    return this.reports.cancelPule(tenant, session, puleNumber);
   }
 }

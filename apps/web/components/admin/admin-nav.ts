@@ -123,7 +123,6 @@ export const ADMIN_NAV: NavEntry[] = [
             label: 'Geral cassino',
             icon: WalletCards,
             permission: 'operation.read',
-            soon: true,
           },
           {
             href: ADMIN_ROUTES.casinoClosingReport,

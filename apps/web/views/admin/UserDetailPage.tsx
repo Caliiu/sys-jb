@@ -119,7 +119,9 @@ export default function UserDetailPage({
                 <dd className="mt-0.5 text-[13.5px] text-admin-text">
                   {user.promoterCommissionBps === null
                     ? 'Não é promotor'
-                    : `Promotor · comissão de ${formatCommission(user.promoterCommissionBps)}`}
+                    : `Promotor · comissão de ${formatCommission(user.promoterCommissionBps)} · cassino de ${formatCommission(
+                        user.casinoCommissionBps,
+                      )}`}
                 </dd>
               </div>
               <div>
@@ -148,7 +150,11 @@ export default function UserDetailPage({
             </dl>
             {canManagePromoters && (
               <div className="mt-5 border-t border-admin-border pt-5">
-                <PromoterControls userId={user.id} commissionBps={user.promoterCommissionBps} />
+                <PromoterControls
+                  userId={user.id}
+                  commissionBps={user.promoterCommissionBps}
+                  casinoCommissionBps={user.casinoCommissionBps}
+                />
               </div>
             )}
           </section>

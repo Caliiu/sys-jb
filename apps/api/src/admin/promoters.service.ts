@@ -4,7 +4,7 @@ import { Errors } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { toAdminListItem } from './admin-user.mapper.js';
-import type { ListPromotersQuery, ReferralsQuery } from './admin.schemas.js';
+import type { ListPromotersQuery, ReferralsQuery, SetPromoterInput } from './admin.schemas.js';
 import { recordAudit } from './audit.js';
 import type { AuthenticatedOperator } from './operator.types.js';
 import { type PromoterRow, PromotersRepository } from './promoters.repository.js';
@@ -17,6 +17,7 @@ const toPromoterItem = (row: PromoterRow): AdminPromoterListItem => ({
   inviteCode: row.inviteCode,
   status: row.status,
   commissionBps: row.promoterCommissionBps,
+  casinoCommissionBps: row.casinoCommissionBps,
   referralsCount: row._count.referrals,
   createdAt: row.createdAt.toISOString(),
 });
@@ -62,27 +63,39 @@ export class PromotersService {
   }
 
   /**
-   * Promove o usuário a promotor ou altera a comissão. Repetir o mesmo valor é aceito sem efeito (e sem
-   * novo registro de auditoria). A alteração e a auditoria acontecem na mesma transação.
+   * Promove o usuário a promotor ou altera as comissões (de Loterias e, se informada, a de cassino). Repetir os mesmos
+   * valores é aceito sem efeito (e sem novo registro de auditoria). A alteração e a auditoria acontecem na mesma
+   * transação.
    */
-  set(
-    tenant: ResolvedTenant,
-    operator: AuthenticatedOperator,
-    id: string,
-    commissionBps: number,
-  ): Promise<AdminPromoterListItem> {
-    return this.db.withTenant(tenant.id, async (tx) => {
-      const previous = await this.repo.currentCommission(tx, tenant.id, id);
-      if (previous === undefined) throw Errors.userNotFound();
-      if (previous !== commissionBps) {
-        await this.repo.setCommission(tx, tenant.id, id, commissionBps);
+  set(tenant: ResolvedTenant, operator: AuthenticatedOperator, id: string, input: SetPromoterInput) {
+    return this.db.withTenant(tenant.id, async (tx): Promise<AdminPromoterListItem> => {
+      const previous = await this.repo.currentCommissions(tx, tenant.id, id);
+      if (!previous) throw Errors.userNotFound();
+      const next = {
+        promoterCommissionBps: input.commissionBps,
+        casinoCommissionBps: input.casinoCommissionBps ?? previous.casinoCommissionBps,
+      };
+      const fields = [
+        ...(previous.promoterCommissionBps !== next.promoterCommissionBps ? ['promoterCommissionBps'] : []),
+        ...(previous.casinoCommissionBps !== next.casinoCommissionBps ? ['casinoCommissionBps'] : []),
+      ];
+      if (fields.length > 0) {
+        await this.repo.setCommissions(tx, tenant.id, id, next);
         await recordAudit(tx, {
           tenantId: tenant.id,
           operatorId: operator.id,
-          action: previous === null ? 'promoter.enable' : 'promoter.update',
+          action: previous.promoterCommissionBps === null ? 'promoter.enable' : 'promoter.update',
           targetType: 'user',
           targetId: id,
-          details: { fields: ['promoterCommissionBps'], from: previous, to: commissionBps },
+          details: {
+            fields,
+            ...(fields.includes('promoterCommissionBps')
+              ? { from: previous.promoterCommissionBps, to: next.promoterCommissionBps }
+              : {}),
+            ...(fields.includes('casinoCommissionBps')
+              ? { casinoFrom: previous.casinoCommissionBps, casinoTo: next.casinoCommissionBps }
+              : {}),
+          },
         });
       }
       const row = await this.repo.findPromoter(tx, tenant.id, id);
@@ -97,17 +110,18 @@ export class PromotersService {
    */
   remove(tenant: ResolvedTenant, operator: AuthenticatedOperator, id: string): Promise<void> {
     return this.db.withTenant(tenant.id, async (tx) => {
-      const previous = await this.repo.currentCommission(tx, tenant.id, id);
-      if (previous === undefined) throw Errors.userNotFound();
-      if (previous === null) return;
-      await this.repo.setCommission(tx, tenant.id, id, null);
+      const previous = await this.repo.currentCommissions(tx, tenant.id, id);
+      if (!previous) throw Errors.userNotFound();
+      if (previous.promoterCommissionBps === null) return;
+      // A de cassino também zera: só promotor tem comissão de cassino.
+      await this.repo.setCommissions(tx, tenant.id, id, { promoterCommissionBps: null, casinoCommissionBps: 0 });
       await recordAudit(tx, {
         tenantId: tenant.id,
         operatorId: operator.id,
         action: 'promoter.disable',
         targetType: 'user',
         targetId: id,
-        details: { fields: ['promoterCommissionBps'], from: previous, to: null },
+        details: { fields: ['promoterCommissionBps'], from: previous.promoterCommissionBps, to: null },
       });
     });
   }

@@ -5,7 +5,10 @@ import { searchFilter } from './admin-users.repository.js';
 import type { ListPromotersQuery, ReferralsQuery } from './admin.schemas.js';
 import { ADMIN_LIST_SELECT } from './admin-user.mapper.js';
 
-export type PromoterRow = Pick<User, 'id' | 'displayId' | 'name' | 'phone' | 'inviteCode' | 'status' | 'createdAt'> & {
+export type PromoterRow = Pick<
+  User,
+  'id' | 'displayId' | 'name' | 'phone' | 'inviteCode' | 'status' | 'createdAt' | 'casinoCommissionBps'
+> & {
   promoterCommissionBps: number;
   _count: { referrals: number };
 };
@@ -26,8 +29,15 @@ const PROMOTER_SELECT = {
   status: true,
   createdAt: true,
   promoterCommissionBps: true,
+  casinoCommissionBps: true,
   _count: { select: { referrals: true } },
 } as const;
+
+/** Comissões de um usuário: de promotor (null = não é promotor) e de cassino (0 para quem não é promotor). */
+export interface PromoterCommissions {
+  promoterCommissionBps: number | null;
+  casinoCommissionBps: number;
+}
 
 /** Consultas de promotores. Toda operação filtra por tenantId, além do RLS da transação. */
 @Injectable()
@@ -73,14 +83,21 @@ export class PromotersRepository {
     return row as PromoterRow | null;
   }
 
-  /** Comissão atual do usuário: `undefined` = usuário não existe nesta banca; `null` = existe e não é promotor. */
-  async currentCommission(tx: TenantTx, tenantId: string, id: string): Promise<number | null | undefined> {
-    const user = await tx.user.findFirst({ where: { id, tenantId }, select: { promoterCommissionBps: true } });
-    return user ? user.promoterCommissionBps : undefined;
+  /**
+   * Comissões atuais do usuário, travando a linha até o fim da transação (duas alterações ao mesmo tempo não se
+   * sobrepõem nem duplicam a auditoria). `undefined` = o usuário não existe nesta banca.
+   */
+  async currentCommissions(tx: TenantTx, tenantId: string, id: string): Promise<PromoterCommissions | undefined> {
+    const [user] = await tx.$queryRaw<Array<{ promoter: number | null; casino: number }>>`
+      SELECT "promoter_commission_bps" AS promoter, "casino_commission_bps" AS casino
+      FROM "users" WHERE "tenant_id" = ${tenantId}::uuid AND "id" = ${id}::uuid
+      FOR UPDATE`;
+    return user ? { promoterCommissionBps: user.promoter, casinoCommissionBps: user.casino } : undefined;
   }
 
-  setCommission(tx: TenantTx, tenantId: string, id: string, bps: number | null): Promise<unknown> {
-    return tx.user.updateMany({ where: { id, tenantId }, data: { promoterCommissionBps: bps } });
+  /** Grava as duas comissões juntas (o banco exige cassino 0 para quem não é promotor). */
+  setCommissions(tx: TenantTx, tenantId: string, id: string, data: PromoterCommissions): Promise<unknown> {
+    return tx.user.updateMany({ where: { id, tenantId }, data });
   }
 
   async listReferrals(

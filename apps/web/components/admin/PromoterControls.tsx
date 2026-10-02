@@ -4,27 +4,38 @@ import { useRouter } from 'next/navigation';
 import { type FormEvent, useId, useState, useTransition } from 'react';
 import { removePromoterAction, setPromoterAction } from '@/app/admin/actions';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
-import { COMMISSION_HELP, commissionInputValue, formatCommission, parseCommission } from '@/lib/admin/commission';
+import {
+  CASINO_COMMISSION_HELP,
+  COMMISSION_HELP,
+  commissionInputValue,
+  formatCommission,
+  parseCasinoCommission,
+  parseCommission,
+} from '@/lib/admin/commission';
 import ConfirmDialog from './ConfirmDialog';
 
 interface PromoterControlsProps {
   userId: string;
   /** Comissão atual em centésimos de %; null = ainda não é promotor. */
   commissionBps: number | null;
+  /** Comissão de cassino (centésimos de % do GGR mensal); 0 para quem não é promotor. */
+  casinoCommissionBps: number;
 }
 
 const inputClass =
   'h-10 w-32 rounded-lg border border-admin-border bg-admin-surface px-3 text-[13.5px] text-admin-text outline-none focus:ring-2 focus:ring-admin-accent';
 
 /**
- * Promover a promotor, alterar a comissão ou remover. Só aparece para quem pode gerenciar promotores
- * (a API confere a permissão de novo a cada chamada).
+ * Promover a promotor, alterar as comissões (Loterias, paga na hora de cada aposta, e cassino, sobre o GGR do mês) ou
+ * remover. Só aparece para quem pode gerenciar promotores (a API confere a permissão de novo a cada chamada).
  */
-export default function PromoterControls({ userId, commissionBps }: PromoterControlsProps) {
+export default function PromoterControls({ userId, commissionBps, casinoCommissionBps }: PromoterControlsProps) {
   const router = useRouter();
   const inputId = useId();
+  const casinoId = useId();
   const isPromoter = commissionBps !== null;
   const [value, setValue] = useState(isPromoter ? commissionInputValue(commissionBps) : '');
+  const [casinoValue, setCasinoValue] = useState(commissionInputValue(casinoCommissionBps));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
@@ -38,14 +49,17 @@ export default function PromoterControls({ userId, commissionBps }: PromoterCont
     if (busy) return;
     const bps = parseCommission(value);
     if (bps === null) return setError(COMMISSION_HELP);
-    if (bps === commissionBps) return setError(null);
+    const casinoBps = parseCasinoCommission(casinoValue);
+    if (casinoBps === null) return setError(CASINO_COMMISSION_HELP);
+    if (bps === commissionBps && casinoBps === casinoCommissionBps) return setError(null);
 
     setError(null);
     setSaving(true);
     try {
-      const result = await setPromoterAction(userId, bps);
+      const result = await setPromoterAction(userId, bps, casinoBps);
       if (result.ok) {
         setValue(commissionInputValue(result.data.commissionBps));
+        setCasinoValue(commissionInputValue(result.data.casinoCommissionBps));
         startTransition(() => router.refresh());
       } else if (result.code === 'SESSION_INVALID') {
         router.replace(ADMIN_ROUTES.login);
@@ -84,7 +98,7 @@ export default function PromoterControls({ userId, commissionBps }: PromoterCont
       <form onSubmit={handleSubmit} noValidate className="flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor={inputId} className="text-[11.5px] font-semibold uppercase tracking-wide text-admin-muted">
-            Comissão (%)
+            Loterias (%)
           </label>
           <input
             id={inputId}
@@ -102,12 +116,32 @@ export default function PromoterControls({ userId, commissionBps }: PromoterCont
             className={`mt-1 block ${inputClass}`}
           />
         </div>
+        <div>
+          <label htmlFor={casinoId} className="text-[11.5px] font-semibold uppercase tracking-wide text-admin-muted">
+            Cassino (% do GGR)
+          </label>
+          <input
+            id={casinoId}
+            value={casinoValue}
+            onChange={(event) => {
+              setCasinoValue(event.target.value);
+              setError(null);
+            }}
+            inputMode="decimal"
+            autoComplete="off"
+            maxLength={7}
+            placeholder="Ex.: 20"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${inputId}-error` : undefined}
+            className={`mt-1 block ${inputClass}`}
+          />
+        </div>
         <button
           type="submit"
           disabled={busy}
           className="h-10 rounded-lg bg-admin-accent px-4 text-[13px] font-semibold text-white disabled:opacity-60"
         >
-          {busy ? 'Salvando…' : isPromoter ? 'Salvar comissão' : 'Tornar promotor'}
+          {busy ? 'Salvando…' : isPromoter ? 'Salvar comissões' : 'Tornar promotor'}
         </button>
         {isPromoter && (
           <button

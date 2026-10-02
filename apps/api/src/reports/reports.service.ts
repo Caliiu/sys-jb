@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   type BalanceReport,
   isReportDate,
+  MAX_PULE_NUMBER,
   type LotteryMovementReport,
   PULE_LIST_LIMIT,
   type PuleDetail,
@@ -11,15 +12,19 @@ import {
 } from '@sysjb/contracts';
 import type { UserSession } from '../auth/session.types.js';
 import { AppError, Errors } from '../common/app-error.js';
+import { hasSqlState } from '../common/prisma-errors.js';
 import { DatabaseService } from '../database/database.service.js';
 import { toPublicBet } from '../fazendinha/fazendinha.service.js';
 import { toPublicTicket } from '../lotteries/lotteries.service.js';
 import { QuotesService } from '../quotes/quotes.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 
-/** Movimentações de aposta (débito do pule) e de comissão; o resto entra em "Crédito / débitos". */
-const SALE_KINDS = ['FAZENDINHA_BET', 'LOTTERY_BET'];
-const COMMISSION_KIND = 'COMMISSION';
+/**
+ * Movimentações de aposta (débito do pule e devolução do pule cancelado: as vendas do dia são as líquidas) e de comissão
+ * (crédito na aposta e estorno no cancelamento); o resto entra em "Crédito / débitos".
+ */
+const SALE_KINDS = ['FAZENDINHA_BET', 'LOTTERY_BET', 'LOTTERY_REFUND'];
+const COMMISSION_KINDS = ['COMMISSION', 'COMMISSION_REVERSAL'];
 /** Rótulo mostrado ao jogador: pelo tipo, nunca o motivo digitado no painel (pode ser interno). */
 const ENTRY_LABELS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'Ajuste',
@@ -71,11 +76,11 @@ export class ReportsService {
         tx.walletEntry.aggregate({ where: { ...owner, createdAt: { lt: start } }, _sum: deltas }),
         tx.walletEntry.groupBy({
           by: ['kind'],
-          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { in: [...SALE_KINDS, COMMISSION_KIND] } },
+          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { in: [...SALE_KINDS, ...COMMISSION_KINDS] } },
           _sum: deltas,
         }),
         tx.walletEntry.findMany({
-          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { notIn: [...SALE_KINDS, COMMISSION_KIND] } },
+          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { notIn: [...SALE_KINDS, ...COMMISSION_KINDS] } },
           select: { kind: true, ...deltas },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         }),
@@ -84,7 +89,7 @@ export class ReportsService {
       const sumOf = (kinds: string[]) =>
         byKind.filter((row) => kinds.includes(row.kind)).reduce((sum, row) => sum + jbDelta(row._sum), 0);
       const salesCents = -sumOf(SALE_KINDS);
-      const commissionCents = sumOf([COMMISSION_KIND]);
+      const commissionCents = sumOf(COMMISSION_KINDS);
       const lines = entries
         .map((row) => ({ label: ENTRY_LABELS[row.kind] ?? 'Outros', amountCents: jbDelta(row) }))
         .filter((line) => line.amountCents !== 0);
@@ -105,14 +110,18 @@ export class ReportsService {
     });
   }
 
-  /** Movimento loterias: total apostado pelo jogador em cada extração do dia (Loterias + Fazendinha). */
+  /** Movimento loterias: total apostado pelo jogador em cada extração do dia (Loterias + Fazendinha; sem canceladas). */
   lotteryMovement(tenant: ResolvedTenant, session: UserSession, date: string): Promise<LotteryMovementReport> {
     this.assertDate(date, REPORT_DAYS_BACK.lotteryMovement);
     const where = { tenantId: tenant.id, userId: session.userId, drawDate: toDate(date) };
 
     return this.db.withTenant(tenant.id, async (tx) => {
       const [tickets, bets] = await Promise.all([
-        tx.lotteryTicket.groupBy({ by: ['drawCode', 'drawHour'], where, _sum: { totalCents: true } }),
+        tx.lotteryTicket.groupBy({
+          by: ['drawCode', 'drawHour'],
+          where: { ...where, canceledAt: null },
+          _sum: { totalCents: true },
+        }),
         tx.fazendinhaBet.groupBy({ by: ['drawCode', 'drawHour'], where, _sum: { totalCents: true } }),
       ]);
       const rows = new Map<string, { code: string; hour: number; totalCents: number }>();
@@ -138,27 +147,27 @@ export class ReportsService {
     const where = { tenantId: tenant.id, userId: session.userId, createdAt: { gte: start, lt: end } };
     const select = { puleNumber: true, drawCode: true, drawDate: true, totalCents: true, createdAt: true } as const;
     const page = {
-      select,
       orderBy: [{ createdAt: 'desc' as const }, { puleNumber: 'desc' as const }],
       take: PULE_LIST_LIMIT + 1,
     };
 
     return this.db.withTenant(tenant.id, async (tx) => {
-      const [tickets, bets, ticketTotal, betTotal] = await Promise.all([
-        tx.lotteryTicket.findMany({ where, ...page }),
-        tx.fazendinhaBet.findMany({ where, ...page }),
-        tx.lotteryTicket.aggregate({ where, _sum: { totalCents: true } }),
+      const [tickets, bets, validTotal, canceledTotal, betTotal] = await Promise.all([
+        tx.lotteryTicket.findMany({ where, select: { ...select, canceledAt: true }, ...page }),
+        tx.fazendinhaBet.findMany({ where, select, ...page }),
+        tx.lotteryTicket.aggregate({ where: { ...where, canceledAt: null }, _sum: { totalCents: true } }),
+        tx.lotteryTicket.aggregate({ where: { ...where, canceledAt: { not: null } }, _sum: { totalCents: true } }),
         tx.fazendinhaBet.aggregate({ where, _sum: { totalCents: true } }),
       ]);
       const summary =
         (game: PuleSummary['game']) =>
-        (row: (typeof tickets)[number]): PuleSummary => ({
+        (row: (typeof bets)[number] & { canceledAt?: Date | null }): PuleSummary => ({
           puleNumber: row.puleNumber,
           game,
           code: row.drawCode,
           createdAt: row.createdAt.toISOString(),
           drawDate: fromDate(row.drawDate),
-          status: 'registered',
+          status: row.canceledAt ? 'canceled' : 'registered',
           totalCents: Number(row.totalCents),
         });
       const all = [...tickets.map(summary('lotteries')), ...bets.map(summary('fazendinha'))].sort(
@@ -166,8 +175,8 @@ export class ReportsService {
       );
       return {
         date,
-        registeredCents: Number((ticketTotal._sum.totalCents ?? 0n) + (betTotal._sum.totalCents ?? 0n)),
-        canceledCents: 0,
+        registeredCents: Number((validTotal._sum.totalCents ?? 0n) + (betTotal._sum.totalCents ?? 0n)),
+        canceledCents: Number(canceledTotal._sum.totalCents ?? 0n),
         pules: all.slice(0, PULE_LIST_LIMIT),
         truncated: all.length > PULE_LIST_LIMIT,
       };
@@ -195,7 +204,8 @@ export class ReportsService {
         return {
           game: 'lotteries',
           ticket: toPublicTicket(ticket, user.displayId),
-          cancellable: ticket.closesAt.getTime() > Date.now(),
+          cancellable: !ticket.canceledAt && ticket.closesAt.getTime() > Date.now(),
+          canceledAt: ticket.canceledAt?.toISOString() ?? null,
         };
       }
       if (bet) {
@@ -212,6 +222,29 @@ export class ReportsService {
       }
       throw puleNotFound();
     });
+  }
+
+  /**
+   * Cancelar pule (só Loterias), pelo próprio jogador e antes do horário limite. O banco faz tudo numa transação
+   * (lottery_cancel): devolve a aposta às mesmas bolsas, marca a pule e estorna a comissão de quem indicou. Pule de
+   * outro jogador ou inexistente responde 404, como a consulta; repetir o pedido responde 409.
+   */
+  async cancelPule(tenant: ResolvedTenant, session: UserSession, puleNumber: number): Promise<PuleDetail> {
+    // O número da pule é integer no banco: acima disso, a pule não existe.
+    if (puleNumber > MAX_PULE_NUMBER) throw puleNotFound();
+    try {
+      await this.db.withTenant(tenant.id, (tx) =>
+        tx.$queryRaw`SELECT lottery_cancel(${puleNumber}::integer, ${session.userId}::uuid)::text AS id`,
+      );
+    } catch (error) {
+      if (hasSqlState(error, 'P0002')) throw puleNotFound();
+      if (hasSqlState(error, 'SJ005')) throw new AppError(409, 'CONFLICT', 'Esta pule já foi cancelada.');
+      if (hasSqlState(error, 'SJ002')) {
+        throw new AppError(409, 'DRAW_CLOSED', 'O horário de venda desta extração já encerrou.');
+      }
+      throw error;
+    }
+    return this.pule(tenant, session, puleNumber);
   }
 
   private assertDate(date: string, daysBack: number): void {

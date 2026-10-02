@@ -1,13 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import {
-  type AdminCommissionMonth,
-  type AdminUserDetail,
-  type LoginResponse,
-  type PublicUser,
-  brasiliaNow,
-  drawDateOf,
-} from '@sysjb/contracts';
+import { type AdminUserDetail, type LoginResponse, type PublicUser, drawDateOf } from '@sysjb/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   api,
@@ -38,31 +31,25 @@ beforeEach(resetUsers);
 
 type Session = Awaited<ReturnType<typeof loginOperator>>;
 
-const now = () => brasiliaNow(new Date().toISOString());
-const monthOf = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
-const CURRENT = (() => {
-  const { year, month } = now();
-  return monthOf(year, month);
-})();
-const LAST = (() => {
-  const { year, month } = now();
-  return month === 1 ? monthOf(year - 1, 12) : monthOf(year, month - 1);
-})();
 const TOMORROW = drawDateOf(new Date().toISOString(), 1);
 let nextNumber = 0;
 
-/** Jogador que se cadastra pelo convite de `referrer` (ou sem convite) e aposta `bets` (em centavos, R$ 1 cada número). */
-async function bettor(referrer: PublicUser | null, totalCents: number) {
+/** Jogador que se cadastra pelo convite de `referrer` (ou sem convite), com R$ 100 de saldo. */
+async function bettor(referrer: PublicUser | null) {
   const person = await createUser(app, 'aurora', referrer ? { inviteCode: String(referrer.displayId) } : {});
   await asTenant(migratorPool, auroraId, (c) =>
-    c.query("SELECT wallet_manual_adjust($1, $2, 0, 0, 'fundos de teste')", [person.id, totalCents]),
+    c.query("SELECT wallet_manual_adjust($1, 10000, 0, 0, 'fundos de teste')", [person.id]),
   );
   const login = await api(app, 'aurora').post('/v1/auth/login', {
     document: person.document,
     password: SYNTHETIC_PASSWORD,
   });
-  const http = api(app, 'aurora', KEYS.aurora, { 'X-Session-Token': (login.body as LoginResponse).token });
-  // Cada número só é vendido uma vez por cartela: cada apostador usa números novos (centena: 0–999).
+  return { person, http: api(app, 'aurora', KEYS.aurora, { 'X-Session-Token': (login.body as LoginResponse).token }) };
+}
+type Bettor = Awaited<ReturnType<typeof bettor>>;
+
+/** Aposta na Fazendinha: `totalCents` em números de R$ 1 (cada número só é vendido uma vez por cartela). */
+async function bet({ http }: Bettor, totalCents: number) {
   const numbers = Array.from({ length: totalCents / 100 }, () => nextNumber++);
   const res = await http.post('/v1/fazendinha/bets', {
     idempotencyKey: randomUUID(),
@@ -75,17 +62,19 @@ async function bettor(referrer: PublicUser | null, totalCents: number) {
     numbers,
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return person;
 }
-
-/** Leva todas as apostas para o meio do mês passado (a dona das tabelas pode; a API não). */
-const moveBetsToLastMonth = () =>
-  asTenant(migratorPool, auroraId, (c) =>
-    c.query("UPDATE fazendinha_bets SET created_at = ($1 || '-15 12:00:00-03')::timestamptz", [LAST]),
-  );
 
 const walletOf = async (session: Session, userId: string) =>
   ((await session.http.get(`/v1/admin/users/${userId}`)).body as AdminUserDetail).wallet;
+
+const commissionsOf = (userId: string) =>
+  asTenant(migratorPool, auroraId, (c) =>
+    c.query(
+      `SELECT wagered_cents::int, referral_rate_bps, promoter_rate_bps, referral_cents::int, promoter_cents::int
+       FROM bet_commissions WHERE user_id = $1 ORDER BY created_at, wagered_cents`,
+      [userId],
+    ),
+  ).then((r) => r.rows);
 
 describe('indicação × promotor no cadastro', () => {
   it('jogador comum também indica; o painel mostra "indicado por" e, se for promotor, "promotor"', async () => {
@@ -141,7 +130,7 @@ describe('comissões', () => {
     }
   });
 
-  it('prévia e fechamento: indicação X%, promotor X%+Y%, bloqueado não recebe; crédito no Saldo', async () => {
+  it('paga na hora da aposta: indicação X%, promotor X%+Y%; bloqueado e quem veio sem convite não geram', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
     const promoter = await createUser(app, 'aurora');
@@ -149,111 +138,90 @@ describe('comissões', () => {
     const regular = await createUser(app, 'aurora');
     const blocked = await createUser(app, 'aurora');
 
-    await bettor(promoter, 1000);
-    await bettor(promoter, 2000);
-    await bettor(regular, 500);
-    await bettor(blocked, 200);
-    await bettor(null, 700);
+    const byPromoter = await bettor(promoter);
+    const byRegular = await bettor(regular);
+    const byBlocked = await bettor(blocked);
+    const alone = await bettor(null);
     await session.http.patch(`/v1/admin/users/${blocked.id}/status`, { status: 'BLOCKED' });
 
-    // Apostas deste mês não entram no mês passado.
-    const empty = (await session.http.get(`/v1/admin/commissions/months/${LAST}`)).body as AdminCommissionMonth;
-    expect(empty.rows).toEqual([]);
-
-    await moveBetsToLastMonth();
-    const preview = (await session.http.get(`/v1/admin/commissions/months/${LAST}`)).body as AdminCommissionMonth;
-    expect(preview).toMatchObject({ month: LAST, closed: null, canClose: true });
-    expect(
-      preview.rows.map((r) => [
-        r.user.id,
-        r.wageredCents,
-        r.referralRateBps,
-        r.promoterRateBps,
-        r.amountCents,
-        r.status,
-      ]),
-    ).toEqual([
-      [promoter.id, 3000, 300, 700, 300, 'PAID'],
-      [regular.id, 500, 300, 0, 15, 'PAID'],
-      [blocked.id, 200, 300, 0, 6, 'BLOCKED'],
-    ]);
-    expect(preview.totals).toEqual({ wageredCents: 3700, paidCents: 315 });
-
-    const closed = await session.http.post(`/v1/admin/commissions/months/${LAST}/close`, {});
-    expect(closed.status).toBe(200);
-    expect(closed.body).toMatchObject({
-      closed: { totalPaidCents: 315, operatorName: session.operator.name },
-      canClose: false,
-      totals: { paidCents: 315 },
-    });
+    await bet(byPromoter, 1000);
+    // Pago na hora: o Saldo de quem indicou já tem a comissão (3% + 7% de R$ 10).
+    expect((await walletOf(session, promoter.id)).balanceJb).toBe(100);
+    await bet(byPromoter, 2000);
+    await bet(byRegular, 500);
+    await bet(byBlocked, 200);
+    await bet(alone, 700);
 
     expect((await walletOf(session, promoter.id)).balanceJb).toBe(300);
     expect((await walletOf(session, regular.id)).balanceJb).toBe(15);
     expect((await walletOf(session, blocked.id)).balanceJb).toBe(0);
+    expect(await commissionsOf(promoter.id)).toEqual([
+      { wagered_cents: 1000, referral_rate_bps: 300, promoter_rate_bps: 700, referral_cents: 30, promoter_cents: 70 },
+      { wagered_cents: 2000, referral_rate_bps: 300, promoter_rate_bps: 700, referral_cents: 60, promoter_cents: 140 },
+    ]);
+    expect(await commissionsOf(regular.id)).toEqual([
+      { wagered_cents: 500, referral_rate_bps: 300, promoter_rate_bps: 0, referral_cents: 15, promoter_cents: 0 },
+    ]);
 
     const entries = await asTenant(migratorPool, auroraId, (c) =>
       c.query(
-        "SELECT user_id, balance_jb_delta, note FROM wallet_entries WHERE kind = 'COMMISSION' ORDER BY balance_jb_delta DESC",
+        `SELECT user_id, balance_jb_delta::int AS delta, note FROM wallet_entries
+         WHERE kind = 'COMMISSION' ORDER BY created_at`,
       ),
     );
     expect(entries.rows).toEqual([
-      { user_id: promoter.id, balance_jb_delta: '300', note: `Comissão de ${LAST.slice(5)}/${LAST.slice(0, 4)}` },
-      { user_id: regular.id, balance_jb_delta: '15', note: `Comissão de ${LAST.slice(5)}/${LAST.slice(0, 4)}` },
-    ]);
-    const audit = (await session.http.get('/v1/admin/audit?action=commission.close')).body.items;
-    expect(audit[0]).toMatchObject({ targetType: 'tenant', details: { fields: ['month'], month: LAST, amount: 315 } });
-
-    // Fechado, o mês fica congelado: mudar a % depois não altera o que foi pago.
-    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1000 });
-    const after = (await session.http.get(`/v1/admin/commissions/months/${LAST}`)).body as AdminCommissionMonth;
-    expect(after.totals.paidCents).toBe(315);
-    expect((await session.http.get('/v1/admin/commissions/closings')).body).toEqual([
-      { month: LAST, closedAt: expect.any(String), operatorName: session.operator.name, totalPaidCents: 315 },
+      { user_id: promoter.id, delta: 100, note: 'Comissão de aposta' },
+      { user_id: promoter.id, delta: 200, note: 'Comissão de aposta' },
+      { user_id: regular.id, delta: 15, note: 'Comissão de aposta' },
     ]);
   });
 
-  it('não fecha duas vezes, nem o mês corrente; fechamentos simultâneos pagam uma vez só', async () => {
+  it('cada parte arredonda para baixo; a % é a do momento da aposta; 0% não gera registro', async () => {
     const session = await loginOperator(app, 'aurora');
-    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1000 });
-    const referrer = await createUser(app, 'aurora');
-    await bettor(referrer, 1000);
-    await moveBetsToLastMonth();
+    const promoter = await createUser(app, 'aurora');
+    await session.http.put(`/v1/admin/promoters/${promoter.id}`, { commissionBps: 1 });
+    const player = await bettor(promoter);
 
-    const results = await Promise.all(
-      [1, 2, 3].map(() => session.http.post(`/v1/admin/commissions/months/${LAST}/close`, {})),
-    );
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409, 409]);
-    expect((await walletOf(session, referrer.id)).balanceJb).toBe(100);
+    // 0% de indicação e 0,01% de R$ 1 (0,01 centavo) = nada a pagar: nenhum registro.
+    await bet(player, 100);
+    expect(await commissionsOf(promoter.id)).toEqual([]);
 
-    const again = await session.http.post(`/v1/admin/commissions/months/${LAST}/close`, {});
-    expect(again.body).toMatchObject({ code: 'CONFLICT', message: 'Este mês já foi fechado.' });
-    const current = await session.http.post(`/v1/admin/commissions/months/${CURRENT}/close`, {});
-    expect(current.status).toBe(409);
-    expect(current.body.message).toBe('O mês ainda não terminou.');
-    expect((await session.http.get(`/v1/admin/commissions/months/${CURRENT}`)).body.canClose).toBe(false);
-    expect((await session.http.get('/v1/admin/commissions/months/2026-13')).status).toBe(400);
+    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 333 });
+    await session.http.put(`/v1/admin/promoters/${promoter.id}`, { commissionBps: 1250 });
+    await bet(player, 300);
+    // Mudar a % depois não altera o que já foi pago.
+    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 5000 });
+    // 3,33% de R$ 3 = 9,99 centavos -> 9; 12,5% de R$ 3 = 37,5 -> 37.
+    expect(await commissionsOf(promoter.id)).toEqual([
+      { wagered_cents: 300, referral_rate_bps: 333, promoter_rate_bps: 1250, referral_cents: 9, promoter_cents: 37 },
+    ]);
+    expect((await walletOf(session, promoter.id)).balanceJb).toBe(46);
   });
 
-  it('Financeiro só consulta; Suporte não vê; a função recusa quem não é Gerente', async () => {
+  it('Financeiro só consulta; Suporte não vê; a API não grava comissões nem chama o crédito', async () => {
     const finance = await loginOperator(app, 'aurora', { role: 'FINANCE' });
     expect((await finance.http.get('/v1/admin/commissions/settings')).status).toBe(200);
-    expect((await finance.http.get(`/v1/admin/commissions/months/${LAST}`)).status).toBe(200);
     expect((await finance.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1 })).status).toBe(403);
-    expect((await finance.http.post(`/v1/admin/commissions/months/${LAST}/close`, {})).status).toBe(403);
 
     const support = await loginOperator(app, 'aurora', { role: 'SUPPORT' });
     expect((await support.http.get('/v1/admin/commissions/settings')).status).toBe(403);
 
+    // O fechamento mensal de Loterias/Fazendinha não existe mais.
+    expect((await finance.http.get('/v1/admin/commissions/months/2026-01')).status).toBe(404);
+
+    const user = await createUser(app, 'aurora');
     await expect(
       asTenant(runtimePool, auroraId, (c) =>
-        c.query('SELECT commission_close_month($1::date, $2)', [`${LAST}-01`, finance.operator.id]),
+        c.query('SELECT bet_commission_credit($1, $2, 1000, NULL, NULL)', [auroraId, user.id]),
       ),
     ).rejects.toMatchObject({ code: '42501' });
     await expect(
       asTenant(runtimePool, auroraId, (c) =>
         c.query(
-          "INSERT INTO commission_closings (tenant_id, month, operator_id, referral_rate_bps, total_paid_cents) VALUES ($1, '2020-01-01', $2, 0, 0)",
-          [auroraId, finance.operator.id],
+          `INSERT INTO bet_commissions (tenant_id, user_id, bettor_id, wagered_cents, referral_rate_bps,
+             promoter_rate_bps, referral_cents, promoter_cents)
+           VALUES ($1, $2, $2, 100, 0, 0, 1, 0)`,
+          [auroraId, user.id],
         ),
       ),
     ).rejects.toMatchObject({ code: '42501' });

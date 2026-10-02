@@ -6,7 +6,7 @@ import {
   type PuleDetail,
 } from '@sysjb/contracts';
 import { formatBrl, formatCents } from './currency';
-import { formatCalendarDate, formatShortCalendarDate } from './datetime';
+import { formatCalendarDate, formatShortCalendarDate, formatShortDateTime } from './datetime';
 import { MODE_CODE, palpiteLabel } from './fazendinha';
 import type { ReceiptPdfContent, ReceiptSection } from './receipt-pdf';
 
@@ -82,6 +82,8 @@ export interface PuleCard {
     possiblePrizeCents?: number;
   }>;
   totalCents: number;
+  /** ISO 8601 do cancelamento (só Loterias): o recibo diz que a pule não vale mais. */
+  canceledAt?: string;
 }
 
 export function puleCard(detail: PuleDetail): PuleCard {
@@ -103,6 +105,7 @@ export function puleCard(detail: PuleDetail): PuleCard {
         possiblePrizeCents: item.possiblePrizeCents,
       })),
       totalCents: ticket.totalCents,
+      ...(detail.canceledAt ? { canceledAt: detail.canceledAt } : {}),
     };
   }
   const { bet } = detail;
@@ -126,14 +129,21 @@ export function puleCard(detail: PuleDetail): PuleCard {
   };
 }
 
-/** PDF do recibo: o mesmo conteúdo do TicketCard, com a data/hora da venda no topo. */
+/** Aviso do recibo de pule cancelada (tela e PDF): a pule não concorre e o valor voltou. */
+export const canceledNotice = (canceledAt: string) =>
+  `Pule cancelada em ${formatShortDateTime(canceledAt)}. O valor voltou para o seu saldo.`;
+
+/**
+ * PDF do recibo: o mesmo conteúdo do TicketCard, com a data/hora da venda no topo. Pule cancelada sai marcada como
+ * cancelada (nunca como um comprovante válido).
+ */
 export function puleReceipt(card: PuleCard, stamp: string): ReceiptPdfContent {
   return {
-    title: `Pule #${card.puleNumber}`,
+    title: card.canceledAt ? `Pule #${card.puleNumber} (cancelada)` : `Pule #${card.puleNumber}`,
     sellerId: card.sellerId,
     consultedAt: stamp,
     sections: [
-      [{ left: 'Recibo da aposta' }],
+      [{ left: card.canceledAt ? [{ text: 'PULE CANCELADA', bold: true }] : 'Recibo da aposta' }],
       [
         { left: 'Vale', right: formatShortCalendarDate(card.drawDate) },
         { left: 'Cotação', right: card.quoteTable },
@@ -150,7 +160,13 @@ export function puleReceipt(card: PuleCard, stamp: string): ReceiptPdfContent {
       ]),
       [{ left: 'Total jogo:', right: formatBrl(card.totalCents) }],
       [{ left: 'A pagar', right: formatBrl(card.totalCents) }],
-      [{ left: [{ text: 'Confira sua aposta. Boa sorte!', bold: true }] }],
+      [
+        {
+          left: [
+            { text: card.canceledAt ? canceledNotice(card.canceledAt) : 'Confira sua aposta. Boa sorte!', bold: true },
+          ],
+        },
+      ],
     ],
   };
 }

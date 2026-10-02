@@ -65,14 +65,17 @@ export interface PuleSummary {
   createdAt: string;
   /** "Vale" (YYYY-MM-DD). */
   drawDate: string;
-  status: 'registered';
+  /** Cancelada pelo jogador (só Loterias, antes do horário limite): o valor voltou para a carteira. */
+  status: 'registered' | 'canceled';
   totalCents: Cents;
 }
 
 /** GET /v1/me/pules?date=: pules vendidas no dia (mais recentes primeiro) e os totais. */
 export interface PuleList {
   date: string;
+  /** Pules válidas do dia. */
   registeredCents: Cents;
+  /** Pules do dia que o jogador cancelou. */
   canceledCents: Cents;
   pules: PuleSummary[];
   /** Há mais pules no dia do que a lista traz (os totais contam todos). */
@@ -82,12 +85,17 @@ export interface PuleList {
 /** Máximo de pules na lista de um dia. */
 export const PULE_LIST_LIMIT = 200;
 
-/** GET /v1/me/pules/:puleNumber: recibo de uma pule do jogador (404 se não for dele ou não existir). */
+/**
+ * GET /v1/me/pules/:puleNumber: recibo de uma pule do jogador (404 se não for dele ou não existir).
+ * POST /v1/me/pules/:puleNumber/cancel: cancela a pule de Loterias até o horário limite e devolve o recibo atualizado.
+ */
 export type PuleDetail =
   | {
       game: 'lotteries';
       ticket: PublicLotteryTicket;
-      /** Ainda dentro do horário de venda (o cancelamento em si ainda não existe). */
+      /** Ainda dentro do horário de venda e não cancelada: pode ser cancelada. */
       cancellable: boolean;
+      /** ISO 8601 do cancelamento; null = válida. */
+      canceledAt: string | null;
     }
   | { game: 'fazendinha'; bet: PublicFazendinhaBet };

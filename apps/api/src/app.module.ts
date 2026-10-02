@@ -19,6 +19,10 @@ import { GeneralReportController } from './admin/general-report.controller.js';
 import { GeneralReportService } from './admin/general-report.service.js';
 import { SalesByDrawController } from './admin/sales-by-draw.controller.js';
 import { SalesByDrawService } from './admin/sales-by-draw.service.js';
+import { CasinoGeneralController } from './admin/casino-general.controller.js';
+import { CasinoGeneralService } from './admin/casino-general.service.js';
+import { CasinoClosingController } from './admin/casino-closing.controller.js';
+import { CasinoClosingService } from './admin/casino-closing.service.js';
 import { PlayerStatementController } from './admin/player-statement.controller.js';
 import { PlayerStatementService } from './admin/player-statement.service.js';
 import { PrizesAdminService } from './admin/prizes-admin.service.js';
@@ -100,6 +104,8 @@ export class AppModule {
         OperationSummaryController,
         GeneralReportController,
         SalesByDrawController,
+        CasinoGeneralController,
+        CasinoClosingController,
         PlayerStatementController,
         MuralsController,
         DrawsController,
@@ -143,6 +149,8 @@ export class AppModule {
         OperationSummaryService,
         GeneralReportService,
         SalesByDrawService,
+        CasinoGeneralService,
+        CasinoClosingService,
         PlayerStatementService,
         QuotesService,
         PrizesService,

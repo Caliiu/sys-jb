@@ -64,7 +64,12 @@ export class ResultNotifier implements OnApplicationShutdown {
           draws.map(async (draw) => {
             const where = { tenantId, lottery: draw.name, drawHour: Math.floor(draw.drawMinutes / 60), drawDate };
             const [tickets, bets] = await Promise.all([
-              tx.lotteryTicket.findMany({ where, select: { userId: true }, distinct: ['userId'] }),
+              // Pule cancelada não concorre: quem só tinha pules canceladas não recebe o aviso.
+              tx.lotteryTicket.findMany({
+                where: { ...where, canceledAt: null },
+                select: { userId: true },
+                distinct: ['userId'],
+              }),
               tx.fazendinhaBet.findMany({ where, select: { userId: true }, distinct: ['userId'] }),
             ]);
             return { draw, userIds: [...new Set([...tickets, ...bets].map((row) => row.userId))] };

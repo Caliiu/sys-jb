@@ -3,6 +3,7 @@ import {
   ADMIN_PRIZES_MAX_DAYS,
   AUDIT_ACTIONS,
   AUDIT_PERIODS,
+  casinoClosingMonths,
   dayOffsetOf,
   DRAW_MAX_DAY_OFFSET,
   GENERAL_REPORT_SORTS,
@@ -15,6 +16,7 @@ import {
   type TraditionalQuoteModality,
   MAX_COMMISSION_BPS,
   MAX_WALLET_CREDIT_CENTS,
+  MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
@@ -72,6 +74,12 @@ export const setPromoterSchema = z.strictObject({
     .int('A comissão deve ser um inteiro (centésimos de %).')
     .min(MIN_COMMISSION_BPS, 'A comissão mínima é 0,01%.')
     .max(MAX_COMMISSION_BPS, 'A comissão máxima é 100%.'),
+  casinoCommissionBps: z
+    .number({ error: 'Informe a comissão de cassino.' })
+    .int('A comissão de cassino deve ser um inteiro (centésimos de %).')
+    .min(MIN_CASINO_COMMISSION_BPS, 'A comissão de cassino não pode ser negativa.')
+    .max(MAX_COMMISSION_BPS, 'A comissão de cassino máxima é 100%.')
+    .optional(),
 });
 
 export const setUserStatusSchema = z.strictObject({ status: z.enum(USER_STATUSES) });
@@ -139,7 +147,7 @@ export const setFazendinhaQuotesSchema = z.strictObject({
     .max(FAZENDINHA_MODE_IDS.length * FAZENDINHA_STAKES_CENTS.length),
 });
 
-/** Mês das comissões: YYYY-MM (2000-01 a 2099-12). */
+/** Mês (fechamento de comissões): YYYY-MM (2000-01 a 2099-12). */
 export const commissionMonthSchema = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/, 'Mês inválido (use AAAA-MM).');
 
 /** Auditoria: página, tamanho e filtros opcionais por ação, usuário afetado e período. */
@@ -272,6 +280,27 @@ export const salesByDrawQuerySchema = z
   })
   .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS, DRAW_MAX_DAY_OFFSET));
 export type SalesByDrawQuery = z.output<typeof salesByDrawQuerySchema>;
+
+/** Geral cassino: período (até hoje), promotor, apostador e tipo. */
+export const casinoGeneralQuerySchema = z
+  .strictObject({
+    from: z.string({ error: 'Informe o início do período.' }),
+    to: z.string({ error: 'Informe o fim do período.' }),
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+    userId: z.uuid({ error: 'userId deve ser um UUID.' }).optional(),
+    type: z.enum(GENERAL_REPORT_TYPES, { error: 'Tipo inválido.' }).optional(),
+  })
+  .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS));
+export type CasinoGeneralQuery = z.output<typeof casinoGeneralQuerySchema>;
+
+/** Fechamento cassino: o mês do detalhamento (opcional), até o mês atual (Brasília). */
+export const casinoClosingQuerySchema = z
+  .strictObject({ month: commissionMonthSchema.optional() })
+  .refine((query) => !query.month || query.month <= casinoClosingMonths(new Date().toISOString()).current, {
+    path: ['month'],
+    message: 'Mês futuro.',
+  });
+export type CasinoClosingQuery = z.output<typeof casinoClosingQuerySchema>;
 
 /** Extrato do apostador: período (até hoje) e paginação. */
 export const playerStatementQuerySchema = z

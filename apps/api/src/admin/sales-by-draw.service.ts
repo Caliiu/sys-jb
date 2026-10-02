@@ -63,10 +63,10 @@ const sum = (rows: SalesByDrawRow[]): SalesByDrawTotals =>
   );
 
 /**
- * Vendas por extração da banca do operador: pules de Loterias e Fazendinha e os prêmios deles, por sorteio (nome e hora
- * da venda, que o banco não deixa mudar depois de vender), pela data do jogo. Só leitura, numa consulta; toda parte
- * filtra pela banca, além do RLS da transação, e o SQL é sempre parametrizado. São poucas linhas (uma por sorteio da
- * banca), então não há paginação.
+ * Vendas por extração da banca do operador: pules de Loterias (sem os cancelados) e Fazendinha e os prêmios deles, por
+ * sorteio (nome e hora da venda, que o banco não deixa mudar depois de vender), pela data do jogo. Só leitura, numa
+ * consulta; toda parte filtra pela banca, além do RLS da transação, e o SQL é sempre parametrizado. São poucas linhas
+ * (uma por sorteio da banca), então não há paginação.
  */
 @Injectable()
 export class SalesByDrawService {
@@ -99,7 +99,7 @@ export class SalesByDrawService {
       const rows = await tx.$queryRaw<DrawRow[]>`
         WITH sold AS (
           SELECT 'lotteries' AS game, t."lottery", t."draw_hour", t."draw_code", t."total_cents", t."created_at"
-          FROM "lottery_tickets" t WHERE ${pules(Prisma.raw('t'))}
+          FROM "lottery_tickets" t WHERE ${pules(Prisma.raw('t'))} AND t."canceled_at" IS NULL
           UNION ALL
           SELECT 'fazendinha' AS game, b."lottery", b."draw_hour", b."draw_code", b."total_cents", b."created_at"
           FROM "fazendinha_bets" b WHERE ${pules(Prisma.raw('b'))}

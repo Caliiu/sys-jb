@@ -4,6 +4,7 @@ import type {
   AdminCommissionSettings,
   AdminDrawsResponse,
   AdminBranding,
+  AdminCasinoGeneralReport,
   HomeLayout,
   AdminMural,
   AdminPromoterListItem,
@@ -25,12 +26,14 @@ import type {
   SaveDrawRequest,
   SaveBrandingRequest,
   SaveMuralRequest,
+  SetPromoterRequest,
   SetFazendinhaQuotesRequest,
   SetTraditionalQuotesRequest,
 } from '@sysjb/contracts';
 import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import type { AuditQuery } from './audit-query';
+import type { CasinoGeneralQuery } from './casino-general-query';
 import type { GeneralReportQuery } from './general-report-query';
 import type { OperationSummaryQuery } from './operation-summary-query';
 import type { PrizesQuery } from './prizes-query';
@@ -105,6 +108,13 @@ export const adminApi = {
     if (query.userId) params.set('userId', query.userId);
     return call<AdminSalesByDrawReport>(session, 'GET', `/v1/admin/reports/sales-by-draw?${params}`);
   },
+  casinoGeneral(session: Caller, query: CasinoGeneralQuery) {
+    const params = new URLSearchParams({ from: query.from, to: query.to });
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.userId) params.set('userId', query.userId);
+    if (query.type) params.set('type', query.type);
+    return call<AdminCasinoGeneralReport>(session, 'GET', `/v1/admin/reports/casino/general?${params}`);
+  },
   generalReport(session: Caller, query: GeneralReportQuery) {
     const params = new URLSearchParams({
       from: query.from,
@@ -139,8 +149,8 @@ export const adminApi = {
   setUserStatus: (session: Caller, id: string, status: string) =>
     call<AdminUserDetail>(session, 'PATCH', `/v1/admin/users/${encodeURIComponent(id)}/status`, { status }),
 
-  setPromoter: (session: Caller, id: string, commissionBps: number) =>
-    call<AdminPromoterListItem>(session, 'PUT', `/v1/admin/promoters/${encodeURIComponent(id)}`, { commissionBps }),
+  setPromoter: (session: Caller, id: string, body: SetPromoterRequest) =>
+    call<AdminPromoterListItem>(session, 'PUT', `/v1/admin/promoters/${encodeURIComponent(id)}`, body),
 
   removePromoter: (session: Caller, id: string) =>
     call<null>(session, 'DELETE', `/v1/admin/promoters/${encodeURIComponent(id)}`),

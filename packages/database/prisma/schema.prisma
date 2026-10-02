@@ -72,6 +72,7 @@ model Tenant {
   logo                 TenantLogo?
   pushSubscriptions    PushSubscription[]
   pulePrizes           PulePrize[]
+  betCommissions       BetCommission[]
 
   @@map("tenants")
 }
@@ -95,6 +96,8 @@ model User {
   status                UserStatus @default(ACTIVE)
   // Promotor = usuário com comissão definida (centésimos de %, 1 a 10000 = 0,01% a 100%). Null = não é promotor. Só operadores alteram.
   promoterCommissionBps Int?       @map("promoter_commission_bps")
+  // Comissão de cassino do promotor (centésimos de % do GGR mensal dos indicados). 0 para quem não é promotor.
+  casinoCommissionBps   Int        @default(dbgenerated("0")) @map("casino_commission_bps")
   // Promotor que indicou este usuário (pelo link de convite, só no cadastro). Nunca muda depois.
   referredByUserId      String?    @map("referred_by_user_id") @db.Uuid
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -112,6 +115,8 @@ model User {
   muralViews        MuralView[]
   pushSubscriptions PushSubscription[]
   pulePrizes        PulePrize[]
+  betCommissions    BetCommission[]    @relation("BetCommissionReferrer")
+  commissionedBets  BetCommission[]    @relation("BetCommissionBettor")
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -280,8 +285,9 @@ model FazendinhaBet {
 
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   user        User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  numbers     FazendinhaBetNumber[]
-  walletEntry WalletEntry?
+  numbers       FazendinhaBetNumber[]
+  walletEntry   WalletEntry?
+  betCommission BetCommission?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, idempotencyKey])
@@ -335,10 +341,12 @@ model WalletEntry {
   idempotencyKey     String?  @map("idempotency_key") @db.Uuid
   // Pagamento de comissão do fechamento mensal (COMMISSION).
   commissionPayoutId String?  @map("commission_payout_id") @db.Uuid
-  // Débito de um pule de loteria (LOTTERY_BET).
+  // Pule de loteria: débito (LOTTERY_BET) e devolução no cancelamento (LOTTERY_REFUND), um de cada por pule.
   lotteryTicketId    String?  @map("lottery_ticket_id") @db.Uuid
   // Um débito por pule (UNIQUE): a função não debita duas vezes o mesmo pule.
   fazendinhaBetId    String?  @map("fazendinha_bet_id") @db.Uuid
+  // Comissão de uma aposta: crédito na hora (COMMISSION) e estorno no cancelamento (COMMISSION_REVERSAL).
+  betCommissionId    String?  @map("bet_commission_id") @db.Uuid
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -347,11 +355,13 @@ model WalletEntry {
   operator         Operator?         @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
   commissionPayout CommissionPayout? @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
   lotteryTicket    LotteryTicket?    @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+  betCommission    BetCommission?    @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, fazendinhaBetId])
   @@unique([tenantId, idempotencyKey])
   @@unique([tenantId, commissionPayoutId])
-  @@unique([tenantId, lotteryTicketId])
+  @@unique([tenantId, lotteryTicketId, kind])
+  @@unique([tenantId, betCommissionId, kind])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@map("wallet_entries")
 }
@@ -378,8 +388,8 @@ enum CommissionPayoutStatus {
   @@map("commission_payout_status")
 }
 
-// Fechamento mensal de comissões (indicação + promotor), feito pelo Gerente. Um por banca e mês; somente
-// inclusão. Criado só pela função commission_close_month, que também credita os pagamentos.
+// Histórico do antigo fechamento mensal de comissões de Loterias/Fazendinha (indicação + promotor). Desde a
+// migration bet_commissions a comissão é paga na hora da aposta (BetCommission) e nada novo entra aqui.
 model CommissionClosing {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String   @map("tenant_id") @db.Uuid
@@ -420,6 +430,44 @@ model CommissionPayout {
   @@unique([tenantId, id])
   @@unique([closingId, userId])
   @@map("commission_payouts")
+}
+
+// Comissão de uma aposta (pule de Loterias ou da Fazendinha), paga na hora a quem indicou o apostador:
+// % de indicação da banca + % de promotor (se for promotor), sobre o valor apostado, cada parte arredondada para
+// baixo no centavo. Percentuais gravados no momento da aposta. Criada só pela função bet_commission_credit; o
+// cancelamento do pule (lottery_cancel) grava o estorno. Somente leitura para a API.
+model BetCommission {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  // Quem recebe (quem indicou o apostador).
+  userId          String    @map("user_id") @db.Uuid
+  bettorId        String    @map("bettor_id") @db.Uuid
+  // Exatamente uma das duas apostas.
+  lotteryTicketId String?   @map("lottery_ticket_id") @db.Uuid
+  fazendinhaBetId String?   @map("fazendinha_bet_id") @db.Uuid
+  wageredCents    BigInt    @map("wagered_cents")
+  referralRateBps Int       @map("referral_rate_bps")
+  promoterRateBps Int       @map("promoter_rate_bps")
+  // Parte "Indique e ganhe" e parte de promotor; o crédito é a soma.
+  referralCents   BigInt    @map("referral_cents")
+  promoterCents   BigInt    @map("promoter_cents")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Pule cancelado: quando e quanto voltou (pode ser menos que o crédito se quem recebeu já gastou o saldo).
+  reversedAt      DateTime? @map("reversed_at") @db.Timestamptz(3)
+  reversedCents   BigInt?   @map("reversed_cents")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User           @relation("BetCommissionReferrer", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  bettor        User           @relation("BetCommissionBettor", fields: [tenantId, bettorId], references: [tenantId, id], onDelete: Restrict)
+  lotteryTicket LotteryTicket? @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+  fazendinhaBet FazendinhaBet? @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
+  walletEntries WalletEntry[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, lotteryTicketId])
+  @@unique([tenantId, fazendinhaBetId])
+  @@index([tenantId, userId, createdAt])
+  @@map("bet_commissions")
 }
 
 // Cotação do Tradicional por banca: prêmio para cada R$ 1,00 apostado. Sem linha = vale o padrão
@@ -474,11 +522,14 @@ model LotteryTicket {
   // Jogo: tradicional (1/7) ou tradicional_10 (1/10). Define colocações e sorteios aceitos; nunca muda.
   game        String   @default("tradicional")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  // Cancelado pelo jogador antes do horário limite (função lottery_cancel): aposta devolvida e comissão estornada.
+  canceledAt  DateTime? @map("canceled_at") @db.Timestamptz(3)
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user        User                @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  items       LotteryTicketItem[]
-  walletEntry WalletEntry?
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User                @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  items         LotteryTicketItem[]
+  walletEntries WalletEntry[]
+  betCommission BetCommission?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, purchaseKey, lottery, drawHour])

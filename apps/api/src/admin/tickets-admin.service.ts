@@ -13,10 +13,10 @@ import type { ListTicketsQuery } from './admin.schemas.js';
 
 const DAY_MS = 86_400_000;
 
-/** Tabelas dos pules, uma por jogo (nomes fixos: nunca vêm da requisição). */
-const TICKET_TABLES: ReadonlyArray<{ game: AdminTicketGame; table: Prisma.Sql }> = [
-  { game: 'lotteries', table: Prisma.raw('"lottery_tickets"') },
-  { game: 'fazendinha', table: Prisma.raw('"fazendinha_bets"') },
+/** Tabelas dos pules, uma por jogo (nomes fixos: nunca vêm da requisição). Só pule de Loterias pode ser cancelado. */
+const TICKET_TABLES: ReadonlyArray<{ game: AdminTicketGame; table: Prisma.Sql; canceledAt: Prisma.Sql }> = [
+  { game: 'lotteries', table: Prisma.raw('"lottery_tickets"'), canceledAt: Prisma.raw('t."canceled_at"') },
+  { game: 'fazendinha', table: Prisma.raw('"fazendinha_bets"'), canceledAt: Prisma.raw('NULL::timestamptz') },
 ];
 
 interface TicketRow {
@@ -30,6 +30,7 @@ interface TicketRow {
   user_id: string;
   display_id: number;
   name: string;
+  canceled_at: Date | null;
 }
 
 const toItem = (row: TicketRow): AdminTicketListItem => ({
@@ -41,6 +42,7 @@ const toItem = (row: TicketRow): AdminTicketListItem => ({
   drawCode: row.draw_code,
   totalCents: Number(row.total_cents),
   player: { id: row.user_id, displayId: row.display_id, name: row.name },
+  canceledAt: row.canceled_at?.toISOString() ?? null,
 });
 
 /**
@@ -72,9 +74,9 @@ export class TicketsAdminService {
       const end = new Date(start.getTime() + DAY_MS);
       const union = Prisma.join(
         TICKET_TABLES.map(
-          ({ game, table }) => Prisma.sql`
+          ({ game, table, canceledAt }) => Prisma.sql`
             SELECT ${game}::text AS game, t."pule_number", t."created_at", t."draw_date", t."lottery", t."draw_code",
-                   t."total_cents", t."user_id"
+                   t."total_cents", t."user_id", ${canceledAt} AS canceled_at
             FROM ${table} t
             WHERE t."tenant_id" = ${tenant.id}::uuid
               AND t."created_at" >= ${start} AND t."created_at" < ${end}
@@ -94,7 +96,8 @@ export class TicketsAdminService {
       );
 
       const [totals] = await tx.$queryRaw<Array<{ total: bigint; total_cents: bigint | null }>>`
-        SELECT count(*) AS total, sum(x."total_cents") AS total_cents FROM (${union}) x`;
+        SELECT count(*) AS total, sum(x."total_cents") FILTER (WHERE x.canceled_at IS NULL) AS total_cents
+        FROM (${union}) x`;
       const total = Number(totals?.total ?? 0n);
       if (total === 0) return empty;
 
@@ -130,10 +133,10 @@ export class TicketsAdminService {
         user: { select: { id: true, displayId: true, name: true } },
       } as const;
       const [ticket, bet] = await Promise.all([
-        tx.lotteryTicket.findFirst({ where, select }),
+        tx.lotteryTicket.findFirst({ where, select: { ...select, canceledAt: true } }),
         tx.fazendinhaBet.findFirst({ where, select }),
       ]);
-      const found: Array<[AdminTicketGame, typeof ticket]> = [
+      const found: Array<[AdminTicketGame, (typeof bet & { canceledAt?: Date | null }) | null]> = [
         ['lotteries', ticket],
         ['fazendinha', bet],
       ];
@@ -149,6 +152,7 @@ export class TicketsAdminService {
                 drawCode: row.drawCode,
                 totalCents: Number(row.totalCents),
                 player: row.user,
+                canceledAt: row.canceledAt?.toISOString() ?? null,
               },
             ]
           : [],

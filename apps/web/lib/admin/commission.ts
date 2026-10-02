@@ -37,3 +37,8 @@ export function parseReferralRate(text: string): number | null {
 }
 
 export const REFERRAL_RATE_HELP = 'Entre 0% e 100%, com até 2 casas decimais (0% desliga).';
+
+/** Comissão de cassino do promotor: como a de indicação, de 0% (sem comissão de cassino) a 100% do GGR. */
+export const parseCasinoCommission = parseReferralRate;
+
+export const CASINO_COMMISSION_HELP = 'Cassino: entre 0% e 100% do GGR, com até 2 casas decimais.';

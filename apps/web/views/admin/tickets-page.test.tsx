@@ -28,6 +28,7 @@ const ticket = (over: Partial<AdminTicketListItem> = {}): AdminTicketListItem =>
   drawCode: 'PTRIO09',
   totalCents: 1250,
   player: PLAYER,
+  canceledAt: null,
   ...over,
 });
 
@@ -139,6 +140,18 @@ describe('Pules', () => {
     expect(within(within(results).getByRole('table')).getAllByRole('row')).toHaveLength(3);
     expect(within(results).queryByRole('navigation', { name: 'Paginação' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Número do Ticket' })).toHaveValue('10001');
+  });
+
+  it('pule cancelada: etiqueta "Cancelada" e o valor riscado', () => {
+    show(
+      { ticket: '10001' },
+      { result: { kind: 'ticket', items: [ticket({ canceledAt: '2026-09-30T12:10:00.000Z' }), ticket({ game: 'fazendinha' })] } },
+    );
+    const table = within(screen.getByRole('region', { name: 'Resultados' })).getByRole('table');
+    const [, canceled, valid] = within(table).getAllByRole('row');
+    expect(within(canceled!).getByText('Cancelada')).toHaveAttribute('title', 'Cancelada em 30/09/2026 09:10');
+    expect(within(canceled!).getByText(/12,50/)).toHaveClass('line-through');
+    expect(within(valid!).queryByText('Cancelada')).toBeNull();
   });
 
   it('sem bilhetes: os avisos', () => {

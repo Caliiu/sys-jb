@@ -104,19 +104,23 @@ export class PlayerStatementService {
       const rows = await tx.$queryRaw<EntryRow[]>`
         WITH p AS (
           SELECT e."id", e."created_at", e."kind", e."note", e."operator_id", e."lottery_ticket_id",
-                 e."fazendinha_bet_id", e."balance_jb_delta", e."bonus_jb_delta", e."prizes_jb_delta",
+                 e."fazendinha_bet_id", e."bet_commission_id", e."balance_jb_delta", e."bonus_jb_delta", e."prizes_jb_delta",
                  e."balance_games_delta", ${JB} AS total,
                  ${openingCents}::bigint + sum(${JB}) OVER (ORDER BY e."created_at", e."id") AS balance_after
           FROM "wallet_entries" e
           WHERE ${mine} AND ${inPeriod}
         )
         SELECT p."id", p."created_at", p."kind", p."note", o."name" AS operator_name,
-               COALESCE(t."pule_number", b."pule_number") AS pule_number,
+               COALESCE(t."pule_number", b."pule_number", ct."pule_number", cb."pule_number") AS pule_number,
                p."balance_jb_delta", p."bonus_jb_delta", p."prizes_jb_delta", p."balance_games_delta",
                p.total, p.balance_after
         FROM p
         LEFT JOIN "lottery_tickets" t ON t."tenant_id" = ${tenant.id}::uuid AND t."id" = p."lottery_ticket_id"
         LEFT JOIN "fazendinha_bets" b ON b."tenant_id" = ${tenant.id}::uuid AND b."id" = p."fazendinha_bet_id"
+        -- Comissão da aposta (e o estorno dela): o pule do indicado que gerou a comissão.
+        LEFT JOIN "bet_commissions" c ON c."tenant_id" = ${tenant.id}::uuid AND c."id" = p."bet_commission_id"
+        LEFT JOIN "lottery_tickets" ct ON ct."tenant_id" = ${tenant.id}::uuid AND ct."id" = c."lottery_ticket_id"
+        LEFT JOIN "fazendinha_bets" cb ON cb."tenant_id" = ${tenant.id}::uuid AND cb."id" = c."fazendinha_bet_id"
         LEFT JOIN "operators" o ON o."tenant_id" = ${tenant.id}::uuid AND o."id" = p."operator_id"
         ORDER BY p."created_at" DESC, p."id" DESC
         LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`;

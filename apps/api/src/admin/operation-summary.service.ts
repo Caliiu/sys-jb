@@ -32,9 +32,9 @@ const game = (turnoverCents: number, payoutCents: number): OperationGameTotals =
  *
  * Origem de cada número:
  * - cadastros: usuários criados no período;
- * - jogado: pules de Loterias e Fazendinha vendidos no período (data da venda);
+ * - jogado: pules de Loterias e Fazendinha vendidos no período (data da venda), sem os cancelados;
  * - prêmios: pules premiadas apuradas no período (pule_prizes; vazio até a apuração existir);
- * - comissão: pagamentos de comissão creditados no período (lançamentos COMMISSION);
+ * - comissão: comissões creditadas no período (na hora de cada aposta), menos os estornos de pules cancelados;
  * - creditado / bônus creditado: créditos pelo painel e ajustes manuais do período (só a parte positiva);
  * - saldo total: soma das carteiras agora.
  * Depósitos, saques, primeiro depósito e cassino ainda não existem no sistema: vêm zerados e listados em `unavailable`.
@@ -76,7 +76,8 @@ export class OperationSummaryService {
           ) AS signups,
           (SELECT sum(x."total_cents") FROM (
              SELECT t."total_cents" FROM "lottery_tickets" t
-             WHERE t."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`t."created_at"`)} ${player(Prisma.sql`t."user_id"`)}
+             WHERE t."tenant_id" = ${tenantId} AND t."canceled_at" IS NULL AND ${inPeriod(Prisma.sql`t."created_at"`)}
+               ${player(Prisma.sql`t."user_id"`)}
              UNION ALL
              SELECT b."total_cents" FROM "fazendinha_bets" b
              WHERE b."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`b."created_at"`)} ${player(Prisma.sql`b."user_id"`)}
@@ -86,7 +87,8 @@ export class OperationSummaryService {
           ) AS prizes,
           (SELECT sum(e."balance_jb_delta" + e."prizes_jb_delta" + e."bonus_jb_delta" + e."balance_games_delta")
             FROM "wallet_entries" e
-            WHERE e."tenant_id" = ${tenantId} AND e."kind" = 'COMMISSION' AND ${inPeriod(Prisma.sql`e."created_at"`)}
+            WHERE e."tenant_id" = ${tenantId} AND e."kind" IN ('COMMISSION', 'COMMISSION_REVERSAL')
+              AND ${inPeriod(Prisma.sql`e."created_at"`)}
             ${promoter ? Prisma.sql`AND e."user_id" = ${promoter.id}::uuid` : Prisma.empty}
           ) AS commission,
           (SELECT sum(greatest(e."balance_jb_delta", 0) + greatest(e."prizes_jb_delta", 0)

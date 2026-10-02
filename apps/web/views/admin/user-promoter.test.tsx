@@ -34,6 +34,7 @@ const promoter = (over: Partial<AdminPromoterListItem> = {}): AdminPromoterListI
   inviteCode: 'P5R3M',
   status: 'ACTIVE',
   commissionBps: 1250,
+  casinoCommissionBps: 0,
   referralsCount: 3,
   createdAt: '2026-09-25T17:30:00.000Z',
   ...over,
@@ -62,6 +63,7 @@ const userDetail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
     totalAvailableGames: 0,
   },
   promoterCommissionBps: null,
+  casinoCommissionBps: 0,
   referredBy: null,
   ...over,
 });
@@ -88,16 +90,32 @@ describe('promotor no detalhe do usuário', () => {
     expect(screen.getByText('Não é promotor')).toBeInTheDocument();
     expect(screen.getByText('Ninguém (cadastro sem convite)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover promotor' })).toBeNull();
-    await ui.type(screen.getByLabelText('Comissão (%)'), '10');
+    await ui.type(screen.getByLabelText('Loterias (%)'), '10');
+    // Cassino começa em 0% (sem comissão de cassino).
+    expect(screen.getByLabelText('Cassino (% do GGR)')).toHaveValue('0');
     await ui.click(screen.getByRole('button', { name: 'Tornar promotor' }));
-    expect(actions.setPromoterAction).toHaveBeenCalledExactlyOnceWith(ID_ANA, 1000);
+    expect(actions.setPromoterAction).toHaveBeenCalledExactlyOnceWith(ID_ANA, 1000, 0);
   });
 
-  it('promotor: mostra a comissão e permite alterar e remover', () => {
-    renderUser(userDetail({ promoterCommissionBps: 1250 }), true, true);
-    expect(screen.getByText('Promotor · comissão de 12,5%')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Salvar comissão' })).toBeInTheDocument();
+  it('promotor: mostra as comissões e permite alterar (inclusive a de cassino) e remover', async () => {
+    const ui = userEvent.setup();
+    actions.setPromoterAction.mockResolvedValue({ ok: true, data: promoter({ casinoCommissionBps: 2000 }) });
+    renderUser(userDetail({ promoterCommissionBps: 1250, casinoCommissionBps: 500 }), true, true);
+    expect(screen.getByText('Promotor · comissão de 12,5% · cassino de 5%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remover promotor' })).toBeInTheDocument();
+
+    const casino = screen.getByLabelText('Cassino (% do GGR)');
+    expect(casino).toHaveValue('5');
+    await ui.clear(casino);
+    await ui.type(casino, '120');
+    await ui.click(screen.getByRole('button', { name: 'Salvar comissões' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Cassino: entre 0% e 100% do GGR');
+    expect(actions.setPromoterAction).not.toHaveBeenCalled();
+
+    await ui.clear(casino);
+    await ui.type(casino, '20');
+    await ui.click(screen.getByRole('button', { name: 'Salvar comissões' }));
+    expect(actions.setPromoterAction).toHaveBeenCalledExactlyOnceWith(ID_ANA, 1250, 2000);
   });
 
   it('indicado por um promotor: "Indicado por" (link para a unidade) e "Promotor do jogador" separados', () => {
@@ -112,7 +130,7 @@ describe('promotor no detalhe do usuário', () => {
     expect(screen.getByText('Bruno Alves · comissão de 7%')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /comissão de 7%/ })).toBeNull();
     // Sem permissão de gerenciar, não há controles de promotor.
-    expect(screen.queryByLabelText('Comissão (%)')).toBeNull();
+    expect(screen.queryByLabelText('Loterias (%)')).toBeNull();
     unmount();
 
     renderUser(user, false, false);

@@ -74,7 +74,7 @@ export class PromotersController {
     @Param('id', new ZodValidationPipe(userIdSchema)) id: string,
     @Body(new ZodValidationPipe(setPromoterSchema)) body: SetPromoterInput,
   ): Promise<AdminPromoterListItem> {
-    return this.promoters.set(tenant, operator, id, body.commissionBps);
+    return this.promoters.set(tenant, operator, id, body);
   }
 
   @Delete(':id')

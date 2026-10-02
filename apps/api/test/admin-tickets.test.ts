@@ -129,6 +129,7 @@ describe('GET /v1/admin/tickets', () => {
       drawCode: 'PTRIO14',
       totalCents: 100,
       player: { id: person.id, displayId: person.displayId, name: person.name },
+      canceledAt: null,
     });
     expect(page.totalCents).toBe(page.items.reduce((sum, i) => sum + i.totalCents, 0));
     expect(JSON.stringify(page)).not.toMatch(/document|phone|guesses|tenantId/);

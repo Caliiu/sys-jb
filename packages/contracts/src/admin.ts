@@ -2,6 +2,7 @@
  * Contratos do painel administrativo (operadores, perfis, usuários vistos pelo operador).
  * Sem dependências de servidor: a API e o web importam daqui.
  */
+import { drawDateOf } from './fazendinha.js';
 import type { PublicTenant, PublicWallet } from './index.js';
 
 export const USER_STATUSES = ['ACTIVE', 'BLOCKED'] as const;
@@ -153,6 +154,8 @@ export interface AdminUserDetail {
   wallet: PublicWallet;
   /** Comissão em centésimos de % (1 a 10000); null = não é promotor. */
   promoterCommissionBps: number | null;
+  /** Comissão de cassino do promotor em centésimos de % do GGR mensal (0 a 10000); 0 para quem não é promotor. */
+  casinoCommissionBps: number;
   /**
    * Quem indicou este usuário no cadastro (jogador comum ou promotor); null = veio sem convite.
    * `promoterCommissionBps` não nulo = quem indicou é promotor (ganha indicação + promotor).
@@ -163,6 +166,8 @@ export interface AdminUserDetail {
 /** Comissão do promotor em centésimos de % (1 = 0,01%; 10000 = 100%). Inteiro: nunca ponto flutuante. */
 export const MIN_COMMISSION_BPS = 1;
 export const MAX_COMMISSION_BPS = 10_000;
+/** Comissão de cassino do promotor: 0% (sem comissão de cassino) a 100% do GGR. */
+export const MIN_CASINO_COMMISSION_BPS = 0;
 
 /** Linha da lista de promotores. */
 export interface AdminPromoterListItem {
@@ -175,15 +180,19 @@ export interface AdminPromoterListItem {
   inviteCode: string;
   status: UserStatus;
   commissionBps: number;
+  /** Comissão de cassino (centésimos de % do GGR mensal dos indicados). */
+  casinoCommissionBps: number;
   /** Jogadores cadastrados pelo link de convite deste promotor. */
   referralsCount: number;
   /** ISO 8601. */
   createdAt: string;
 }
 
-/** PUT /v1/admin/promoters/:userId: promove o usuário a promotor ou altera a comissão. */
+/** PUT /v1/admin/promoters/:userId: promove o usuário a promotor ou altera as comissões. */
 export interface SetPromoterRequest {
   commissionBps: number;
+  /** Omitido = mantém a atual (0 para quem está virando promotor). */
+  casinoCommissionBps?: number;
 }
 
 export interface Page<T> {
@@ -231,11 +240,13 @@ export interface AdminTicketListItem {
   drawCode: string;
   totalCents: number;
   player: { id: string; displayId: number; name: string };
+  /** ISO 8601 do cancelamento pelo jogador (só Loterias); null = válido. */
+  canceledAt: string | null;
 }
 
 /** GET /v1/admin/tickets: bilhetes vendidos no dia (Brasília), mais recentes primeiro, e o total apostado. */
 export interface AdminTicketList extends Page<AdminTicketListItem> {
-  /** Soma de todos os bilhetes do filtro (não só da página). */
+  /** Soma dos bilhetes válidos do filtro (não só da página; cancelados não contam). */
   totalCents: number;
 }
 
@@ -487,16 +498,102 @@ export interface AdminSalesByDrawQuery {
 }
 
 // ---------------------------------------------------------------------------
+// Geral cassino (Relatórios > Cassino > Geral cassino)
+// ---------------------------------------------------------------------------
+
+/** Uma linha por usuário com jogo de cassino no período. Valores em centavos, do ponto de vista da banca. */
+export interface CasinoGeneralRow extends OperationGameTotals {
+  player: { id: string; displayId: number; name: string };
+  type: GeneralReportType;
+}
+
+/** GET /v1/admin/reports/casino/general: cassino por usuário no período (dias de Brasília, inclusivos). */
+export interface AdminCasinoGeneralReport {
+  from: string;
+  to: string;
+  rows: CasinoGeneralRow[];
+  totals: OperationGameTotals;
+  /** false enquanto o sistema não tem cassino: o relatório vem vazio (como o cassino do resumo da operação). */
+  available: boolean;
+}
+
+export interface AdminCasinoGeneralQuery {
+  /** Período (YYYY-MM-DD, Brasília), inclusivo; até OPERATION_SUMMARY_MAX_DAYS dias e até hoje. */
+  from: string;
+  to: string;
+  /** Só os indicados deste promotor. */
+  promoterId?: string;
+  userId?: string;
+  type?: GeneralReportType;
+}
+
+// ---------------------------------------------------------------------------
+// Fechamento cassino (Relatórios > Cassino > Fechamento cassino)
+// ---------------------------------------------------------------------------
+
+/** Cassino dos indicados no mês, do ponto de vista da banca, e a comissão dos promotores. Centavos. */
+export interface CasinoClosingTotals {
+  turnoverCents: number;
+  payoutCents: number;
+  /** Turnover − payout (pode ser negativo). */
+  ggrCents: number;
+  /** % de cassino do promotor sobre o GGR; GGR negativo paga 0. */
+  commissionCents: number;
+}
+
+/** Card de um mês: o último mês encerrado (a fechar) ou o mês em andamento (parcial). */
+export interface CasinoClosingMonth {
+  /** YYYY-MM. */
+  month: string;
+  /** O mês já terminou (Brasília): só ele pode ser pago. */
+  ended: boolean;
+  totals: CasinoClosingTotals;
+  /** Promotores com comissão no mês. */
+  promotersWithCommission: number;
+}
+
+/** Linha do detalhamento: um promotor, a % de cassino dele e o cassino dos indicados no mês. */
+export interface CasinoClosingRow extends CasinoClosingTotals {
+  promoter: { id: string; displayId: number; name: string };
+  casinoCommissionBps: number;
+  /** Jogadores cadastrados pelo link do promotor. */
+  referralsCount: number;
+}
+
+/** Meses dos cards do fechamento (YYYY-MM, Brasília): o último encerrado e o em andamento. */
+export function casinoClosingMonths(nowIso: string): { previous: string; current: string } {
+  const current = drawDateOf(nowIso, 0).slice(0, 7);
+  const [year, month] = current.split('-').map(Number) as [number, number];
+  // Dia 1 do mês anterior (Date.UTC aceita mês 0 - 1 = dezembro do ano anterior).
+  return { previous: new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7), current };
+}
+
+/**
+ * GET /v1/admin/reports/casino/closing (+ `month=YYYY-MM`): os cards do mês anterior e do atual e, com `month`, o
+ * detalhamento por promotor daquele mês. Enquanto o sistema não tem cassino, os valores vêm zerados
+ * (`available: false`) e não há o que pagar.
+ */
+export interface AdminCasinoClosing {
+  /** [mês anterior, mês atual]. */
+  months: [CasinoClosingMonth, CasinoClosingMonth];
+  /** null = nenhum mês escolhido. */
+  detail: { month: string; ended: boolean; rows: CasinoClosingRow[]; totals: CasinoClosingTotals } | null;
+  available: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Extrato do apostador (Carteira > Extrato apostador)
 // ---------------------------------------------------------------------------
 
 /** Tipos de lançamento da carteira (wallet_entries.kind). */
 export const STATEMENT_KINDS = [
   'LOTTERY_BET',
+  'LOTTERY_REFUND',
   'FAZENDINHA_BET',
   'OPERATOR_CREDIT',
   'MANUAL_ADJUSTMENT',
   'COMMISSION',
+  'COMMISSION_REVERSAL',
   'OPENING_BALANCE',
 ] as const;
 export type StatementKind = (typeof STATEMENT_KINDS)[number];
@@ -507,7 +604,7 @@ export interface AdminStatementEntry {
   /** ISO 8601. */
   createdAt: string;
   kind: StatementKind;
-  /** Número do pule (apostas); null nos outros lançamentos. */
+  /** Número do pule (aposta, devolução e comissão da aposta); null nos outros lançamentos. */
   puleNumber: number | null;
   /** Motivo (crédito pelo painel, ajuste, comissão, saldo anterior). */
   note: string | null;
@@ -602,6 +699,9 @@ export type AuditDetails = {
   fields: string[];
   from?: number | null;
   to?: number | null;
+  /** Comissão de cassino do promotor antes/depois (centésimos de %). */
+  casinoFrom?: number;
+  casinoTo?: number;
   amount?: number;
   month?: string;
   draw?: string;
@@ -645,7 +745,10 @@ export interface AdminWalletCreditRequest {
   note: string;
 }
 
-/** "Indique e ganhe" da banca: % (centésimos) do valor apostado pelos indicados. 0 = desligado. */
+/**
+ * "Indique e ganhe" da banca: % (centésimos) do valor apostado pelos indicados, paga na hora de cada aposta de Loterias
+ * e Fazendinha (estornada se o pule for cancelado). 0 = desligado.
+ */
 export interface AdminCommissionSettings {
   referralCommissionBps: number;
 }
@@ -653,41 +756,4 @@ export interface AdminCommissionSettings {
 /** PUT /v1/admin/commissions/settings. */
 export interface SetCommissionSettingsRequest {
   referralCommissionBps: number;
-}
-
-/** PAID = recebe (ou recebeu); BLOCKED = quem indicou está bloqueado e não recebe; ZERO = nada a receber. */
-export const COMMISSION_PAYOUT_STATUSES = ['PAID', 'BLOCKED', 'ZERO'] as const;
-export type CommissionPayoutStatus = (typeof COMMISSION_PAYOUT_STATUSES)[number];
-
-/** Linha do mês: quanto os indicados de um usuário apostaram e quanto ele ganha. */
-export interface AdminCommissionRow {
-  user: { id: string; displayId: number; name: string; status: UserStatus };
-  wageredCents: number;
-  referralRateBps: number;
-  /** 0 quando quem indicou não é promotor. */
-  promoterRateBps: number;
-  amountCents: number;
-  status: CommissionPayoutStatus;
-}
-
-/**
- * GET /v1/admin/commissions/months/:month (YYYY-MM). Mês aberto = prévia calculada agora (percentuais de
- * hoje); mês fechado = o que foi pago, como ficou gravado.
- */
-export interface AdminCommissionMonth {
-  /** YYYY-MM. */
-  month: string;
-  closed: { closedAt: string; operatorName: string; totalPaidCents: number } | null;
-  /** O mês já terminou (Brasília) e ainda não foi fechado. */
-  canClose: boolean;
-  rows: AdminCommissionRow[];
-  totals: { wageredCents: number; paidCents: number };
-}
-
-/** GET /v1/admin/commissions/closings: meses já fechados, mais recentes primeiro. */
-export interface AdminCommissionClosing {
-  month: string;
-  closedAt: string;
-  operatorName: string;
-  totalPaidCents: number;
 }

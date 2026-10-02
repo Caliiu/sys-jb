@@ -139,11 +139,19 @@ export function describeAuditDetails(entry: AdminAuditEntry): string {
     const bucket = details.fields.map((field) => FIELD_LABELS[field] ?? field).join(', ');
     return `${bucket}: + ${formatBrl(details.amount)}`;
   }
+  const casino = details.fields.includes('casinoCommissionBps')
+    ? `cassino de ${commission(details.casinoFrom)} para ${commission(details.casinoTo)}`
+    : null;
   if (details.fields.includes('promoterCommissionBps') && ('from' in details || 'to' in details)) {
-    if (details.from == null) return `Comissão de ${commission(details.to)}`;
-    if (details.to == null) return `Comissão era ${commission(details.from)}`;
-    return `Comissão de ${commission(details.from)} para ${commission(details.to)}`;
+    const lotteries =
+      details.from == null
+        ? `Comissão de ${commission(details.to)}`
+        : details.to == null
+          ? `Comissão era ${commission(details.from)}`
+          : `Comissão de ${commission(details.from)} para ${commission(details.to)}`;
+    return casino ? `${lotteries}; ${casino}` : lotteries;
   }
+  if (casino) return `Comissão de ${casino}`;
   if (details.fields.length === 0) return '—';
   return `Campos: ${details.fields.map((field) => FIELD_LABELS[field] ?? field).join(', ')}`;
 }

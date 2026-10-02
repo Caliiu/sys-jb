@@ -500,6 +500,7 @@ describe('detalhe do usuário', () => {
       lastLoginAt: null,
       wallet: user.wallet,
       promoterCommissionBps: null,
+      casinoCommissionBps: 0,
       referredBy: null,
     });
 

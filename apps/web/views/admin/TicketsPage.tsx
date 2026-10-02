@@ -57,6 +57,19 @@ function PlayerLink({ ticket }: { ticket: AdminTicketListItem }) {
 }
 
 /** Tabela (e, no celular, cartões) dos pules. */
+/** Pule cancelada pelo jogador: etiqueta vermelha (o valor voltou para a carteira e não entra no total). */
+function CanceledBadge({ ticket }: { ticket: AdminTicketListItem }) {
+  if (!ticket.canceledAt) return null;
+  return (
+    <span
+      title={`Cancelada em ${formatShortDateTime(ticket.canceledAt)}`}
+      className="mt-1 inline-flex items-center rounded-md border border-admin-danger/25 bg-admin-danger/10 px-2 py-0.5 text-[12px] font-medium text-admin-danger"
+    >
+      Cancelada
+    </span>
+  );
+}
+
 function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: string }) {
   if (items.length === 0) return <p className="py-10 text-center text-[14px] text-admin-muted">{empty}</p>;
   return (
@@ -86,6 +99,7 @@ function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: st
                 <td className="whitespace-nowrap py-3 pr-4">
                   <span className="block font-medium tabular-nums">#{ticket.puleNumber}</span>
                   <span className="block text-[13px] text-admin-muted">{GAME_LABELS[ticket.game]}</span>
+                  <CanceledBadge ticket={ticket} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatShortDateTime(ticket.createdAt)}</td>
                 <td className="px-4 py-3">
@@ -96,7 +110,13 @@ function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: st
                   <span className="block font-mono text-[12px] text-admin-muted">{ticket.drawCode}</span>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatCalendarDate(ticket.drawDate)}</td>
-                <td className="whitespace-nowrap py-3 pl-4 text-right tabular-nums">{formatBrl(ticket.totalCents)}</td>
+                <td
+                  className={`whitespace-nowrap py-3 pl-4 text-right tabular-nums ${
+                    ticket.canceledAt ? 'text-admin-muted line-through' : ''
+                  }`}
+                >
+                  {formatBrl(ticket.totalCents)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -110,8 +130,11 @@ function TicketsList({ items, empty }: { items: AdminTicketListItem[]; empty: st
               <span className="font-medium tabular-nums">
                 #{ticket.puleNumber} <span className="font-normal text-admin-muted">· {GAME_LABELS[ticket.game]}</span>
               </span>
-              <span className="tabular-nums">{formatBrl(ticket.totalCents)}</span>
+              <span className={`tabular-nums ${ticket.canceledAt ? 'text-admin-muted line-through' : ''}`}>
+                {formatBrl(ticket.totalCents)}
+              </span>
             </div>
+            <CanceledBadge ticket={ticket} />
             <p className="mt-1 text-[14px]">
               <PlayerLink ticket={ticket} />
             </p>

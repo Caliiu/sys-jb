@@ -195,7 +195,7 @@ describe('GET /v1/admin/operation-summary', () => {
     ]);
   });
 
-  it('comissão paga no período (fechamento do mês) entra no resultado; com promotor, só a dele', async () => {
+  it('comissão paga no período (na hora da aposta) entra no resultado; com promotor, só a dele', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
     const promoter = await createUser(app, 'aurora');
@@ -204,17 +204,12 @@ describe('GET /v1/admin/operation-summary', () => {
     await credit(session, referred.person.id, 'balance', 1_000);
     await buyFazendinha(referred);
 
-    // A aposta vai para o mês passado e o mês é fechado hoje: 10% (3% + 7%) de R$ 1,00.
-    const { year, month } = { year: Number(TODAY.slice(0, 4)), month: Number(TODAY.slice(5, 7)) };
-    const last = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
-    await asTenant(migratorPool, auroraId, (c) =>
-      c.query("UPDATE fazendinha_bets SET created_at = ($1 || '-15 12:00:00-03')::timestamptz", [last]),
-    );
-    expect((await session.http.post(`/v1/admin/commissions/months/${last}/close`, {})).status).toBe(200);
-
+    // 10% (3% + 7%) de R$ 1,00, creditado na aposta.
     const body = await summary(session, today);
-    expect(body.result).toEqual({ wageredCents: 0, prizesCents: 0, grossCents: 0, commissionCents: 10, netCents: -10 });
+    expect(body.result).toEqual({ wageredCents: 100, prizesCents: 0, grossCents: 100, commissionCents: 10, netCents: 90 });
     expect((await summary(session, `${today}&promoterId=${promoter.id}`)).result.commissionCents).toBe(10);
+    // Ontem não teve comissão.
+    expect((await summary(session, `from=${day(-1)}&to=${day(-1)}`)).result.commissionCents).toBe(0);
   });
 
   it('com promotor: só os indicados dele; promotor inexistente ou jogador comum = 404', async () => {

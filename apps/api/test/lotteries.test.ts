@@ -4,7 +4,6 @@ import {
   type LoginResponse,
   type PlaceLotteryTicketsResponse,
   type PublicUser,
-  brasiliaNow,
   defaultQuotes,
   drawDateOf,
   findLotteryModality,
@@ -405,7 +404,7 @@ describe('travas do banco e comissões', () => {
     expect(await count('SELECT count(*) AS n FROM lottery_tickets')).toBe(0);
   });
 
-  it('o valor apostado nas loterias entra nas comissões de quem indicou', async () => {
+  it('o valor apostado nas loterias paga, na hora, a comissão de quem indicou', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1000 });
     const referrer: PublicUser = await createUser(app, 'aurora');
@@ -414,15 +413,7 @@ describe('travas do banco e comissões', () => {
       201,
     );
 
-    const { year, month } = brasiliaNow(new Date().toISOString());
-    const current = `${year}-${String(month).padStart(2, '0')}`;
-    const preview = (await session.http.get(`/v1/admin/commissions/months/${current}`)).body;
-    expect(preview.rows).toEqual([
-      expect.objectContaining({
-        user: expect.objectContaining({ id: referrer.id }),
-        wageredCents: 500,
-        amountCents: 50,
-      }),
-    ]);
+    // 10% de R$ 5,00 no Saldo de quem indicou.
+    expect((await session.http.get(`/v1/admin/users/${referrer.id}`)).body.wallet.balanceJb).toBe(50);
   });
 });

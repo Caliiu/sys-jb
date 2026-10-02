@@ -193,7 +193,7 @@ describe('GET /v1/admin/reports/general', () => {
     expect((await report(session, `from=${day(-1)}&to=${day(-1)}`)).total).toBe(0);
   });
 
-  it('comissão do fechamento dividida em promotor e "indique e ganhe"; promotor e indicados no filtro; tipo', async () => {
+  it('comissão das apostas dividida em promotor e "indique e ganhe"; promotor e indicados no filtro; tipo', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
     const promoter = await createUser(app, 'aurora', { name: 'Paula Promotora' });
@@ -205,13 +205,7 @@ describe('GET /v1/admin/reports/general', () => {
     for (let group = 1; group <= 10; group += 1) await buyFazendinha(referred, group);
     await buyLottery(loose, 200);
 
-    // As apostas da indicada vão para o mês passado e o mês é fechado hoje: R$ 10,00 × (3% + 7%) = R$ 1,00.
-    const [year, month] = TODAY.split('-').map(Number) as [number, number];
-    const last = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
-    await asTenant(migratorPool, auroraId, (c) =>
-      c.query("UPDATE fazendinha_bets SET created_at = ($1 || '-15 12:00:00-03')::timestamptz", [last]),
-    );
-    expect((await session.http.post(`/v1/admin/commissions/months/${last}/close`, {})).status).toBe(200);
+    // Comissão paga em cada aposta da indicada: R$ 10,00 × (3% + 7%) = R$ 1,00.
 
     const all = await report(session, today);
     const paula = all.items.find((row) => row.player.id === promoter.id)!;

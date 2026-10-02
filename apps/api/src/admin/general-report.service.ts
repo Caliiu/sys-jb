@@ -51,9 +51,9 @@ const toRow = (row: ReportRow): AdminGeneralReportRow => ({
  * Só leitura, numa consulta por página (contagem + linhas); toda parte filtra pela banca, além do RLS da transação, e o
  * SQL é sempre parametrizado.
  *
- * - vendas: pules de Loterias e Fazendinha vendidos no período (data da venda);
- * - comissão / comissão amigo: pagamentos de comissão creditados no período, divididos como no fechamento
- *   (amigo = apostado × % indique e ganhe; o resto do pagamento é a parte de promotor), somando o que foi pago;
+ * - vendas: pules de Loterias e Fazendinha vendidos no período (data da venda), sem os cancelados;
+ * - comissão / comissão amigo: comissões creditadas no período (na hora de cada aposta), menos os estornos de pules
+ *   cancelados; amigo = a parte "indique e ganhe", o resto é a parte de promotor (somam o creditado);
  * - prêmios: pules premiadas apuradas no período (vazio até a apuração existir);
  * - outros: créditos pelo painel e ajustes manuais no período (todas as bolsas);
  * - líquido = vendas − prêmios − comissão − comissão amigo; líquido geral = líquido − outros.
@@ -92,7 +92,7 @@ export class GeneralReportService {
         WITH sales AS (
           SELECT x."user_id", sum(x."total_cents") AS v FROM (
             SELECT t."user_id", t."total_cents" FROM "lottery_tickets" t
-            WHERE t."tenant_id" = ${tenantId} AND ${period(Prisma.sql`t."created_at"`)}
+            WHERE t."tenant_id" = ${tenantId} AND t."canceled_at" IS NULL AND ${period(Prisma.sql`t."created_at"`)}
             UNION ALL
             SELECT b."user_id", b."total_cents" FROM "fazendinha_bets" b
             WHERE b."tenant_id" = ${tenantId} AND ${period(Prisma.sql`b."created_at"`)}
@@ -103,12 +103,22 @@ export class GeneralReportService {
           WHERE p."tenant_id" = ${tenantId} AND ${period(Prisma.sql`p."settled_at"`)}
           GROUP BY p."user_id"
         ),
+        -- Comissão creditada no período, já sem os estornos (pule cancelado). A parte "amigo" (indique e ganhe):
+        -- na aposta, a gravada em bet_commissions (no estorno, a mesma proporção do que voltou); no antigo fechamento
+        -- mensal, apostado × % de indicação. O resto é a parte de promotor.
         commissions AS (
-          SELECT e."user_id", sum(c."amount_cents") AS total,
-                 sum(c."wagered_cents" * c."referral_rate_bps" / 10000) AS referral
+          SELECT e."user_id", sum(e."balance_jb_delta" + e."prizes_jb_delta") AS total,
+                 sum(CASE
+                       WHEN b."id" IS NOT NULL THEN trunc(
+                         (e."balance_jb_delta" + e."prizes_jb_delta")::numeric * b."referral_cents"
+                         / (b."referral_cents" + b."promoter_cents"))::bigint
+                       ELSE trunc(c."wagered_cents"::numeric * c."referral_rate_bps" / 10000)::bigint
+                     END) AS referral
           FROM "wallet_entries" e
-          JOIN "commission_payouts" c ON c."tenant_id" = e."tenant_id" AND c."id" = e."commission_payout_id"
-          WHERE e."tenant_id" = ${tenantId} AND e."kind" = 'COMMISSION' AND ${period(Prisma.sql`e."created_at"`)}
+          LEFT JOIN "bet_commissions" b ON b."tenant_id" = e."tenant_id" AND b."id" = e."bet_commission_id"
+          LEFT JOIN "commission_payouts" c ON c."tenant_id" = e."tenant_id" AND c."id" = e."commission_payout_id"
+          WHERE e."tenant_id" = ${tenantId} AND e."kind" IN ('COMMISSION', 'COMMISSION_REVERSAL')
+            AND ${period(Prisma.sql`e."created_at"`)}
           GROUP BY e."user_id"
         ),
         others AS (

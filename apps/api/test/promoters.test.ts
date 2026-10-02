@@ -94,6 +94,7 @@ describe('promover, alterar e remover', () => {
       inviteCode: user.inviteCode,
       status: 'ACTIVE',
       commissionBps: 1250,
+      casinoCommissionBps: 0,
       referralsCount: 0,
       createdAt: expect.any(String),
     });
@@ -190,6 +191,41 @@ describe('promover, alterar e remover', () => {
         details: { fields: ['promoterCommissionBps'], from: 1000, to: 1500 },
       },
     ]);
+  });
+
+  it('comissão de cassino: 0 a 100%, mantida quando omitida, auditada e zerada ao remover', async () => {
+    const session = await loginOperator(app, 'aurora');
+    const user = await createUser(app, 'aurora');
+    const put = (body: object) => session.http.put(`/v1/admin/promoters/${user.id}`, body);
+
+    for (const casinoCommissionBps of [-1, 10_001, 2.5, '100', null]) {
+      expect((await put({ commissionBps: 1000, casinoCommissionBps })).status, String(casinoCommissionBps)).toBe(400);
+    }
+    expect((await put({ commissionBps: 1000, casinoCommissionBps: 2000 })).body).toMatchObject({
+      commissionBps: 1000,
+      casinoCommissionBps: 2000,
+    });
+    // Sem a de cassino: só a de Loterias muda.
+    expect((await put({ commissionBps: 1200 })).body).toMatchObject({ commissionBps: 1200, casinoCommissionBps: 2000 });
+    expect((await put({ commissionBps: 1200, casinoCommissionBps: 0 })).body.casinoCommissionBps).toBe(0);
+    expect((await detail(session, user.id)).casinoCommissionBps).toBe(0);
+
+    expect((await auditRows(auroraId, user.id)).map((row) => row.details)).toEqual([
+      { fields: ['promoterCommissionBps', 'casinoCommissionBps'], from: null, to: 1000, casinoFrom: 0, casinoTo: 2000 },
+      { fields: ['promoterCommissionBps'], from: 1000, to: 1200 },
+      { fields: ['casinoCommissionBps'], casinoFrom: 2000, casinoTo: 0 },
+    ]);
+
+    await put({ commissionBps: 1200, casinoCommissionBps: 500 });
+    expect((await session.http.delete(`/v1/admin/promoters/${user.id}`)).status).toBe(204);
+    expect(await detail(session, user.id)).toMatchObject({ promoterCommissionBps: null, casinoCommissionBps: 0 });
+
+    // O banco não aceita comissão de cassino de quem não é promotor.
+    await expect(
+      asTenant(migratorPool, auroraId, (c) =>
+        c.query('UPDATE users SET casino_commission_bps = 100 WHERE id = $1', [user.id]),
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
   });
 
   it('remover: deixa de ser promotor, mantém quem já foi indicado e audita; repetir é aceito', async () => {

@@ -101,11 +101,12 @@ describe('menu do painel (configuração)', () => {
     });
     expect(findNavItem('/saques')).toMatchObject({ item: { label: 'Saques' }, group: { group: 'Carteira' } });
     expect(findNavItem('/saques')!.item.soon).toBeUndefined();
-    expect(findNavItem('/relatorios/cassino/geral')).toMatchObject({
-      item: { label: 'Geral cassino', soon: true },
+    expect(findNavItem('/relatorios/cassino/fechamento')).toMatchObject({
+      item: { label: 'Fechamento cassino', soon: true },
       group: { group: 'Relatórios' },
       section: { section: 'Cassino' },
     });
+    expect(findNavItem('/relatorios/cassino/geral')!.item.soon).toBeUndefined();
     expect(findNavItem('/auditoria')).toMatchObject({ item: { label: 'Log de auditoria' } });
     expect(findNavItem('/')).toMatchObject({ item: { label: 'Início' }, group: null, section: null });
     expect(findNavItem('/nao-existe')).toBeNull();

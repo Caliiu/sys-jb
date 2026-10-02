@@ -63,6 +63,7 @@ export function toAdminDetail(user: DetailSource, wallet: Wallet, lastLoginAt: D
     lastLoginAt: lastLoginAt ? lastLoginAt.toISOString() : null,
     wallet: toPublicWallet(wallet),
     promoterCommissionBps: user.promoterCommissionBps,
+    casinoCommissionBps: user.casinoCommissionBps,
     referredBy: user.referredBy,
   };
 }
