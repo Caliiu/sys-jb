@@ -1,5 +1,5 @@
 import { isReportDate, REPORT_DAYS_BACK } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import ReportScreen from '@/components/reports/ReportScreen';
 import PlayerShell from '@/components/section/PlayerShell';
 import { TenantUnavailable } from '@/components/ui/Notice';
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page({ params }: { params: Promise<{ data: string }> }) {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const { data: date } = await params;
   const nowIso = new Date().toISOString();

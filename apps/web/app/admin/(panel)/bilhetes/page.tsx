@@ -1,11 +1,10 @@
 import { drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { parseTicketsQuery, ticketsHref } from '@/lib/admin/tickets-query';
 import TicketsPage, { type TicketsResult } from '@/views/admin/TicketsPage';
 
@@ -39,7 +38,7 @@ export default async function Page({
   const main = searched ?? listed;
   if (main && !main.ok) {
     const failure = toAdminFailure(main.status, main.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     return <AdminMessage title="Não foi possível carregar os pules">{failure.message}</AdminMessage>;
   }
   if (searched?.ok) result = { kind: 'ticket', items: searched.data };

@@ -77,7 +77,8 @@ export default function TicketCard(props: TicketCardProps) {
       </div>
       <div className="px-3 pb-3">
         <p
-          className={`flex items-center gap-3 py-3 text-[13px] ${canceledAt ? 'font-bold text-red-600' : 'text-gray-600'} before:h-px before:flex-1 before:border-t before:border-dashed before:border-gray-300 after:h-px after:flex-1 after:border-t after:border-dashed after:border-gray-300">
+          className={`flex items-center gap-3 py-3 text-[13px] ${canceledAt ? 'font-bold text-red-600' : 'text-gray-600'} before:h-px before:flex-1 before:border-t before:border-dashed before:border-gray-300 after:h-px after:flex-1 after:border-t after:border-dashed after:border-gray-300`}
+        >
           {heading}
         </p>
         <dl className={`${row} space-y-1`}>

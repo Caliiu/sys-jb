@@ -60,6 +60,7 @@ describe('GET /v1/admin/audit', () => {
       operator,
       targetType: 'user',
       target,
+      operatorTarget: null,
       details: { fields: ['promoterCommissionBps'], from: 1000, to: 1250 },
     });
     expect(page.items[2]).toMatchObject({ action: 'user.block', operator, target, details: null });

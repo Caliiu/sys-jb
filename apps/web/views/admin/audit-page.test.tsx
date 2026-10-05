@@ -17,6 +17,7 @@ const entries: AdminAuditEntry[] = [
     operator,
     targetType: 'user',
     target: ANA,
+    operatorTarget: null,
     details: { fields: ['promoterCommissionBps'], from: 1000, to: 1250 },
   },
   {
@@ -26,6 +27,7 @@ const entries: AdminAuditEntry[] = [
     operator,
     targetType: 'user',
     target: null,
+    operatorTarget: null,
     details: null,
   },
   {
@@ -35,6 +37,7 @@ const entries: AdminAuditEntry[] = [
     operator,
     targetType: 'tenant',
     target: null,
+    operatorTarget: null,
     details: { fields: ['month'], month: '2026-08', amount: 31500 },
   },
 ];

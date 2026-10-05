@@ -1,11 +1,10 @@
 import { drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { parseSalesByDrawQuery, salesByDrawHref, salesByDrawMaxDate } from '@/lib/admin/sales-by-draw-query';
 import SalesByDrawPage from '@/views/admin/SalesByDrawPage';
 
@@ -35,7 +34,7 @@ export default async function Page({
 
   if (report && !report.ok) {
     const failure = toAdminFailure(report.status, report.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     // Promotor que deixou de ser promotor (link antigo): volta para todos.
     if (report.status === 404 && query.promoterId) redirect(salesByDrawHref({ ...query, promoterId: '' }));
     return <AdminMessage title="Não foi possível carregar o relatório">{failure.message}</AdminMessage>;

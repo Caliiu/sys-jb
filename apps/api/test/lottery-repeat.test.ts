@@ -119,6 +119,37 @@ describe('POST /v1/lotteries/tickets/repeat', () => {
     expect(body.wallet.balanceJb).toBe(10_000 - 200 - 400);
   });
 
+  it('pule antiga de combo com a colocação de antes (Passe 1/2) repete com a colocação atual da modalidade', async () => {
+    const { http } = await player('aurora', 10_000);
+    const bought = await http.post('/v1/lotteries/tickets', {
+      idempotencyKey: randomUUID(),
+      drawDate: TOMORROW,
+      draws: [{ name: 'LT PT RIO 14HS', hour: 14 }],
+      items: [
+        {
+          modality: 'passe_vai',
+          placement: 'p1_5',
+          guesses: ['0512'],
+          amountCents: 100,
+          split: 'total',
+          quoteCents: quote('passe_vai'),
+        },
+      ],
+    });
+    expect(bought.status, JSON.stringify(bought.body)).toBe(201);
+    const original = (bought.body as PlaceLotteryTicketsResponse).tickets[0]!;
+    // Como as pules vendidas antes da mudança (só a dona das tabelas consegue alterar).
+    await asTenant(migratorPool, auroraId, (c) => c.query("UPDATE lottery_ticket_items SET placement = 'p1_2'"));
+
+    const res = await http.post('/v1/lotteries/tickets/repeat', repeat(original.puleNumber));
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    for (const ticket of (res.body as PlaceLotteryTicketsResponse).tickets) {
+      expect(ticket.items.map((i) => [i.modality, i.placement, i.placementLabel])).toEqual([
+        ['passe_vai', 'p1_5', '1/5 PRÊMIO'],
+      ]);
+    }
+  });
+
   it('mesma chave não compra de novo (clique duplo, reenvio)', async () => {
     const { http } = await player('aurora', 10_000);
     const original = await buyOriginal(http);

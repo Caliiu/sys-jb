@@ -72,6 +72,8 @@ model Tenant {
   logo                 TenantLogo?
   pushSubscriptions    PushSubscription[]
   pulePrizes           PulePrize[]
+  puleSettlements      PuleSettlement[]
+  casinoTransactions   CasinoTransaction[]
   betCommissions       BetCommission[]
 
   @@map("tenants")
@@ -103,20 +105,22 @@ model User {
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  wallet            Wallet?
-  sessions          Session[]
-  referredBy        User?              @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
-  referrals         User[]             @relation("Referrals")
-  fazendinhaBets    FazendinhaBet[]
-  lotteryTickets    LotteryTicket[]
-  walletEntries     WalletEntry[]
-  commissionPayouts CommissionPayout[]
-  muralViews        MuralView[]
-  pushSubscriptions PushSubscription[]
-  pulePrizes        PulePrize[]
-  betCommissions    BetCommission[]    @relation("BetCommissionReferrer")
-  commissionedBets  BetCommission[]    @relation("BetCommissionBettor")
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  wallet             Wallet?
+  sessions           Session[]
+  referredBy         User?               @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
+  referrals          User[]              @relation("Referrals")
+  fazendinhaBets     FazendinhaBet[]
+  lotteryTickets     LotteryTicket[]
+  walletEntries      WalletEntry[]
+  commissionPayouts  CommissionPayout[]
+  muralViews         MuralView[]
+  pushSubscriptions  PushSubscription[]
+  pulePrizes         PulePrize[]
+  puleSettlements    PuleSettlement[]
+  casinoTransactions CasinoTransaction[]
+  betCommissions     BetCommission[]     @relation("BetCommissionReferrer")
+  commissionedBets   BetCommission[]     @relation("BetCommissionBettor")
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -283,11 +287,12 @@ model FazendinhaBet {
   totalCents     BigInt         @map("total_cents")
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user        User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
   numbers       FazendinhaBetNumber[]
   walletEntry   WalletEntry?
   betCommission BetCommission?
+  settlement    PuleSettlement?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, idempotencyKey])
@@ -325,43 +330,53 @@ model FazendinhaBetNumber {
 // motivo), OPERATOR_CREDIT (crédito pelo painel, função wallet_operator_credit, com operador e motivo),
 // OPENING_BALANCE (saldos anteriores ao registro, criados pelas migrations).
 model WalletEntry {
-  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String   @map("tenant_id") @db.Uuid
-  userId             String   @map("user_id") @db.Uuid
-  kind               String
-  balanceJbDelta     BigInt   @map("balance_jb_delta")
-  prizesJbDelta      BigInt   @map("prizes_jb_delta")
-  bonusJbDelta       BigInt   @default(0) @map("bonus_jb_delta")
-  balanceGamesDelta  BigInt   @default(0) @map("balance_games_delta")
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  kind                String
+  balanceJbDelta      BigInt   @map("balance_jb_delta")
+  prizesJbDelta       BigInt   @map("prizes_jb_delta")
+  bonusJbDelta        BigInt   @default(0) @map("bonus_jb_delta")
+  balanceGamesDelta   BigInt   @default(0) @map("balance_games_delta")
+  // Prêmios de games (cassino): aposta tira daqui depois do saldo; prêmio entra aqui.
+  prizesGamesDelta    BigInt   @default(0) @map("prizes_games_delta")
   // Motivo (obrigatório no ajuste manual e no crédito pelo painel).
-  note               String?
+  note                String?
   // Operador que creditou pelo painel (OPERATOR_CREDIT).
-  operatorId         String?  @map("operator_id") @db.Uuid
+  operatorId          String?  @map("operator_id") @db.Uuid
   // Chave do crédito pelo painel: repetir a mesma chave não credita de novo.
-  idempotencyKey     String?  @map("idempotency_key") @db.Uuid
+  idempotencyKey      String?  @map("idempotency_key") @db.Uuid
   // Pagamento de comissão do fechamento mensal (COMMISSION).
-  commissionPayoutId String?  @map("commission_payout_id") @db.Uuid
+  commissionPayoutId  String?  @map("commission_payout_id") @db.Uuid
   // Pule de loteria: débito (LOTTERY_BET) e devolução no cancelamento (LOTTERY_REFUND), um de cada por pule.
-  lotteryTicketId    String?  @map("lottery_ticket_id") @db.Uuid
+  lotteryTicketId     String?  @map("lottery_ticket_id") @db.Uuid
   // Um débito por pule (UNIQUE): a função não debita duas vezes o mesmo pule.
-  fazendinhaBetId    String?  @map("fazendinha_bet_id") @db.Uuid
+  fazendinhaBetId     String?  @map("fazendinha_bet_id") @db.Uuid
   // Comissão de uma aposta: crédito na hora (COMMISSION) e estorno no cancelamento (COMMISSION_REVERSAL).
-  betCommissionId    String?  @map("bet_commission_id") @db.Uuid
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  betCommissionId     String?  @map("bet_commission_id") @db.Uuid
+  // Prêmio de um pule (PRIZE): um crédito por pule premiada, na bolsa de prêmios.
+  pulePrizeId         String?  @map("pule_prize_id") @db.Uuid
+  // Rodada do cassino (CASINO): uma movimentação por transação do provedor.
+  casinoTransactionId String?  @map("casino_transaction_id") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user             User              @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  fazendinhaBet    FazendinhaBet?    @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
-  operator         Operator?         @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
-  commissionPayout CommissionPayout? @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
-  lotteryTicket    LotteryTicket?    @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
-  betCommission    BetCommission?    @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user              User               @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  fazendinhaBet     FazendinhaBet?     @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
+  operator          Operator?          @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+  commissionPayout  CommissionPayout?  @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
+  lotteryTicket     LotteryTicket?     @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+  betCommission     BetCommission?     @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
+  pulePrize         PulePrize?         @relation(fields: [tenantId, pulePrizeId], references: [tenantId, id], onDelete: Restrict)
+  casinoTransaction CasinoTransaction? @relation(fields: [tenantId, casinoTransactionId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, fazendinhaBetId])
   @@unique([tenantId, idempotencyKey])
   @@unique([tenantId, commissionPayoutId])
   @@unique([tenantId, lotteryTicketId, kind])
   @@unique([tenantId, betCommissionId, kind])
+  @@unique([tenantId, pulePrizeId])
+  @@unique([tenantId, casinoTransactionId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@map("wallet_entries")
 }
@@ -502,26 +517,26 @@ model FazendinhaQuote {
 // Pule de loteria (Tradicional): uma extração de uma compra. Criado pela API junto com os itens e o débito
 // (função lottery_debit); um trigger adiado recusa o commit de pule sem débito. Somente inclusão.
 model LotteryTicket {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
   // Número exibido no comprovante (sequence própria, lacunas aceitas).
-  puleNumber  Int      @unique @default(autoincrement()) @map("pule_number")
+  puleNumber  Int       @unique @default(autoincrement()) @map("pule_number")
   // Chave da compra (a mesma em todos os pules dela): repetir a chave devolve os mesmos pules.
-  purchaseKey String   @map("purchase_key") @db.Uuid
-  drawDate    DateTime @map("draw_date") @db.Date
+  purchaseKey String    @map("purchase_key") @db.Uuid
+  drawDate    DateTime  @map("draw_date") @db.Date
   lottery     String
-  drawHour    Int      @map("draw_hour") @db.SmallInt
+  drawHour    Int       @map("draw_hour") @db.SmallInt
   // Código da extração na venda (ex.: PT14), gravado pelo trigger a partir do cadastro.
-  drawCode    String   @default(dbgenerated("''")) @map("draw_code")
+  drawCode    String    @default(dbgenerated("''")) @map("draw_code")
   // Horário limite da extração (do cadastro de sorteios; o trigger grava o valor do cadastro).
-  closesAt    DateTime @map("closes_at") @db.Timestamptz(3)
-  totalCents  BigInt   @map("total_cents")
+  closesAt    DateTime  @map("closes_at") @db.Timestamptz(3)
+  totalCents  BigInt    @map("total_cents")
   // Nome da tabela de cotação na compra (ex.: 800/1/8000).
-  quoteTable  String   @map("quote_table")
+  quoteTable  String    @map("quote_table")
   // Jogo: tradicional (1/7) ou tradicional_10 (1/10). Define colocações e sorteios aceitos; nunca muda.
-  game        String   @default("tradicional")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  game        String    @default("tradicional")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   // Cancelado pelo jogador antes do horário limite (função lottery_cancel): aposta devolvida e comissão estornada.
   canceledAt  DateTime? @map("canceled_at") @db.Timestamptz(3)
 
@@ -530,6 +545,7 @@ model LotteryTicket {
   items         LotteryTicketItem[]
   walletEntries WalletEntry[]
   betCommission BetCommission?
+  settlement    PuleSettlement?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, purchaseKey, lottery, drawHour])
@@ -552,6 +568,8 @@ model LotteryTicketItem {
   split              String
   totalCents         BigInt   @map("total_cents")
   quoteCents         Int      @map("quote_cents")
+  // Só na MILHAR E CENTENA (cuja cotação é a soma das duas): a cotação da centena na venda, que paga quem acerta só ela.
+  centenaQuoteCents  Int?     @map("centena_quote_cents")
   possiblePrizeCents BigInt   @map("possible_prize_cents")
 
   tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -659,32 +677,73 @@ model MuralView {
   @@map("mural_views")
 }
 
-// Pule premiada: um registro por pule (Loterias ou Fazendinha), gravado pela apuração de prêmios quando ela existir.
-// Guarda o sorteio e o apostado como na venda, para a consulta do painel não depender dos pules. A role de runtime só lê
-// por enquanto; a apuração dará a permissão de inclusão na migration dela.
+// Pule premiada: um registro por pule (Loterias ou Fazendinha), gravado pela apuração de prêmios (funções
+// lottery_settle / fazendinha_settle), na mesma transação do crédito na carteira (movimentação PRIZE). Guarda o sorteio e
+// o apostado como na venda, para a consulta do painel não depender dos pules. Somente inclusão; a API só lê.
 model PulePrize {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
   // lotteries ou fazendinha (cada jogo tem a sua numeração de pule).
-  game        String
-  puleNumber  Int      @map("pule_number")
-  drawDate    DateTime @map("draw_date") @db.Date
+  game       String
+  puleNumber Int      @map("pule_number")
+  drawDate   DateTime @map("draw_date") @db.Date
   // Nome, hora e código do sorteio na venda.
-  lottery     String
-  drawHour    Int      @map("draw_hour") @db.SmallInt
-  drawCode    String   @default("") @map("draw_code")
-  stakeCents  BigInt   @map("stake_cents")
-  prizeCents  BigInt   @map("prize_cents")
-  settledAt   DateTime @default(now()) @map("settled_at") @db.Timestamptz(3)
+  lottery    String
+  drawHour   Int      @map("draw_hour") @db.SmallInt
+  drawCode   String   @default("") @map("draw_code")
+  stakeCents BigInt   @map("stake_cents")
+  prizeCents BigInt   @map("prize_cents")
+  settledAt  DateTime @default(now()) @map("settled_at") @db.Timestamptz(3)
+  // Itens premiados: [{ position, guesses, prizeCents }] (position = ordem do item no pule; a soma é o prêmio).
+  // Null só em registros antigos ou gravados à mão.
+  items      Json?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
 
+  @@unique([tenantId, id])
   @@unique([tenantId, game, puleNumber])
   @@index([tenantId, drawDate])
   @@index([tenantId, userId, drawDate])
   @@map("pule_prizes")
+}
+
+// Apuração de um pule (premiado ou não): o resultado e a revisão conferidos e o prêmio pago (0 = não premiado). Gravada
+// uma vez, pelas funções de apuração, depois da carência do resultado. Se o provedor corrige o resultado depois disso, o
+// pago não muda: a conferência com a revisão nova fica em checked_* e a diferença vira aviso para o operador.
+model PuleSettlement {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  game              String
+  puleNumber        Int      @map("pule_number")
+  // Exatamente um dos dois, conforme o jogo.
+  lotteryTicketId   String?  @map("lottery_ticket_id") @db.Uuid
+  fazendinhaBetId   String?  @map("fazendinha_bet_id") @db.Uuid
+  drawDate          DateTime @map("draw_date") @db.Date
+  resultId          String   @map("result_id") @db.Uuid
+  settledRevision   Int      @map("settled_revision")
+  prizeCents        BigInt   @map("prize_cents")
+  settledAt         DateTime @default(now()) @map("settled_at") @db.Timestamptz(3)
+  // Última revisão do resultado conferida e o prêmio por ela (igual ao pago enquanto não houver correção).
+  checkedRevision   Int      @map("checked_revision")
+  checkedPrizeCents BigInt   @map("checked_prize_cents")
+  checkedAt         DateTime @default(now()) @map("checked_at") @db.Timestamptz(3)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User           @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  lotteryTicket LotteryTicket? @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+  fazendinhaBet FazendinhaBet? @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
+  result        LotteryResult  @relation(fields: [resultId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, game, puleNumber])
+  @@unique([tenantId, lotteryTicketId])
+  @@unique([tenantId, fazendinhaBetId])
+  @@index([tenantId, drawDate])
+  @@index([resultId])
+  @@map("pule_settlements")
 }
 
 // Aparelho do jogador inscrito nas notificações (Web Push). Um por banca e endpoint: o mesmo aparelho que entra com
@@ -759,7 +818,8 @@ model LotteryResult {
   receivedAt     DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
   updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
 
-  revisions LotteryResultRevision[]
+  revisions   LotteryResultRevision[]
+  settlements PuleSettlement[]
 
   @@unique([drawDate, lottery, extraction])
   // Histórico de uma loteria/extração (Atrasados), do dia mais recente para trás.
@@ -792,13 +852,13 @@ model LotteryResultRevision {
 // global (sem banca). A API busca quando o jogador pede e o cache venceu (resultado novo ou prazo).
 model OverdueSnapshot {
   // Sigla e extração do provedor (as do resultado ligado ao sorteio).
-  lottery        String
-  extraction     Int      @db.SmallInt
+  lottery       String
+  extraction    Int      @db.SmallInt
   // Último dia de saída de cada grupo (índice 0 = grupo 1), YYYY-MM-DD; '' = nunca saiu no histórico do provedor.
-  lastDates      String[] @map("last_dates")
+  lastDates     String[] @map("last_dates")
   // Data de referência informada pelo provedor.
-  referenceDate  DateTime @map("reference_date") @db.Date
-  fetchedAt      DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
+  referenceDate DateTime @map("reference_date") @db.Date
+  fetchedAt     DateTime @default(now()) @map("fetched_at") @db.Timestamptz(3)
 
   @@id([lottery, extraction])
   @@map("overdue_snapshots")
@@ -844,4 +904,52 @@ model HoroscopeReading {
 
   @@id([referenceDate, sign])
   @@map("horoscope_readings")
+}
+
+// Jogo do cassino (catálogo do provedor PlayFivers), global: sincronizado pela API a partir de /api/v2/games. O id curto
+// vai no endereço da tela do jogo. Jogo que sai do catálogo fica inativo (nunca é apagado: as rodadas apontam pelo código).
+model CasinoGame {
+  id       Int      @id @default(autoincrement())
+  // Provedor e código do jogo no PlayFivers (o par é único).
+  provider String
+  gameCode String   @map("game_code")
+  name     String
+  imageUrl String?  @map("image_url")
+  // "Original" do provedor (vai no lançamento do jogo).
+  original Boolean  @default(false)
+  active   Boolean  @default(true)
+  syncedAt DateTime @default(now()) @map("synced_at") @db.Timestamptz(3)
+
+  @@unique([provider, gameCode])
+  @@index([active, provider, name])
+  @@map("casino_games")
+}
+
+// Rodada (transação) do cassino recebida do provedor: aposta e prêmio aplicados na carteira de games, uma vez só por
+// txn_id. Gravada só pela função casino_apply_transaction, junto com a movimentação CASINO. Somente inclusão.
+model CasinoTransaction {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  // Id da transação no provedor (único: reenvio da mesma transação não aplica de novo).
+  txnId        String   @unique @map("txn_id")
+  roundId      String?  @map("round_id")
+  provider     String
+  gameCode     String   @map("game_code")
+  // debit_credit, debit, credit ou bonus.
+  txnType      String   @map("txn_type")
+  betCents     BigInt   @map("bet_cents")
+  winCents     BigInt   @map("win_cents")
+  // Disponível Games depois da transação.
+  balanceAfter BigInt   @map("balance_after")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId, createdAt])
+  @@map("casino_transactions")
 }

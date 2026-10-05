@@ -40,5 +40,6 @@ export const ADMIN_ROUTES = {
   /** Valores: "Indique e ganhe" e o fechamento mensal das comissões (antes, Carteira > Comissões em /comissoes). */
   values: '/personalizacao/valores',
   // Administração (rodapé do menu)
+  operators: '/operadores',
   audit: '/auditoria',
 } as const;

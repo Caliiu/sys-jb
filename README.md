@@ -128,12 +128,12 @@ Todas as rotas `/v1/*` exigem `Authorization: Bearer <chave da banca>` e resolve
 | POST   | `/v1/fazendinha/bets`                             | Compra palpites da Fazendinha (sessão). `201` com o pule e a carteira debitada; ver "Fazendinha"                                                                                                                                                                                   |
 | GET    | `/v1/fazendinha/sold?drawDate=AAAA-MM-DD`         | Números já vendidos no dia, por extração/modalidade/valor (sessão). Só números                                                                                                                                                                                                     |
 | GET    | `/v1/draws`                                       | Sorteios ativos da banca e exceções de data da janela de apostas (sessão); ver "Sorteios"                                                                                                                                                                                          |
-| GET    | `/v1/me/prizes?date=YYYY-MM-DD`                   | Pules premiadas do jogador da sessão no dia (hoje até 7 dias atrás; fora disso `400`). Sem apuração de resultados ainda: lista vazia                                                                                                                                               |
+| GET    | `/v1/me/prizes?date=YYYY-MM-DD`                   | Pules premiadas do jogador da sessão pela data do jogo (hoje até 7 dias atrás; fora disso `400`), com os itens e palpites premiados. Só depois de pagas (ver "Apuração de prêmios")                                                                                                |
 | GET    | `/v1/me/reports/balance?date=YYYY-MM-DD`          | Consultar saldo: movimento da carteira de apostas (saldo + prêmios + bônus) no dia (hoje até 7 dias atrás): vendas, comissão, prêmios, créditos/débitos (rótulo pelo tipo, nunca o motivo do painel), recargas, saques, saldo anterior e haver. Fecha com o livro de movimentações |
 | GET    | `/v1/me/reports/lottery-movement?date=YYYY-MM-DD` | Movimento loterias: total apostado pelo jogador por extração do dia ("vale"), pelo código gravado na venda (hoje até 7 dias atrás)                                                                                                                                                 |
 | GET    | `/v1/me/pules?date=YYYY-MM-DD`                    | Consultar pule por data: pules vendidas no dia (hoje até 6 dias atrás), mais recentes primeiro (até 200; `truncated` avisa), com os totais                                                                                                                                         |
 | GET    | `/v1/me/pules/:puleNumber`                        | Recibo de uma pule do jogador (Loterias com `cancellable` ou Fazendinha). De outro jogador ou inexistente: `404` igual                                                                                                                                                             |
-| GET    | `/v1/me/prizes/claim?pule=N`                      | Reclame: situação do prêmio de uma pule do jogador da sessão (`paid` com a data, ou `not_found`). Pule inexistente, de outro jogador ou sem prêmio respondem igual. Sem apuração ainda: sempre `not_found`                                                                         |
+| GET    | `/v1/me/prizes/claim?pule=N`                      | Reclame: situação do prêmio de uma pule do jogador da sessão (`paid` com o dia da apuração, ou `not_found`). Pule inexistente, de outro jogador, ainda não apurada ou sem prêmio respondem igual                                                                                   |
 | GET    | `/health`                                         | `{"status":"ok","database":"up"}`, sem credencial e sem expor segredos                                                                                                                                                                                                             |
 
 Exemplos (dados sintéticos; `$AURORA_KEY` é a chave da Aurora no seu `.env`; o CPF `529.982.247-25` é um número de teste amplamente usado):
@@ -272,7 +272,7 @@ Exigem sessão (sem ela, redirecionam para `/login`) e seguem o mesmo modelo do 
 | `/relatorios/pule/:numero`         | Recibo da pule (o mesmo da compra) com "Compartilhar" (PDF), "Cancelar pule" (só Loterias no horário de venda; o cancelamento ainda não existe: avisa "em breve") e "Menu". `?lista=YYYY-MM-DD` volta para a lista do dia |
 | `/premiadas`                       | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                                 |
 | `/premiadas/consultar`             | Consultar premiadas: escolha do dia (hoje e os 7 anteriores, Brasília)                                                                                                                                                    |
-| `/premiadas/consultar/:data`       | Pules premiadas do jogador no dia (`YYYY-MM-DD`; fora do período volta à escolha do dia), por extração, com o total e "Compartilhar" (PDF). Sem apuração de resultados ainda: sempre "Nenhuma pule premiada"              |
+| `/premiadas/consultar/:data`       | Pules premiadas do jogador no dia do jogo (`YYYY-MM-DD`; fora do período volta à escolha do dia), por extração, com os palpites premiados, o total e "Compartilhar" (PDF)                                                 |
 | `/premiadas/reclame`               | Reclame: código da pule (formulário GET, funciona sem JavaScript) e, com `?pule=N`, o resultado ("Prêmio pago em dd/mm/aa" ou "Prêmio não encontrado") com "Compartilhar" (PDF)                                           |
 | `/recarga-pix`                     | Recarga em duas etapas na mesma rota (a URL não muda): 1) valor (máscara de moeda, mín. R$ 1,00, teto de tela R$ 10.000,00) e destino; 2) pagamento: chave Pix (copia e cola), QR Code sob demanda e contagem de 5 min    |
 | `/saques`                          | "Meus saques" (lista do usuário, vazia enquanto não há saques) e "Novo saque" na mesma rota, sem mudar a URL: 1) Pix, titular e chave; 2) resumo do saldo e valor                                                         |
@@ -346,7 +346,16 @@ Cada banca pode ter vários operadores, cada um com um perfil. O **e-mail do ope
 | Suporte    |         ✔          |         ✔         |         ✘         |       ✘        |          ✘           |
 | Financeiro |         ✔          |         ✘         |         ✘         |       ✔        |          ✘           |
 
-Operadores **não têm cadastro pela API nem pela interface** (nesta etapa); são criados por script, com a credencial de migração:
+O **Gerente** cadastra os operadores da própria banca em **Administração > Operadores** (`/operadores`, permissão `operators.manage`, só o Gerente):
+
+- **Cadastrar**: nome, e-mail (o login; único em todas as bancas) e perfil. A senha é **gerada pelo sistema** (24 caracteres) e mostrada **uma única vez**, para o Gerente entregar ao operador; o banco guarda só o hash argon2id.
+- **Alterar** nome, e-mail e perfil (o perfil novo vale na próxima chamada do operador). **Desativar** derruba as sessões abertas na hora e impede o login; **ativar** devolve o acesso com a mesma senha. **Gerar nova senha** invalida a antiga e encerra as sessões.
+- O Gerente **não muda o próprio perfil, não se desativa e não gera a própria senha** por aqui, então a banca nunca fica sem Gerente ativo.
+- **Banco**: a role de runtime continua sem INSERT/UPDATE em `operators`; tudo passa pelas funções `operator_create`, `operator_update`, `operator_set_active` e `operator_set_password` (`SECURITY DEFINER`, sujeitas ao RLS), que conferem de novo que quem age é um Gerente ativo da banca e a regra acima (`SJ009` → 409). E-mail repetido: 409 no campo.
+- **Auditoria**: `operator.create`, `operator.update` (campos alterados), `operator.activate`, `operator.deactivate` e `operator.password`, com o operador afetado (nunca a senha).
+- Rotas (`operators.manage`): `GET`/`POST /v1/admin/operators`, `PUT /v1/admin/operators/:id`, `PATCH /v1/admin/operators/:id/status` e `POST /v1/admin/operators/:id/password`. Testes: `operators.test.ts` (API) e `OperatorsManager.test.tsx` (web).
+
+O **primeiro Gerente** de uma banca nova continua sendo criado por script, com a credencial de migração:
 
 ```bash
 pnpm operator:create --tenant aurora --name "Maria Souza" --email maria@banca.com --role MANAGER
@@ -407,7 +416,7 @@ Tela em `/fazendinha` (uma rota só; as etapas lista → palpites → comprovant
 - **Idempotência**: o web manda uma `idempotencyKey` por seleção. Reenviar a mesma chave devolve o mesmo pule sem cobrar de novo; a mesma chave com outra aposta é `409 CONFLICT`.
 - **Travas no banco**: a role de runtime continua sem `UPDATE` em `wallets`. `fazendinha_debit` (`SECURITY DEFINER`, sujeita ao RLS) só debita o total de um pule da banca corrente, uma vez, conferindo total = valor × números; um trigger adiado recusa o commit de pule sem débito; depois do débito o pule não aceita números novos; pule, números e movimentações são somente inclusão.
 - **Comprovante**: `VENDEDOR` é o `displayId` do próprio jogador; `COTAÇÃO` mostra o multiplicador da modalidade.
-- **Limitações**: não há apuração de resultado nem pagamento de prêmio, nem histórico de pules do jogador.
+- **Prêmio**: vale só o 1º prêmio (a cabeça), pelo prêmio gravado na compra; a apuração paga sozinha (ver "Apuração de prêmios").
 
 ## Loterias
 
@@ -418,7 +427,8 @@ Tela em `/loterias` (uma rota só, como a Fazendinha), com 9 etapas: Nova aposta
 - **Tradicional 1/10**: mesmas modalidades e a **mesma tabela de cotação** da 1/7; mudam as colocações e as loterias: só os sorteios marcados como "Loterias 1/10" no cadastro (Sorteios no painel; no padrão, BAHIA e LOTECE/LOTEP, que valem nos dois jogos). O pule grava o jogo (`lottery_tickets.game`), mostrado no recibo, em Consultar pule e no PDF. O banco confere de novo: sorteio do jogo (`draw_for_sale`), colocação do jogo (trigger com `lottery_placement_allowed`, mesma lista do contrato, conferida por teste) e a trava de apostas vendidas por jogo (tirar a 1/10 de um sorteio com pule 1/10 vendido: `DRAW_HAS_BETS`). Sem `game` no pedido, vale a 1/7.
 - **Valor**: "Todos" divide entre os palpites; "Cada" vale por palpite. Várias loterias = um pule por extração, com os mesmos itens.
 - **Compra** (`POST /v1/lotteries/tickets`): valida sorteios (cadastro da banca), palpites, horário limite (o banco confere de novo e grava o "Venda até" do cadastro no pule) e a **cotação que o jogador viu** (`QUOTE_CHANGED` se mudou). Grava os pules e debita cada um (`lottery_debit`, movimentação `LOTTERY_BET`) na mesma transação; mesma chave não compra de novo. Entra no cálculo das comissões (valor apostado).
-- **Limitações**: sem apuração de resultado nem pagamento de prêmio; o botão "Valendo" do carrinho não foi feito.
+- **Prêmios**: pagos pela apuração (ver "Apuração de prêmios"). **MILHAR E CENTENA** grava também a cotação da centena (`centena_quote_cents`), porque quem acerta só a centena recebe pela metade dela. **Sena GP 10/6** vale do 1º ao 6º prêmio e **Passe Vai / Vai e Vem** um grupo no 1º e o outro do 2º ao 5º (colocações fixas 1/6 e 1/5, como no "Como jogar"; pules antigos gravados com 1/5 e 1/2 são apurados pela regra atual).
+- **Limitações**: o botão "Valendo" do carrinho não foi feito.
 
 ### Repetir pule
 
@@ -481,17 +491,57 @@ pnpm results:fetch --lottery rj --date 2026-09-30 --force        # consulta mesm
 
 Mesmas regras do webhook (normalização, idempotência, correção com histórico). Só grava itens da data/sigla/extração pedidas. Cliente só HTTPS, sem seguir redirecionamento (o token não vaza para outro host), com tempo limite, resposta de até 1 MB e até 2 novas tentativas em falha de rede/5xx. Usa a credencial de runtime (`DATABASE_URL`).
 
-**Vínculo com os sorteios da banca.** Cada sorteio tem o resultado do provedor que vale para ele (`draws.result_lottery` + `draws.result_extraction`, editável em Painel > Sorteios > "Resultado (provedor)"; só combinações do catálogo). A extração é a hora do **provedor**, que pode não ser a da banca: "LT FEDERAL" (20h na banca) é a Federal das 19h (`fd` 19). O cadastro padrão já vem ligado onde a correspondência é certa (54 de 72); ficam sem ligação os que o provedor não tem (Lotece, Capital, Alvorada, Minas Pref) e os ambíguos (Lotep 09h/20h, Nacional 21h, Maluquinha Federal). Sem ligação, o sorteio aparece na escolha mas nunca tem resultado.
+**Vínculo com os sorteios da banca.** Cada sorteio tem o resultado do provedor que vale para ele (`draws.result_lottery` + `draws.result_extraction`, editável em Painel > Sorteios > "Resultado (provedor)"; só combinações do catálogo). A extração é o número que o **provedor** dá ao sorteio, que nem sempre é a hora do sorteio: a "LT FEDERAL" sorteia às 20h e usa a extração 19 do provedor (`fd` 19). O cadastro padrão já vem ligado onde a correspondência é certa (63 de 72; Lotep 09h/20h = `pb` 09/20, a "PT Paraíba" do provedor; Nacional 21h = `ln` 20; Lotece 10h/14h/16h/19h = `lce` 11/14/15/19; Alvorada 12h = `mg` 12 e Minas Pref 21h = `mg` 21, confirmados pela operação); ficam sem ligação os que o provedor não tem (Capital, Maluquinha Federal). Sem ligação, o sorteio aparece na escolha mas nunca tem resultado.
 
-**Tela do jogador** (Resultados > Resultado loterias): data (hoje e 7 dias antes) → escolha das extrações do dia (a mesma lista agrupada da compra, com favoritas) → comprovante com número, grupo e bicho de cada prêmio das escolhidas que já têm resultado (nenhuma: "Não há resultado na data"), com Compartilhar em PDF.
+**Tela do jogador** (Resultados > Resultado loterias), numa rota só, `/resultados/loterias` (como Loterias e Fazendinha: o endereço não muda entre as etapas, e o voltar de cada uma leva à anterior): data (hoje e 7 dias antes) → escolha das extrações do dia (a mesma lista agrupada da compra, com favoritas) → comprovante com número, grupo e bicho de cada prêmio das escolhidas que já têm resultado (nenhuma: "Não há resultado na data"), com Compartilhar em PDF. O resultado do dia vem da server action `loadResultsAction`. A notificação "Resultado saiu" abre `/resultados/loterias?data=&sorteios=` (`resultsViewPath`), que mostra direto o resultado e deixa o endereço só como `/resultados/loterias`; os endereços antigos (`/resultados/loterias/:data` e `/:data/resultado`) redirecionam para ela.
 
-**Ainda não feito**: apuração das apostas (conferir pules contra o resultado e creditar prêmios). A tabela de resultados, as revisões e o vínculo acima já estão prontos para isso; a apuração precisa decidir o que fazer com uma correção depois de pagar.
+**Venda depois do resultado**: o banco recusa a venda (`409 DRAW_CLOSED`) de um sorteio cujo resultado ligado, na data, já chegou, mesmo com o horário de venda mal configurado. Os pules são apurados por esses resultados (ver "Apuração de prêmios").
 
 | Método | Rota                            | Acesso                                  | Comportamento                                                                                       |
 | ------ | ------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | POST   | `/integracoes/resultados` (web) | token do provedor                       | Repassa à API. `502` se a API não responder (o provedor reenvia)                                    |
 | POST   | `/v1/integrations/results`      | token do provedor (sem banca)           | `201 {codigo, mensagem}` novo; `200` repetido ou corrigido; `401` token; `422` inválido; `400` JSON |
 | GET    | `/v1/results?date=YYYY-MM-DD`   | credencial da banca + sessão do jogador | Resultados do dia (hoje até 7 dias atrás; fora disso `400`), na ordem do catálogo                   |
+
+## Apuração de prêmios
+
+A API confere os pules (Loterias e Fazendinha) contra o resultado do sorteio ligado a cada um (`draws.result_lottery` + `result_extraction`, na data do pule) e paga os premiados na **bolsa de prêmios** (`prizes_jb`), sozinha, numa rodada a cada minuto (`PrizeSettlementService`). Regras em `packages/contracts/src/settlement.ts`, com os prêmios do resultado como o jogador vê (`resultFullPrizes`: nas loterias de 7 prêmios, o 6º é a soma e o 7º a multiplicação).
+
+- **Carência** (`PRIZES_GRACE_MINUTES`, padrão 30): o resultado precisa ficar esse tempo **sem correção** do provedor antes de pagar. Correção dentro da carência recomeça a contagem, e vale a versão corrigida. Correção **depois** do pagamento não muda o que foi pago: o pule é conferido com a revisão nova (`checked_*`) e, se o prêmio seria outro, vira aviso em **Operação > Prêmios** para o operador ajustar a carteira.
+- **Conta** (a mesma do "Possível prêmio" do recibo, em inteiros): cada acerto paga valor do palpite × cotação ÷ R$ 1,00 × fração da colocação ÷ permutações (invertidas), arredondado para baixo no centavo. Faixa = prêmio ÷ posições; "1 e 1/5" = 3/5 no 1º prêmio e 1/10 do 2º ao 5º; o mesmo palpite que sai em duas posições da colocação ganha duas vezes. "Todos" divide o valor entre os palpites.
+- **Modalidades** (texto "Como jogar"): milhar, centena, dezena e unidade pelos dígitos da direita (Federal: os 4 últimos dos 5); esquerda e meio pelos dígitos da milhar; grupo pela dezena da direita (00 = 25); invertidas em qualquer ordem; MILHAR E CENTENA paga as duas metades se acertar a milhar, ou só a metade da centena. Combos ganham uma vez por palpite, pela cotação da modalidade: duque/terno/quadra de grupo e duque/terno de dezena com todos os números do 1º ao 5º; terno de dezena seco do 1º ao 3º; quina 8/5 com 5 grupos diferentes do 1º ao 5º; sena 10/6 com 6 grupos do 1º ao 6º; passe vai com um grupo no 1º e o outro do 2º ao 5º (vai e vem: em qualquer ordem). Fazendinha: só o 1º prêmio, pelo prêmio gravado na compra.
+- **Pendentes**: pule que precisa de uma posição que o resultado ainda não tem (ex.: o 6º prêmio sem a soma) espera a próxima versão do resultado. Pule de sorteio **sem resultado ligado** nunca é apurado: aparece em "Aguardando apuração" no painel. A rodada olha os últimos 31 dias.
+- **Banco**: cada pule é apurado numa transação própria pelas funções `lottery_settle` / `fazendinha_settle` (`SECURITY DEFINER`, sujeitas ao RLS), que conferem de novo: o resultado é o do sorteio da venda, na data e na revisão atual (`SJ007` se mudou); o pule não foi cancelado nem vendido depois de o resultado chegar (`SJ008`); o prêmio de Loterias não passa do "possível prêmio" de cada item × palpites premiados × posições, com palpites do próprio pule; o da Fazendinha é exatamente o calculado pelo 1º prêmio. Gravam, uma vez só (rodadas simultâneas de várias instâncias não pagam duas vezes): `pule_settlements` (todo pule apurado, premiado ou não), `pule_prizes` (premiados, com os itens) e a movimentação **`PRIZE`** na carteira. A role de runtime só lê essas tabelas; nem a dona altera ou apaga apuração ou prêmio (triggers).
+- **Venda**: o banco recusa vender um sorteio cujo resultado da data já chegou (`409 DRAW_CLOSED`).
+- **Jogador**: Premiadas (por data do jogo, com os palpites premiados), Reclame ("Prêmio pago em" = dia da apuração), Consultar saldo ("Prêmios", por pule) e a notificação "Pule premiada" no app instalado.
+- Testes: `settlement-rules.test.ts` (regras de cada modalidade e colocação, e o acerto na melhor posição = possível prêmio do recibo) e `prize-settlement.test.ts` (carência, pagamento único inclusive com rodadas simultâneas, correções antes e depois do pagamento, pendentes, isolamento entre bancas, telas e as travas do banco).
+
+## Cassino
+
+Jogos do provedor **PlayFivers** (`playfiver.json`). O saldo do cassino é o **Disponível Games** da carteira.
+
+- **Telas**: `/cassino` (lobby: saldo, Recarga Pix, busca por jogo ou provedor, filtros Todos/Favoritos/provedor, Top ganhos e uma faixa por provedor com "Ver todos") e `/cassino/jogo/<id>` (jogo em tela cheia com "Sair"). Favoritos ficam no aparelho (por jogador). Atalhos no banner, menu lateral e rodapé do início.
+- **Catálogo**: a API busca `GET /api/v2/games` ao subir e a cada 12 h e guarda em `casino_games` (global). Com `PLAYFIVERS_WALLETS` (ex.: `Carteira Oficial (Slots)`), entram só os provedores dessas carteiras, conforme `GET /api/v2/providers` (cada provedor pertence a uma carteira, e a aposta consome o crédito dela). Nome de carteira que não existe não muda nada, e o log lista as carteiras disponíveis. Item fora do formato é descartado; jogo que sai do provedor é desativado (nunca apagado). Catálogo vazio ou falha do provedor não muda nada.
+- **Abrir jogo**: `POST /v1/casino/games/:id/launch` chama `game_launch` com o jogador no formato `<ID> <primeiro nome> - <banca>` (ex.: `10000 Carlos - Trevo da Sorte`, sem acento nem símbolo; legível no painel do PlayFivers) e o saldo gastável. O webhook identifica o jogador **só pelo ID do início** (único em todas as bancas): mudar o nome ou a banca não desvia dinheiro. Cada conta tem o seu ID, então a mesma pessoa em duas bancas é dois jogadores no provedor (RTP e histórico separados); o RTP do agente vale para todas as bancas. O endereço devolvido só é aceito em `https`. A tela do jogo tem CSP própria (`frame-src https:` só nessa rota) e o iframe é isolado (`sandbox` sem navegação da página).
+- **Webhook**: `https://<domínio>/integracoes/cassino?token=<CASINO_WEBHOOK_TOKEN>` (o web repassa à API com o token no cabeçalho, sem o IP do provedor). `BALANCE` devolve o saldo; `WinBet` aplica a rodada em `casino_apply_transaction` (carteira travada, **uma vez só por `txn_id`**: repetição devolve o saldo atual; mesmo `txn_id` com outro valor é recusado). Confere o segredo do agente (`PLAYFIVERS_SECRET_KEY`, tempo constante) e, se configurado, `PLAYFIVERS_AGENT_CODE`. Respostas no formato do provedor (`INSUFFICIENT_USER_FUNDS`, `INVALID_USER`, `ERROR_INTERNAL`).
+- **Origem do webhook**: `CASINO_WEBHOOK_IPS` (IPs ou faixas CIDR do PlayFivers): fora da lista = `403` no web, antes de chegar à API (a API não é exposta, o web é a única porta). Vazio = aceita e registra no log do web o IP de cada chamada; use isso para descobrir os IPs do provedor (a documentação dele não informa) e preencha. Entrada inválida ou IP indeterminado (proxy mal configurado, ver `WEB_TRUSTED_PROXY_HOPS`) = recusa. **Em produção, preencha sempre.**
+- **Token no endereço**: o PlayFivers só chama a URL cadastrada, então o token vai na query (`?token=`). O web e a API nunca registram a URL nem o corpo (a API recebe o token num cabeçalho). Quem pode registrar é o proxy na frente. No nginx, use um log sem a query string nessa rota:
+
+  ```nginx
+  log_format sem_query '$remote_addr - [$time_local] "$request_method $uri" $status $body_bytes_sent';
+  location = /integracoes/cassino {
+      access_log /var/log/nginx/access.log sem_query;
+      proxy_pass http://127.0.0.1:3000;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  ```
+
+  Com Cloudflare na frente, não exporte a query dessa rota em Logpush/Log Explorer (ou use uma regra de transformação que remova `token` antes de registrar). Se o token vazar, troque `CASINO_WEBHOOK_TOKEN` e a URL no painel do PlayFivers; com a lista de IPs, o token sozinho já não basta.
+- **Dinheiro**: a aposta sai do saldo de games e depois dos prêmios de games; o prêmio entra nos prêmios de games (inclusive de jogador bloqueado; bloqueado não aposta). O bônus de games continua sem movimentação, por isso o saldo informado ao provedor é saldo + prêmios de games. Cada rodada com movimento gera um lançamento `CASINO` (coluna Games do extrato no painel); a conciliação da carteira inclui os prêmios de games. `casino_transactions` é só inclusão, com RLS por banca.
+- **Top ganhos**: maiores prêmios da banca nas últimas 24 h, com o nome mascarado (`Gustavo***27`).
+- Configuração: `PLAYFIVERS_API_URL`, `PLAYFIVERS_AGENT_TOKEN`, `PLAYFIVERS_SECRET_KEY`, `PLAYFIVERS_AGENT_CODE`, `PLAYFIVERS_WALLETS`, `CASINO_WEBHOOK_TOKEN`, `CASINO_WEBHOOK_IPS` (ver `.env.example`). Sem credenciais o cassino fica desligado. Libere o IP do servidor no PlayFivers.
+- Testes: `apps/api/test/casino.test.ts` (catálogo, lobby, busca, abertura, webhook, idempotência, saldo insuficiente, bloqueio, isolamento) e, no web, `components/casino/casino.test.tsx`, `lib/casino-webhook.test.ts`, `lib/casino-favorites.test.ts`.
 
 ## Horóscopo
 
@@ -525,7 +575,8 @@ Tela em `/loterias/atrasados` (barra de ferramentas das Loterias e atalho do in�
 
 Operação > Prêmios (`/premios` no painel; `tickets.read`, todos os perfis): filtros por período da data do jogo (atalhos Ontem, Hoje, 7D, 30D, Mês e Mês Ant., até 93 dias e até hoje), extração, promotor, apostador e faixa de prêmio em reais; Seção, Rota e Grupo de Cobrança ficam visíveis mas sem efeito até os cadastros existirem. Resultado: quantidade, total em prêmios e a lista (maiores prêmios primeiro, paginada).
 
-- **Dados**: `pule_prizes`, um registro por pule premiada (jogo, número, sorteio e apostado como na venda, prêmio e quando foi apurado), com RLS por banca. **A apuração de prêmios ainda não existe**: até ela gravar aqui, a lista vem vazia. A role de runtime só lê; a migration da apuração dará a permissão de inclusão (ninguém altera nem apaga um prêmio).
+- **Dados**: `pule_prizes`, um registro por pule premiada (jogo, número, sorteio e apostado como na venda, prêmio, itens premiados e quando foi apurado), gravado pela apuração (ver "Apuração de prêmios"), com RLS por banca. A role de runtime só lê; ninguém altera nem apaga um prêmio (nem a dona das tabelas: trigger).
+- **Avisos**: acima da lista, as pules cujo resultado o provedor **corrigiu depois do pagamento** e que, pelo resultado corrigido, teriam outro prêmio (pago, corrigido e a diferença). O pago não muda sozinho: o operador confere e ajusta a carteira. E o chip **Aguardando apuração**: pules do filtro cujo sorteio já passou e que ainda não foram apurados (resultado que não chegou, sorteio sem resultado ligado ou ainda na carência).
 - `GET /v1/admin/prizes?from=&to=` (+ `promoterId`, `userId`, `drawId`, `minPrizeCents`, `maxPrizeCents`, `page`, `pageSize`): `400` para período inválido, futuro, invertido ou acima de 93 dias, e faixa de prêmio invertida.
 
 ## Resumo da Operação (painel)
@@ -567,7 +618,7 @@ Notificações Web Push para quem usa o app instalado na tela inicial (PWA). Cha
 - **Permissão no login**: no app instalado, o toque em "Entrar" abre a janela de permissão do sistema (precisa ser no toque: o iPhone só permite assim, e só no app instalado, iOS 16.4+). Só aparece se o jogador ainda não respondeu; o login não espera a resposta. Numa aba do navegador não pede.
 - **Inscrição do aparelho**: com a conta aberta, o app (service worker `public/sw.js`, só notificações, sem cache de páginas) inscreve o aparelho e manda para `POST /v1/me/push-subscriptions`, a cada abertura. Guardada em `push_subscriptions` (por banca e jogador, RLS; o mesmo aparelho com outra conta passa a ser dela; até 10 aparelhos por jogador). **Sair da conta** tira o aparelho (`DELETE`) e cancela a inscrição.
 - **"Resultado saiu"**: resultado novo recebido pelo webhook avisa, em cada banca, quem apostou (Loterias ou Fazendinha) nos sorteios ligados àquela extração no dia: uma notificação por jogador e sorteio, que abre o resultado. Em segundo plano (o webhook responde sem esperar). Reenvio igual, correção e resultado de antes de ontem não avisam; o `results:fetch` (recuperação manual) também não.
-- **"Pule premiada"**: depende da apuração de prêmios, que ainda não existe; o envio (`PushService.sendToUsers`) já está pronto para ela.
+- **"Pule premiada"**: quando a apuração paga, avisa quem ganhou (um aviso por jogador e dia do jogo, com o pule ou a quantidade e o total), que abre as premiadas do dia.
 - **Segurança**: a API só aceita endpoint HTTPS dos serviços de push dos navegadores (Google, Apple, Mozilla, Microsoft), sem porta nem credenciais (sem isso, um endpoint forjado faria a API chamar qualquer endereço). A chave privada fica só na API (a varredura do bundle confere). Conteúdo cifrado de ponta a ponta pelo protocolo; o service worker só abre caminhos do próprio app. Inscrição expirada (404/410) é apagada no envio; o log nunca traz o endpoint.
 
 | Método | Rota                        | Acesso                                  | Comportamento                                                                       |
@@ -684,7 +735,7 @@ Promotor ≠ Indicação. Todo jogador tem no máximo um "indicado por": o dono 
 - Os totais são só uma convenção de apresentação e **não** definem elegibilidade para apostas ou saques.
 - Não há endpoint de alteração de saldo e a role de runtime não tem `UPDATE` em `wallets`; um trigger exige saldo zero na criação.
 - **Saldo conciliado**: toda mudança de `balance_jb`, `prizes_jb` e `bonus_jb` precisa de uma movimentação em `wallet_entries` (somente inclusão, inclusive para a dona das tabelas). Ao fim de cada transação o banco confere saldo = soma das movimentações e recusa o commit se não bater. As bolsas de games não mudam (ainda não há movimentação delas).
-- Tipos de movimentação: `FAZENDINHA_BET` (débito da compra, pela função `fazendinha_debit`), `MANUAL_ADJUSTMENT` (crédito/estorno com motivo) e `OPENING_BALANCE` (saldos que existiam antes do registro, criados pela migration).
+- Tipos de movimentação: `FAZENDINHA_BET` (débito da compra, pela função `fazendinha_debit`), `MANUAL_ADJUSTMENT` (crédito/estorno com motivo), `OPENING_BALANCE` (saldos que existiam antes do registro, criados pela migration) e `PRIZE` (prêmio pago pela apuração na bolsa de prêmios, um por pule premiada), entre outros.
 - **Crédito/estorno manual** só pelo script, com a credencial de migração: `pnpm wallet:adjust --tenant trevo --user 100008 --amount 1000 --note "motivo"` (estorno: `--amount=-50,25`; `--bucket prizes|bonus` para outras bolsas). Carteira negativa é recusada.
 - `promoter`, `promoterName` e `promoterPhone` são sempre `null`. Estão centralizados no contrato (`PublicPromoterFields`) e no mapper (`promoterFields()`) para evolução futura.
 - Campos nullable sempre aparecem como `null`, nunca são omitidos. O objeto público não inclui `tenantId` nem timestamps.
@@ -754,6 +805,10 @@ O tema é o do `tailwind.config.js`/`index.css` original, em `app/globals.css`: 
 
 Nada é publicado nem implantado automaticamente.
 
+## Limpeza diária
+
+A API chama `maintenance_purge()` ao subir e a cada 24 h (`MaintenanceService`). A função, no banco, apaga só o descartável, com prazos fixos nela: sessões de jogador e de operador encerradas há mais de 7 dias, tentativas de login com mais de 1 dia e consultas ao provedor de resultados com mais de 90 dias (a cota é do mês corrente). Dinheiro, prêmios, rodadas do cassino e auditoria nunca entram. A role de runtime não tem `DELETE` nessas tabelas: só executa a função, que entra em cada banca. O log registra quantas linhas saíram. Logs do servidor e espaço em disco: ver `HOSPEDAGEM.md`. Teste: `maintenance.test.ts`.
+
 ## Testes
 
 `apps/api/test` roda contra PostgreSQL real (`sysjb_test`, recriado a cada execução pelas mesmas migrations), com dados sintéticos:
@@ -799,7 +854,7 @@ Nada é publicado nem implantado automaticamente.
 ## Limitações restantes
 
 - `GET`/`PATCH /v1/users/:id` (integração) ainda dependem só da credencial de serviço (ver acima). O painel usa rotas próprias (`/v1/admin/*`), com sessão e perfil de operador.
-- Painel: só a página de usuários existe. Não há cadastro/edição de operadores pela interface (só o script `operator:create`), troca ou recuperação de senha de operador, nem tela para consultar a auditoria (os registros ficam em `audit_logs`).
+- Painel: só a página de usuários existe. O operador ainda não troca a própria senha (o Gerente gera uma nova em Operadores), nem tela para consultar a auditoria (os registros ficam em `audit_logs`).
 - A busca de usuários usa `ILIKE` sem índice de trigrama: adequada para milhares de usuários por banca; com centenas de milhares, criar índice `pg_trgm`.
 - Troca de senha só logado (sem exigir a senha atual, ver "Perfil"); sem recuperação de senha ("esqueci") e sem listar/encerrar sessões avulsas do cliente.
 - O bloqueio de 5 falhas é por CPF (ou e-mail do operador): um atacante pode bloquear temporariamente o login de um CPF conhecido (efeito colateral aceito do bloqueio por conta). O limite por IP (ver "Limite de requisições") depende de o proxy na frente do web preencher o X-Forwarded-For corretamente; redes móveis com IP compartilhado dividem o mesmo limite por IP (por isso os limites por IP são generosos e os limites finos são por sessão).

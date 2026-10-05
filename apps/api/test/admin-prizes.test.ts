@@ -82,7 +82,17 @@ describe('GET /v1/admin/prizes', () => {
       const res = await session.http.get(`/v1/admin/prizes?${range(day(0))}`);
       expect(res.status, role).toBe(200);
       expect(res.headers['cache-control']).toBe('no-store');
-      expect(res.body).toEqual({ items: [], page: 1, pageSize: 25, total: 0, totalPages: 1, totalPrizeCents: 0 });
+      expect(res.body).toEqual({
+        items: [],
+        page: 1,
+        pageSize: 25,
+        total: 0,
+        totalPages: 1,
+        totalPrizeCents: 0,
+        reviews: [],
+        reviewsTotal: 0,
+        pendingCount: 0,
+      });
     }
   });
 

@@ -124,9 +124,10 @@ export const LOTTERY_MODALITIES: LotteryModality[] = [
   combo('terno_gp', 'TERNO GP', 'terno_gp', 3, true, 'p1_5'),
   combo('quadra_gp', 'QUADRA GP', 'quadra_gp', 4, true, 'p1_5'),
   combo('quina_gp_8_5', 'QUINA GP 8/5', 'quina_gp_8_5', 8, true, 'p1_5'),
-  combo('sena_gp_10_6', 'SENA GP 10/6', 'sena_gp_10_6', 10, true, 'p1_5'),
-  combo('passe_vai', 'PASSE VAI', 'passe_vai', 2, true, 'p1_2'),
-  combo('passe_vai_vem', 'PASSE VAI VEM', 'passe_vai_vem', 2, true, 'p1_2'),
+  // Sena: 6 dos 10 grupos do 1º ao 6º prêmio. Passe: um grupo no 1º e o outro do 2º ao 5º ("Como jogar").
+  combo('sena_gp_10_6', 'SENA GP 10/6', 'sena_gp_10_6', 10, true, 'p1_6'),
+  combo('passe_vai', 'PASSE VAI', 'passe_vai', 2, true, 'p1_5'),
+  combo('passe_vai_vem', 'PASSE VAI VEM', 'passe_vai_vem', 2, true, 'p1_5'),
 ];
 
 export interface LotteryPlacement {
@@ -311,8 +312,43 @@ export function lotteryQuoteCents(modality: LotteryModality, quotes: Pick<Public
   return q(modality.quote);
 }
 
+/** Fração do valor que vale num acerto (numerador/denominador inteiros). */
+export interface PrizeShare {
+  num: number;
+  den: number;
+}
+
 /**
- * Maior prêmio possível do item numa extração (o do palpite que mais paga), arredondado para baixo no
+ * Fração da colocação que vale num acerto na posição `position` (1 = 1º prêmio): 1 ÷ divisor; no "1 e 1/5", 3/5 no 1º
+ * prêmio (as duas metades) e 1/10 do 2º ao 5º. Posição fora da colocação: 0.
+ */
+export function placementShare(placement: LotteryPlacement, position: number): PrizeShare {
+  if (!placement.positions.includes(position)) return { num: 0, den: 1 };
+  if (placement.splitFirstAndFive) return position === 1 ? { num: 3, den: 5 } : { num: 1, den: 10 };
+  return { num: 1, den: placement.divisor };
+}
+
+/**
+ * Prêmio de UM acerto, em centavos arredondados para baixo, calculado em inteiros (sem erro de ponto flutuante): valor
+ * do palpite × cotação ÷ R$ 1,00 × fração ÷ permutações. O valor do palpite é o digitado ("Cada") ou o digitado
+ * dividido pelos palpites ("Todos"). É a mesma conta do "Possível prêmio" do recibo e da apuração.
+ */
+export function lotteryHitPrizeCents(
+  amountCents: number,
+  split: LotterySplit,
+  guessCount: number,
+  quoteCents: number,
+  share: PrizeShare,
+  permutations = 1,
+): Cents {
+  if (guessCount <= 0 || quoteCents <= 0 || share.num <= 0) return 0;
+  const num = BigInt(amountCents) * BigInt(quoteCents) * BigInt(share.num);
+  const den = BigInt(split === 'each' ? 1 : guessCount) * 100n * BigInt(share.den) * BigInt(permutations);
+  return Number(num / den);
+}
+
+/**
+ * Maior prêmio possível do item numa extração (o do palpite que mais paga, num acerto), arredondado para baixo no
  * centavo. Com "Todos", cada palpite vale valor ÷ quantidade de palpites.
  */
 export function lotteryPossiblePrizeCents(
@@ -324,20 +360,35 @@ export function lotteryPossiblePrizeCents(
   quoteCents: number,
 ): Cents {
   if (guesses.length === 0 || quoteCents <= 0) return 0;
-  const perGuess = amountCents / (split === 'each' ? 1 : guesses.length);
-  // Combos: a cotação já é da colocação fixa. Números: divisor da colocação; "1 e 1/5" soma as duas metades.
-  const placementFactor =
-    modality.kind === 'combo' ? 1 : placement.splitFirstAndFive ? (1 / 2) * (1 + 1 / 5) : 1 / placement.divisor;
+  // Combos: a cotação já é da colocação fixa. Números: o maior acerto é na 1ª posição da colocação ("1 e 1/5": as
+  // duas metades).
+  const share = modality.kind === 'combo' ? { num: 1, den: 1 } : placementShare(placement, placement.positions[0]!);
   // MILHAR E CENTENA: metade do valor em cada; quem acerta a milhar acerta também a centena.
-  const quoteFactor = modality.kind === 'milhar_centena' ? 1 / 2 : 1;
-  const best = Math.max(
-    ...guesses.map((guess) => {
-      const perms = modality.kind === 'inverted' ? distinctPermutations(guess) : 1;
-      return (perGuess * (quoteCents / 100) * quoteFactor * placementFactor) / perms;
-    }),
+  const half = modality.kind === 'milhar_centena' ? 2 : 1;
+  return Math.max(
+    ...guesses.map((guess) =>
+      lotteryHitPrizeCents(
+        amountCents,
+        split,
+        guesses.length,
+        quoteCents,
+        { num: share.num, den: share.den * half },
+        modality.kind === 'inverted' ? distinctPermutations(guess) : 1,
+      ),
+    ),
   );
-  // Folga contra erro de ponto flutuante antes de arredondar para baixo.
-  return Math.floor(best + 1e-6);
+}
+
+/**
+ * Cotação da centena dentro da MILHAR E CENTENA (a cotação do item é a soma das duas): gravada no item, porque quem
+ * acerta só a centena recebe pela cotação dela. null nas outras modalidades.
+ */
+export function lotteryCentenaQuoteCents(
+  modality: LotteryModality,
+  quotes: Pick<PublicQuotes, 'traditional'>,
+): number | null {
+  if (modality.kind !== 'milhar_centena') return null;
+  return quotes.traditional.find((t) => t.modality === 'centena')?.prizeCents ?? 0;
 }
 
 // ---------------------------------------------------------------------------

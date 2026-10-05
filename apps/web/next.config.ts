@@ -42,7 +42,8 @@ const nextConfig: NextConfig = {
     };
   },
   // Imagem do mural (até 3 MB) enviada pelo painel numa server action. Padrão do Next: 1 MB.
-  experimental: { serverActions: { bodySizeLimit: '4mb' } },
+  // authInterrupts: unauthorized() e a página unauthorized.tsx (401 de verdade, com a tela própria).
+  experimental: { serverActions: { bodySizeLimit: '4mb' }, authInterrupts: true },
   // Importante: não usar `env` aqui. Ele embute valores no bundle do navegador.
 };
 

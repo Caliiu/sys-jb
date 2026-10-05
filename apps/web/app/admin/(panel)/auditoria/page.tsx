@@ -1,10 +1,9 @@
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { auditHref, parseAuditQuery } from '@/lib/admin/audit-query';
 import AuditPage from '@/views/admin/AuditPage';
 
@@ -27,7 +26,7 @@ export default async function Page({
   const res = await adminApi.listAudit(session, query);
   if (!res.ok) {
     const failure = toAdminFailure(res.status, res.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     return <AdminMessage title="Não foi possível carregar a auditoria">{failure.message}</AdminMessage>;
   }
   // Página além do fim (ex.: filtro mudou): leva à última página existente.

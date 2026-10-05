@@ -1,10 +1,12 @@
 import type {
   AdminPrizeList,
   AdminPrizeListItem,
+  AdminPrizeReview,
   AdminPromoterOption,
   AdminTicketDrawOption,
   AdminTicketGame,
 } from '@sysjb/contracts';
+import { Info, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import type { PlayerOption } from '@/app/admin/actions';
 import AdminPageTitle from '@/components/admin/AdminPageTitle';
@@ -42,11 +44,67 @@ const UNAVAILABLE = 'Cadastro ainda não disponível.';
 const COLUMNS = ['Pule', 'Data do Jogo', 'Apostador', 'Extração', 'Apostado', 'Prêmio'];
 const RIGHT = new Set(['Apostado', 'Prêmio']);
 
-function PlayerLink({ prize }: { prize: AdminPrizeListItem }) {
+function PlayerLink({ prize }: { prize: Pick<AdminPrizeListItem, 'player'> }) {
   return (
     <Link href={ADMIN_ROUTES.user(prize.player.id)} className="font-medium hover:underline">
       <span className="font-normal tabular-nums text-admin-muted">{prize.player.displayId}</span> · {prize.player.name}
     </Link>
+  );
+}
+
+/** Diferença do resultado corrigido para o pago: positiva = o apostador deveria ter recebido mais. */
+function Difference({ review }: { review: AdminPrizeReview }) {
+  const diff = review.correctedCents - review.paidCents;
+  return (
+    <span className={`tabular-nums ${diff > 0 ? 'text-admin-success' : 'text-admin-danger'}`}>
+      {diff > 0 ? '+' : '−'}
+      {formatBrl(Math.abs(diff))}
+    </span>
+  );
+}
+
+/**
+ * Aviso: o provedor corrigiu o resultado destas pules depois que a apuração pagou. O pago não muda sozinho; o operador
+ * confere e ajusta a carteira do apostador se for o caso.
+ */
+function ReviewsNotice({ reviews, total }: { reviews: AdminPrizeReview[]; total: number }) {
+  return (
+    <section
+      aria-labelledby="prize-reviews-title"
+      className="rounded-lg border border-admin-danger/30 bg-admin-danger/5 px-4 py-4"
+    >
+      <h2 id="prize-reviews-title" className="flex items-center gap-2 text-[15px] font-semibold text-admin-danger">
+        <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+        Resultado corrigido depois do pagamento ({total})
+      </h2>
+      <p className="mt-1 text-[13px] text-admin-text">
+        O provedor corrigiu o resultado destas pules depois que os prêmios foram pagos. O pago não muda sozinho: confira
+        e, se for o caso, ajuste a carteira do apostador.
+        {total > reviews.length && <> Mostrando as {reviews.length} mais recentes.</>}
+      </p>
+      <ul aria-label="Pules com resultado corrigido" className="mt-3 divide-y divide-admin-border/70 text-[13.5px]">
+        {reviews.map((review) => (
+          <li
+            key={`${review.game}:${review.puleNumber}`}
+            className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2"
+          >
+            <span className="min-w-0">
+              <span className="font-medium tabular-nums">#{review.puleNumber}</span>{' '}
+              <span className="text-admin-muted">
+                · {GAME_LABELS[review.game]} · {review.lottery} · jogo {formatCalendarDate(review.drawDate)}
+              </span>
+              <span className="block">
+                <PlayerLink prize={review} />
+              </span>
+            </span>
+            <span className="whitespace-nowrap text-right tabular-nums">
+              Pago {formatBrl(review.paidCents)} · corrigido {formatBrl(review.correctedCents)} ·{' '}
+              <Difference review={review} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -223,6 +281,8 @@ export default function PrizesPage({ query, today, promoters, draws, player, res
         </FilterForm>
       </FiltersCard>
 
+      {result && result.reviewsTotal > 0 && <ReviewsNotice reviews={result.reviews} total={result.reviewsTotal} />}
+
       {result && (
         <section
           aria-label="Resultados"
@@ -241,10 +301,22 @@ export default function PrizesPage({ query, today, promoters, draws, player, res
                 {formatBrl(result.totalPrizeCents)}
               </strong>
             </span>
+            <span className="rounded-md border border-admin-border px-3 py-1.5 text-[14px] text-admin-muted">
+              Aguardando apuração:{' '}
+              <strong className="font-semibold tabular-nums text-admin-text">{result.pendingCount}</strong>
+            </span>
           </div>
           <div className="mx-4 mt-4 border-t border-admin-border">
             <PrizesList items={result.items} />
           </div>
+          <p className="mx-4 mt-3 flex items-start gap-2 text-[12.5px] text-admin-muted">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>
+              Os prêmios são pagos alguns minutos depois de o resultado chegar, se ele não for corrigido nesse tempo.
+              Aguardando apuração são as pules cujo sorteio já passou e que ainda não foram apuradas: resultado que não
+              chegou, sorteio sem resultado ligado em Sorteios ou ainda dentro dessa espera.
+            </span>
+          </p>
           <Pagination
             hrefFor={(page) => prizesHref({ ...query, page })}
             page={result.page}

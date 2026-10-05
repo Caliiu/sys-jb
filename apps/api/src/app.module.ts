@@ -23,6 +23,11 @@ import { CasinoGeneralController } from './admin/casino-general.controller.js';
 import { CasinoGeneralService } from './admin/casino-general.service.js';
 import { CasinoClosingController } from './admin/casino-closing.controller.js';
 import { CasinoClosingService } from './admin/casino-closing.service.js';
+import { CasinoController, CasinoWebhookController } from './casino/casino.controller.js';
+import { CasinoWebhookGuard } from './casino/casino-webhook.guard.js';
+import { CasinoWebhookService } from './casino/casino-webhook.service.js';
+import { CasinoService } from './casino/casino.service.js';
+import { MaintenanceService } from './maintenance/maintenance.service.js';
 import { PlayerStatementController } from './admin/player-statement.controller.js';
 import { PlayerStatementService } from './admin/player-statement.service.js';
 import { PrizesAdminService } from './admin/prizes-admin.service.js';
@@ -34,6 +39,7 @@ import { DrawsController } from './draws/draws.controller.js';
 import { DrawsService } from './draws/draws.service.js';
 import { LotteriesController } from './lotteries/lotteries.controller.js';
 import { LotteriesService } from './lotteries/lotteries.service.js';
+import { PrizeSettlementService } from './prizes/prize-settlement.service.js';
 import { PrizesController } from './prizes/prizes.controller.js';
 import { PrizesService } from './prizes/prizes.service.js';
 import { QuotesController } from './quotes/quotes.controller.js';
@@ -48,6 +54,8 @@ import { AdminUsersService } from './admin/admin-users.service.js';
 import { ConsoleGuard } from './admin/console.guard.js';
 import { OperatorAuthService } from './admin/operator-auth.service.js';
 import { OperatorGuard } from './admin/operator.guard.js';
+import { OperatorsController } from './admin/operators.controller.js';
+import { OperatorsService } from './admin/operators.service.js';
 import { AuthController } from './auth/auth.controller.js';
 import { AuthService } from './auth/auth.service.js';
 import { LoginThrottleService } from './auth/login-throttle.service.js';
@@ -107,6 +115,7 @@ export class AppModule {
         CasinoGeneralController,
         CasinoClosingController,
         PlayerStatementController,
+        OperatorsController,
         MuralsController,
         DrawsController,
         QuotesController,
@@ -120,6 +129,8 @@ export class AppModule {
         ResultsWebhookController,
         HoroscopeController,
         PushController,
+        CasinoController,
+        CasinoWebhookController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -152,8 +163,10 @@ export class AppModule {
         CasinoGeneralService,
         CasinoClosingService,
         PlayerStatementService,
+        OperatorsService,
         QuotesService,
         PrizesService,
+        PrizeSettlementService,
         ReportsService,
         DrawsService,
         MuralsService,
@@ -169,6 +182,10 @@ export class AppModule {
         OverdueService,
         PushService,
         ResultNotifier,
+        CasinoService,
+        CasinoWebhookService,
+        CasinoWebhookGuard,
+        MaintenanceService,
       ],
     };
   }

@@ -1,6 +1,8 @@
+import type { PublicLotteryResult } from '@sysjb/contracts';
 import { describe, expect, it } from 'vitest';
+import { TEST_SCHEDULE, testDraw } from '@/test/draws';
 import { formatResultNumber, resultPrizeParts } from './result-format';
-import { NO_RESULTS_TEXT, resultsReceipt } from './results-receipt';
+import { NO_RESULTS_TEXT, drawResults, resultsReceipt } from './results-receipt';
 
 describe('números do resultado', () => {
   it('sem zeros à esquerda e com ponto de milhar (Federal com 5 dígitos)', () => {
@@ -44,6 +46,34 @@ describe('comprovante de resultados', () => {
     expect(resultsReceipt({ ...base, results: [] }).sections).toEqual([
       [{ left: 'Resultados', right: '30/09/2026' }],
       [{ left: NO_RESULTS_TEXT }],
+    ]);
+  });
+});
+
+describe('extrações escolhidas com resultado', () => {
+  const result = (lottery: string, extraction: number, head: string): PublicLotteryResult => ({
+    lottery,
+    lotteryName: lottery.toUpperCase(),
+    extraction,
+    prizes: [head, '1111', '2222', '3333', '4444'],
+    sum: null,
+    multiplication: null,
+    skipped: null,
+    super5: null,
+    updatedAt: '2026-09-30T12:30:00.000Z',
+  });
+
+  it('na ordem do cadastro, pelo resultado ligado a cada sorteio; sem resultado ou excluído fica de fora', () => {
+    const results = [result('ba', 10, '1000'), result('rj', 9, '0900'), result('fd', 19, '01900')];
+    const ids = [
+      testDraw('LT BAHIA 10HS').id,
+      testDraw('LT PT RIO 11HS').id,
+      'sorteio-excluido',
+      testDraw('LT PT RIO 09HS').id,
+    ];
+    expect(drawResults(TEST_SCHEDULE.draws, ids, results)).toEqual([
+      { drawName: 'LT PT RIO 09HS', prizes: ['0900', '1111', '2222', '3333', '4444'] },
+      { drawName: 'LT BAHIA 10HS', prizes: ['1000', '1111', '2222', '3333', '4444'] },
     ]);
   });
 });

@@ -107,7 +107,7 @@ describe('GET /v1/draws (jogador)', () => {
       games: ['lotteries', 'fazendinha'],
       result: { lottery: 'rj', extraction: 9 },
     });
-    // A Federal da banca é às 20h; o resultado é a Federal das 19h do provedor.
+    // A Federal da banca sorteia às 20h e usa a extração 19 do provedor (a extração não é a hora do sorteio).
     expect(body.draws.find((d) => d.name === 'LT FEDERAL')).toMatchObject({
       hour: 20,
       closesAt: '19:58',
@@ -115,11 +115,22 @@ describe('GET /v1/draws (jogador)', () => {
       result: { lottery: 'fd', extraction: 19 },
     });
     expect(body.draws.find((d) => d.name === 'LT BAND 15HS')!.result).toEqual({ lottery: 'sp', extraction: 15 });
-    // Sem correspondência certa no provedor: sem ligação (o painel define).
-    for (const name of ['LT LOTECE 10HS', 'LT CAPITAL 10HS', 'LT LOTEP 09HS', 'LT NACIONAL 21HS', 'LT MALUQ FEDERAL']) {
-      expect(body.draws.find((d) => d.name === name)!.result, name).toBeNull();
+    // Confirmados pela operação: Lotep 09h/20h = PT Paraíba (pb) 09/20; Nacional 21h = extração 20 da Nacional.
+    const resultOf = (name: string) => body.draws.find((d) => d.name === name)!.result;
+    expect(resultOf('LT LOTEP 09HS')).toEqual({ lottery: 'pb', extraction: 9 });
+    expect(resultOf('LT LOTEP 20HS')).toEqual({ lottery: 'pb', extraction: 20 });
+    expect(resultOf('LT NACIONAL 21HS')).toEqual({ lottery: 'ln', extraction: 20 });
+    // Lotece (lce): na ordem do dia, 10HS = 11, 14HS = 14, 16HS = 15, 19HS = 19.
+    expect(['LT LOTECE 10HS', 'LT LOTECE 14HS', 'LT LOTECE 16HS', 'LT LOTECE 19HS'].map(resultOf)).toEqual(
+      [11, 14, 15, 19].map((extraction) => ({ lottery: 'lce', extraction })),
+    );
+    expect(resultOf('LT ALVORADA 12HS')).toEqual({ lottery: 'mg', extraction: 12 });
+    expect(resultOf('LT MINAS PREF 21HS')).toEqual({ lottery: 'mg', extraction: 21 });
+    // Que o provedor não tem: sem ligação (o painel define).
+    for (const name of ['LT CAPITAL 10HS', 'LT CAPITAL 22HS', 'LT MALUQ FEDERAL']) {
+      expect(resultOf(name), name).toBeNull();
     }
-    expect(body.draws.filter((d) => d.result !== null)).toHaveLength(54);
+    expect(body.draws.filter((d) => d.result !== null)).toHaveLength(63);
     expect(body.exceptions).toEqual([]);
   });
 

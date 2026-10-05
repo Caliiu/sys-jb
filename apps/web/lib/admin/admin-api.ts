@@ -1,6 +1,9 @@
 import 'server-only';
 import type {
   AdminAuditEntry,
+  AdminOperator,
+  OperatorPasswordResponse,
+  SaveOperatorRequest,
   AdminCommissionSettings,
   AdminDrawsResponse,
   AdminBranding,
@@ -145,6 +148,20 @@ export const adminApi = {
 
   updateUser: (session: Caller, id: string, patch: Record<string, unknown>) =>
     call<AdminUserDetail>(session, 'PATCH', `/v1/admin/users/${encodeURIComponent(id)}`, patch),
+
+  listOperators: (session: Caller) => call<AdminOperator[]>(session, 'GET', '/v1/admin/operators'),
+
+  createOperator: (session: Caller, body: SaveOperatorRequest) =>
+    call<OperatorPasswordResponse>(session, 'POST', '/v1/admin/operators', body),
+
+  updateOperator: (session: Caller, id: string, body: SaveOperatorRequest) =>
+    call<AdminOperator>(session, 'PUT', `/v1/admin/operators/${encodeURIComponent(id)}`, body),
+
+  setOperatorStatus: (session: Caller, id: string, active: boolean) =>
+    call<AdminOperator>(session, 'PATCH', `/v1/admin/operators/${encodeURIComponent(id)}/status`, { active }),
+
+  resetOperatorPassword: (session: Caller, id: string) =>
+    call<OperatorPasswordResponse>(session, 'POST', `/v1/admin/operators/${encodeURIComponent(id)}/password`, {}),
 
   setUserStatus: (session: Caller, id: string, status: string) =>
     call<AdminUserDetail>(session, 'PATCH', `/v1/admin/users/${encodeURIComponent(id)}/status`, { status }),

@@ -1,11 +1,10 @@
 import { drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { parseStatementQuery, statementHref } from '@/lib/admin/statement-query';
 import StatementPage from '@/views/admin/StatementPage';
 
@@ -34,7 +33,7 @@ export default async function Page({
 
   if (statement && !statement.ok) {
     const failure = toAdminFailure(statement.status, statement.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     // Apostador que não existe (ou de outra banca): volta para a escolha.
     if (statement.status === 404) redirect(statementHref({ ...query, userId: '', page: 1 }));
     return <AdminMessage title="Não foi possível carregar o extrato">{failure.message}</AdminMessage>;

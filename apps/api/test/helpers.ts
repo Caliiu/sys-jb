@@ -48,6 +48,11 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     overdue: null,
     // Notificações desligadas; os testes de push ligam com chaves de teste e um envio falso.
     push: null,
+    // Sem rodada automática de apuração: os testes chamam a rodada (PrizeSettlementService.sweep) com o relógio que querem.
+    prizes: { graceMinutes: 30, sweepIntervalMs: null },
+    casino: null,
+    // Sem limpeza automática: os testes chamam MaintenanceService.purge quando querem.
+    maintenancePurgeMs: null,
     ...overrides,
   };
 }
@@ -143,7 +148,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
  */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE casino_transactions, casino_games, pule_settlements, pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
   await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
 }

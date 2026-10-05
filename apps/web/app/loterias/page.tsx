@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import { InviteProvider } from '@/components/dashboard/InviteProvider';
 import LotteriesScreen from '@/components/lotteries/LotteriesScreen';
 import { TenantUnavailable } from '@/components/ui/Notice';
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   // Sem cotações ou sorteios não dá para mostrar prêmios e horários confiáveis: avisa em vez de abrir a tela.
   const [quotes, schedule] = await Promise.all([loadQuotes(ctx.hostname), loadDraws(ctx.hostname)]);

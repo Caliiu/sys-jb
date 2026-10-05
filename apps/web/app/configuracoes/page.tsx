@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import { TenantUnavailable } from '@/components/ui/Notice';
 import { TenantProvider } from '@/components/tenant/TenantProvider';
 import { APP_VERSION } from '@/lib/app-version';
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   return (
     <TenantProvider tenant={ctx.tenant}>

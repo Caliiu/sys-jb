@@ -1,5 +1,5 @@
 import { normalizePuleCode } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import { InviteProvider } from '@/components/dashboard/InviteProvider';
 import PrizeClaimScreen from '@/components/prizes/PrizeClaimScreen';
 import PuleCodeForm from '@/components/prizes/PuleCodeForm';
@@ -24,7 +24,7 @@ export default async function Page({
 }) {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const raw = (await searchParams).pule;
   const typed = typeof raw === 'string' ? raw : undefined;

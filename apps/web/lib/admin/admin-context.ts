@@ -1,12 +1,13 @@
 import 'server-only';
 import type { OperatorMeResponse, Permission, PublicOperator, PublicTenant } from '@sysjb/contracts';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import { cache } from 'react';
 import { apiRequest } from '../api-client';
 import { hostnameOnly, isAdminHost, serviceKeyFor } from '../server-env';
 import { ADMIN_ROUTES } from './admin-routes';
 import { readOperatorToken } from './admin-session';
+import { REQUEST_PATH_HEADER, isEntryPath } from '../request-path';
 
 export type AdminContext =
   | { ok: true; hostname: string; me: OperatorMeResponse | null; token: string | null }
@@ -41,13 +42,17 @@ export interface AdminSession {
 export type AdminGate = { ok: true; session: AdminSession } | { ok: false; hostname: string | null; message: string };
 
 /**
- * Porta de entrada das páginas do painel. Sem operador logado, vai para o login. Cada página chama
+ * Porta de entrada das páginas do painel. Sem operador logado: a entrada do painel (/) vai para o login; qualquer
+ * outra página mostra o 401 (unauthorized.tsx), com o atalho para entrar. Cada página chama
  * isto (não só o layout): layouts não rodam de novo a cada navegação, e a API é quem autoriza de fato.
  */
 export async function requireAdmin(): Promise<AdminGate> {
   const ctx = await resolveAdminRequest();
   if (!ctx.ok) return ctx;
-  if (!ctx.me || !ctx.token) redirect(ADMIN_ROUTES.login);
+  if (!ctx.me || !ctx.token) {
+    if (isEntryPath((await headers()).get(REQUEST_PATH_HEADER))) redirect(ADMIN_ROUTES.login);
+    unauthorized();
+  }
   return {
     ok: true,
     session: { hostname: ctx.hostname, tenant: ctx.me.tenant, operator: ctx.me.operator, token: ctx.token },

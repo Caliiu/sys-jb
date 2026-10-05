@@ -32,7 +32,7 @@ export interface BalanceReport {
   salesCents: Cents;
   /** COMISSÃO recebida no dia. */
   commissionCents: Cents;
-  /** PRÊMIOS pagos no dia (vazio até existir apuração de resultados). */
+  /** PRÊMIOS pagos no dia pela apuração (na bolsa de prêmios), um por pule premiada. */
   prizes: Array<{ puleNumber: number; amountCents: Cents }>;
   /** CRÉDITO / DÉBITOS: ajustes e créditos do painel; positivo = crédito, negativo = débito. */
   entries: Array<{ label: string; amountCents: Cents }>;

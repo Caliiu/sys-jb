@@ -3,7 +3,7 @@ import type { DrawGame, DrawSchedule, PublicDraw, ResultSource } from '@sysjb/co
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const TEN: DrawGame[] = ['lotteries', 'lotteries10', 'fazendinha'];
 
-/** Ligação com o resultado do provedor, como no cadastro padrão (a Federal da banca, às 20h, é a das 19h). */
+/** Ligação com o resultado do provedor, como no cadastro padrão (a Federal da banca, às 20h, usa a extração 19). */
 function resultOf(name: string, hour: number): ResultSource | null {
   if (name === 'LT FEDERAL') return { lottery: 'fd', extraction: 19 };
   if (name.startsWith('LT PT RIO')) return { lottery: 'rj', extraction: hour };

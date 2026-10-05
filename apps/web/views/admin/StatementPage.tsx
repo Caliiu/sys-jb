@@ -34,6 +34,8 @@ export const KIND_LABELS: Record<StatementKind, string> = {
   COMMISSION: 'Comissão',
   COMMISSION_REVERSAL: 'Estorno de comissão',
   OPENING_BALANCE: 'Saldo anterior',
+  PRIZE: 'Prêmio',
+  CASINO: 'Cassino',
 };
 
 const BUCKETS: ReadonlyArray<{ key: 'balanceCents' | 'bonusCents' | 'prizesCents' | 'gamesCents'; label: string }> = [

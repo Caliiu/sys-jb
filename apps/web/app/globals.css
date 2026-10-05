@@ -111,3 +111,11 @@ body {
   position: relative;
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.08);
 }
+
+/* Faixas roláveis na horizontal (cassino) sem a barra de rolagem visível. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

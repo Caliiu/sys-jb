@@ -64,3 +64,9 @@ export function webPushPublicKey(): string | null {
   const key = process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ?? '';
   return /^[A-Za-z0-9_-]{87}$/.test(key) ? key : null;
 }
+
+/** IPs ou faixas (CIDR) de onde o PlayFivers chama o webhook do cassino (CASINO_WEBHOOK_IPS), texto cru. */
+export function casinoWebhookIpsRaw(): string {
+  ensureEnv();
+  return process.env.CASINO_WEBHOOK_IPS ?? '';
+}

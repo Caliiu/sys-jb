@@ -78,6 +78,11 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'mural.delete': 'danger',
   'branding.update': 'neutral',
   'home.layout.update': 'neutral',
+  'operator.create': 'success',
+  'operator.update': 'neutral',
+  'operator.activate': 'success',
+  'operator.deactivate': 'danger',
+  'operator.password': 'neutral',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
@@ -101,6 +106,11 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'mural.delete': 'Mural excluído',
   'branding.update': 'Identidade visual alterada',
   'home.layout.update': 'Cards do início alterados',
+  'operator.create': 'Operador cadastrado',
+  'operator.update': 'Operador alterado',
+  'operator.activate': 'Operador ativado',
+  'operator.deactivate': 'Operador desativado',
+  'operator.password': 'Nova senha de operador',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -112,6 +122,7 @@ const FIELD_LABELS: Record<string, string> = {
   balanceJb: 'Saldo',
   bonusJb: 'Bônus',
   balanceGames: 'Disponível em Games',
+  role: 'Perfil',
 };
 
 const commission = (bps: number | null | undefined) => (typeof bps === 'number' ? formatCommission(bps) : '—');

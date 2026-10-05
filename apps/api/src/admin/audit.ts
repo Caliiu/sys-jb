@@ -5,8 +5,8 @@ interface AuditEntry {
   tenantId: string;
   operatorId: string;
   action: AuditAction;
-  /** 'tenant' = ação sobre a banca (targetId = id da banca). */
-  targetType: 'user' | 'tenant';
+  /** 'tenant' = ação sobre a banca (targetId = id da banca); 'operator' = sobre um operador (targetId = id dele). */
+  targetType: 'user' | 'tenant' | 'operator';
   targetId: string;
   /**
    * Somente metadados (nomes de campos alterados; para a comissão, o valor antes/depois em

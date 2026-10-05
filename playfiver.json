@@ -1,0 +1,1287 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Documentação PlayFivers",
+    "version": "2.0.0",
+    "description": "Aqui você encontrará todas as informações necessárias para integrar sua aplicação com a API PlayFiver. Nossa API foi projetada para ser simples e eficiente.\n\n### Suporte\n\nSe tiver qualquer dúvida ou precisar de ajuda, fale com nossa equipe de suporte pelo chat no painel.\n\n### IP Whitelist\n\nNosso sistema valida a origem das requisições por IP. Cadastre o IP do seu servidor na plataforma antes de começar, caso contrário as chamadas à API serão bloqueadas.\n\n### Limites de Requisições\n\nPara manter a estabilidade da API aplicamos limites de requisições (rate limiting), que variam conforme o endpoint. Ao exceder o limite você recebe o status HTTP 429 (Too Many Requests). Recomendamos monitorar seu volume de chamadas e implementar retry com backoff exponencial.\n\n### Formato das Respostas\n\nTodas as respostas são em JSON. Em caso de erro, a resposta traz o status HTTP correspondente e uma mensagem descrevendo o problema.\n\n### Moeda\n\nCada agente tem uma moeda definida na sua configuração, e **todos os valores trocados entre os dois sistemas usam essa moeda** — nenhum dos lados converte nada na comunicação.\n\nNa prática:\n\n- **Você devolve o saldo do jogador na moeda do agente.** Se o agente está em PYG, devolva o saldo em guaranis.\n- **Nós enviamos os valores de aposta e ganho na moeda do agente.** Os campos `bet` e `win` do callback chegam já na sua moeda, prontos para debitar e creditar direto no saldo do jogador, sem nenhuma conversão da sua parte.\n\nA conversão pela cotação acontece só internamente, do nosso lado, no controle da nossa carteira. Ela não aparece em nenhum campo da integração.\n\n### Atualizações da API\n\nEstamos sempre melhorando a API. Mudanças significativas são comunicadas com antecedência pelos canais oficiais."
+  },
+  "servers": [
+    {
+      "url": "https://api.playfivers.com"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Jogos",
+      "description": "Aqui você encontrará todas as informações relacionadas aos jogos."
+    },
+    {
+      "name": "Carteiras",
+      "description": "Aqui você encontrará todas as informações relacionadas às carteiras."
+    },
+    {
+      "name": "Agente",
+      "description": "Aqui você encontrará todas as informações relacionadas ao agente."
+    },
+    {
+      "name": "Webhooks",
+      "description": "Enviaremos um webhook para saber ou informar algo."
+    }
+  ],
+  "components": {
+    "headers": {
+      "X-Content-Type-Options": {
+        "schema": {
+          "type": "string"
+        },
+        "example": "nosniff"
+      },
+      "X-XSS-Protection": {
+        "schema": {
+          "type": "integer"
+        },
+        "example": 0
+      },
+      "Cache-Control": {
+        "schema": {
+          "type": "string"
+        },
+        "example": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "Pragma": {
+        "schema": {
+          "type": "string"
+        },
+        "example": "no-cache"
+      },
+      "Expires": {
+        "schema": {
+          "type": "integer"
+        },
+        "example": 0
+      },
+      "X-Frame-Options": {
+        "schema": {
+          "type": "string"
+        },
+        "example": "DENY"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/api/v2/game_launch": {
+      "parameters": [],
+      "post": {
+        "summary": "Iniciar jogo",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Informações de como iniciar um jogo.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Solicitação bem-sucedida",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "Indica se a resposta foi bem-sucedida."
+                    },
+                    "msg": {
+                      "type": "string",
+                      "example": "SUCCESS",
+                      "description": "Indica se a resposta foi bem-sucedida."
+                    },
+                    "launch_url": {
+                      "type": "string",
+                      "example": "https://games.playfivers.com/launch?token=SEU_TOKEN_DE_JOGO",
+                      "description": "URL para iniciar o jogo."
+                    },
+                    "user_code": {
+                      "type": "string",
+                      "example": "teste0209@email.com",
+                      "description": "Código do usuário em seu sistema."
+                    },
+                    "user_balance": {
+                      "type": "float",
+                      "example": 150.75,
+                      "description": "Saldo do jogador."
+                    },
+                    "user_created": {
+                      "type": "boolean",
+                      "example": false,
+                      "description": "Indica se o usuário foi criado durante esta solicitação."
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "Book of Golden Sands",
+                      "description": "Nome do jogo."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Game_code incorreto ou corpo inválido.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Esse game_code não existe"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Error interno"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentToken": {
+                    "type": "string",
+                    "description": "Token do agente",
+                    "example": "SEU_TOKEN_DE_AGENTE"
+                  },
+                  "secretKey": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SUA_CHAVE_SECRETA"
+                  },
+                  "user_code": {
+                    "type": "string",
+                    "description": "Código do usuário em seu sistema.",
+                    "example": "teste0209@email.com"
+                  },
+                  "game_code": {
+                    "type": "string",
+                    "description": "Código do jogo em nosso sistema. Você pode obter a lista de jogos disponíveis através do endpoint /api/v2/games.",
+                    "example": "126"
+                  },
+                  "provider": {
+                    "type": "string",
+                    "description": "Nome do provedor em nosso sistema. Você pode obter o nome dos provedores através da lista de jogos disponíveis através do endpoint /api/v2/games ou através do nosso painel.",
+                    "example": "PGSOFT"
+                  },
+                  "game_original": {
+                    "type": "boolean",
+                    "description": "Se o jogo é original ou não, você pode obter essa informação através da lista de jogos.",
+                    "example": true
+                  },
+                  "user_balance": {
+                    "type": "float",
+                    "description": "Saldo do jogador atualizado.",
+                    "example": 100.5
+                  },
+                  "user_rtp": {
+                    "type": "integer",
+                    "description": "RTP do usuário (Opcional).",
+                    "example": 70
+                  },
+                  "lang": {
+                    "type": "string",
+                    "description": "Linguagem do jogo: pt, es, en, ja, zh, ru, th, hi.",
+                    "example": "pt"
+                  }
+                },
+                "required": [
+                  "agentToken",
+                  "secretKey",
+                  "user_code",
+                  "game_code",
+                  "provider",
+                  "game_original",
+                  "user_balance",
+                  "lang"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/providers": {
+      "parameters": [],
+      "get": {
+        "summary": "Listagem de provedores",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Obter a lista de provedores.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de provedores retornada com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 1,
+                  "data": [
+                    {
+                      "id": 1,
+                      "name": "PGSOFT",
+                      "image_url": "https://imagensfivers.com/Provedores/PGSOFT.webp",
+                      "wallet": {
+                        "name": "Carteira PlayFiver (Clones)"
+                      },
+                      "status": 1
+                    }
+                  ],
+                  "msg": ""
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {}
+        }
+      }
+    },
+    "/api/v2/games": {
+      "parameters": [],
+      "get": {
+        "summary": "Listagem de jogos",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Obter a lista de jogos.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "ID do provedor para filtrar jogos (opcional)",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de jogos retornada com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 1,
+                  "data": [
+                    {
+                      "name": "Book of Golden Sands",
+                      "image_url": "https://imagensfivers.com/Games/Pragmatic/vswaysbook.webp",
+                      "rounds_free": false,
+                      "status": true,
+                      "original": false,
+                      "game_code": "vswaysbook",
+                      "provider": {
+                        "name": "PRAGMATIC"
+                      }
+                    },
+                    {
+                      "name": "Wild Hop and Drop",
+                      "image_url": "https://imagensfivers.com/Games/Pragmatic/vs20mparty.webp",
+                      "rounds_free": false,
+                      "status": true,
+                      "original": false,
+                      "game_code": "vs20mparty",
+                      "provider": {
+                        "name": "PRAGMATIC"
+                      }
+                    }
+                  ],
+                  "msg": ""
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Provedor não encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Provedor não encontrado."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {}
+        }
+      }
+    },
+    "/api/v2/free_bonus": {
+      "parameters": [],
+      "get": {
+        "summary": "Rodadas grátis",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Listagem das rodadas grátis.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listagem",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": true,
+                  "msg": "",
+                  "data": [
+                    {
+                      "id": 2,
+                      "game_id": "126",
+                      "game_name": "Fortune Tiger",
+                      "player_id": "",
+                      "rounds": 10,
+                      "total_rounds": 10,
+                      "status": "pending",
+                      "created_at": "2024-07-17 02:03:56"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ocorreu um erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent_token": {
+                    "type": "string",
+                    "description": "Token do agente",
+                    "example": "SEU_TOKEN_DE_AGENTE"
+                  },
+                  "secret_key": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SUA_CHAVE_SECRETA"
+                  }
+                },
+                "required": [
+                  "agent_token",
+                  "secret_key"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Rodadas grátis",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Informações de como iniciar uma rodada grátis para o jogador.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rodadas grátis agendada com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": true,
+                  "msg": "Rodadas grátis foi agendada!"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não há suporte para rodadas grátis para esse jogo atualmente",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Não temos suporte para rodadas grátis para esse jogo atualmente."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Já existe uma rodada grátis pendente para esse usuário",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Já existe um bônus pendente para esse usuário."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Ultrapassou o limite de rodadas grátis disponível",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Você ultrapassou do limite de rodadas grátis disponível, tente novamente mais tarde."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ocorreu um erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agent_token": {
+                    "type": "string",
+                    "description": "Token do agente",
+                    "example": "SEU_TOKEN_DE_AGENTE"
+                  },
+                  "secret_key": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SUA_CHAVE_SECRETA"
+                  },
+                  "user_code": {
+                    "type": "string",
+                    "description": "Código do usuário em seu sistema.",
+                    "example": "teste0209@email.com"
+                  },
+                  "game_code": {
+                    "type": "string",
+                    "description": "Código do jogo em nosso sistema. Você pode obter a lista de jogos disponíveis através do endpoint /api/v2/games.",
+                    "example": "126"
+                  },
+                  "rounds": {
+                    "type": "integer",
+                    "description": "Quantidade de rodadas grátis a serem concedidas ao jogador. (Máximo 23 e minimo 1)",
+                    "example": 23
+                  }
+                },
+                "required": [
+                  "agent_token",
+                  "secret_key",
+                  "user_code",
+                  "game_code",
+                  "rounds"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Rodadas grátis",
+        "tags": [
+          "Jogos"
+        ],
+        "description": "Deletar uma rodada grátis.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletada a rodada grátis",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": true,
+                  "msg": "Rodada grátis deletada com sucesso!"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rodada grátis não encontrada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Essa rodada grátis não existe."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ocorreu um erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "description": "Id da rodada grátis",
+                    "example": 1
+                  },
+                  "agent_token": {
+                    "type": "string",
+                    "description": "Token do agente",
+                    "example": "SEU_TOKEN_DE_AGENTE"
+                  },
+                  "secret_key": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SUA_CHAVE_SECRETA"
+                  }
+                },
+                "required": [
+                  "id",
+                  "agent_token",
+                  "secret_key"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/balances": {
+      "parameters": [],
+      "get": {
+        "summary": "Saldo das carteiras",
+        "tags": [
+          "Carteiras"
+        ],
+        "description": "Obter saldo das carteiras",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentToken",
+            "in": "query",
+            "required": true,
+            "description": "Token do agente",
+            "schema": {
+              "type": "string"
+            },
+            "example": "22233333023-444444343-22222223-444444"
+          },
+          {
+            "name": "secretKey",
+            "in": "query",
+            "required": true,
+            "description": "Segredo do agente",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2223333223023-44444411343-222222232-4443444"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de carteiras retornada com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 1,
+                  "data": {
+                    "Carteira PlayFiver (Clones)": 0,
+                    "Carteira Pragmatic (Russian)": 0,
+                    "OFICIAL - Evolution": 0,
+                    "Carteira Economix": 0,
+                    "Carteira Alto padrão": 0,
+                    "Carteira Esportes": 0,
+                    "OFICIAL -  Games": 0,
+                    "OFICIAL - Pragmatic Play": 0,
+                    "OFICIAL - PG Soft": 0,
+                    "OFICIAL - Jili": 0,
+                    "OFICIAL - JDB": 0,
+                    "OFICIAL - Tada": 0,
+                    "OFICIAL - Habanero": 0
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Corpo inválido ou faltando.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Esse agentToken não existe"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": 0,
+                  "msg": "Ocorreu um erro interno."
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {}
+        }
+      }
+    },
+    "/api/v2/agent": {
+      "get": {
+        "summary": "Informações do agente",
+        "tags": [
+          "Agente"
+        ],
+        "description": "Obter informações do agente",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agentToken",
+            "in": "query",
+            "required": true,
+            "description": "Token do agente",
+            "schema": {
+              "type": "string"
+            },
+            "example": "22233333023-444444343-22222223-444444"
+          },
+          {
+            "name": "secretKey",
+            "in": "query",
+            "required": true,
+            "description": "Segredo do agente",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2223333223023-44444411343-222222232-4443444"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Informação do agente retornada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "boolean",
+                      "example": true,
+                      "description": "Indica se a resposta foi bem-sucedida."
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "rtp": {
+                          "type": "integer",
+                          "example": 100,
+                          "description": "RTP médio dos jogos"
+                        },
+                        "limit_enable": {
+                          "type": "integer",
+                          "example": 0,
+                          "description": "Se o limite de apostas está ativo (1) ou não (0)"
+                        },
+                        "limit_amount": {
+                          "type": "integer",
+                          "example": 100,
+                          "description": "Valor máximo de apostas ganhas permitido"
+                        },
+                        "limit_hours": {
+                          "type": "integer",
+                          "example": 1,
+                          "description": "Período em horas para o limite de apostas"
+                        },
+                        "bonus_enable": {
+                          "type": "integer",
+                          "example": 1,
+                          "description": "Se o bônus está ativo (1) ou não (0)"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Corpo inválido ou faltando.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Esse agentToken não existe"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor ou agente não encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Ocorreu uma falha ao obter o agente!"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Atualizar informações do agente",
+        "tags": [
+          "Agente"
+        ],
+        "description": "Atualização das informações do agente",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "agentToken": {
+                    "type": "string",
+                    "description": "Token do agente",
+                    "example": "SEU_TOKEN_DE_AGENTE"
+                  },
+                  "secretKey": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SUA_CHAVE_SECRETA"
+                  },
+                  "rtp": {
+                    "type": "integer",
+                    "description": "RTP médio dos jogos",
+                    "example": 100
+                  },
+                  "limit_enable": {
+                    "type": "boolean",
+                    "description": "Se o limite de apostas está ativo (true) ou não (false)",
+                    "example": true
+                  },
+                  "limite_amount": {
+                    "type": "float",
+                    "description": "Quantia de apostas ganhas permitido",
+                    "example": 20000
+                  },
+                  "limit_hours": {
+                    "type": "integer",
+                    "description": "Período em horas para o limite de apostas",
+                    "example": 24
+                  },
+                  "bonus_enable": {
+                    "type": "boolean",
+                    "description": "Bônus ativo (true) ou não (false)",
+                    "example": true
+                  }
+                },
+                "required": [
+                  "agentToken",
+                  "secretKey",
+                  "rtp",
+                  "limit_enable",
+                  "limite_amount",
+                  "limit_hours",
+                  "bonus_enable"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agente atualizado com sucesso",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": true,
+                  "msg": "Agente atualizado com sucesso"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Nenhum parâmetro válido para atualizar o agente!",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Nenhum parâmetro válido para atualizar o agente!"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ocorreu uma falha ao atualizar o agente!",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": false,
+                  "msg": "Ocorreu uma falha ao atualizar o agente!"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook": {
+      "post": {
+        "summary": "Webhook - Saldo",
+        "tags": [
+          "Webhooks"
+        ],
+        "description": "Enviaremos um webhook para saber o saldo do jogador atualizado.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "Tipo de webhook",
+                    "example": "BALANCE"
+                  },
+                  "user_code": {
+                    "type": "string",
+                    "description": "Código do usuário em seu sistema",
+                    "example": "teste0209@email.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Você deve retornar o saldo atualizado do jogador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "msg": {
+                      "type": "string",
+                      "example": "",
+                      "description": "Indica se a resposta foi bem-sucedida."
+                    },
+                    "balance": {
+                      "type": "float",
+                      "example": 150.75,
+                      "description": "Saldo atualizado do jogador."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuário não encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "balance": 0,
+                  "msg": "INVALID_USER"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "balance": 0,
+                  "msg": "ERROR_INTERNAL"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhook": {
+      "post": {
+        "summary": "Webhook - Transação",
+        "tags": [
+          "Webhooks"
+        ],
+        "description": "Enviaremos um webhook para informar uma transação.",
+        "parameters": [
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "required": false,
+            "example": "application/json",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "Tipo de webhook",
+                    "example": "WinBet"
+                  },
+                  "agent_code": {
+                    "type": "string",
+                    "description": "Código do agente",
+                    "example": "AGENTE123"
+                  },
+                  "agent_secret": {
+                    "type": "string",
+                    "description": "Segredo do agente",
+                    "example": "SEGREDO123"
+                  },
+                  "user_code": {
+                    "type": "string",
+                    "description": "Código do usuário em seu sistema",
+                    "example": "teste0209@email.com"
+                  },
+                  "user_balance": {
+                    "type": "float",
+                    "description": "Saldo atualizado do jogador",
+                    "example": 150.75
+                  },
+                  "game_original": {
+                    "type": "boolean",
+                    "description": "Se o jogo é original ou não, você pode obter essa informação através da lista de jogos.",
+                    "example": true
+                  },
+                  "game_type": {
+                    "type": "string",
+                    "description": "Tipo de jogo (slot, live, etc.)",
+                    "example": "slot"
+                  },
+                  "slot": {
+                    "type": "object",
+                    "description": "Detalhes da transação do jogo. Dependendo do game_type, alguns campos podem ser opcionais. (Atenção: o campo 'slot' pode variar dependendo do tipo de jogo, recomendado pegar esse campo sempre como um objeto dinâmico vindo do game_type)",
+                    "properties": {
+                      "provider_code": {
+                        "type": "string",
+                        "description": "Código do provedor do jogo",
+                        "example": "PGSOFT"
+                      },
+                      "game_code": {
+                        "type": "string",
+                        "description": "Código do jogo em nosso sistema. Você pode obter a lista de jogos disponíveis através do endpoint /api/v2/games.",
+                        "example": "126"
+                      },
+                      "type": {
+                        "type": "string",
+                        "description": "Tipo de transação (DEBIT_CREDIT, BASE)",
+                        "example": "BASE"
+                      },
+                      "round_id": {
+                        "type": "string",
+                        "description": "ID da rodada do jogo",
+                        "example": "ROUND12345"
+                      },
+                      "bet": {
+                        "type": "float",
+                        "description": "Valor apostado",
+                        "example": 50
+                      },
+                      "win": {
+                        "type": "float",
+                        "description": "Valor ganho",
+                        "example": 100
+                      },
+                      "txn_id": {
+                        "type": "string",
+                        "description": "ID da transação",
+                        "example": "TXN123456"
+                      },
+                      "txn_type": {
+                        "type": "string",
+                        "description": "Tipo de transação (debit_credit, credit, debit, bonus)",
+                        "example": "debit_credit"
+                      },
+                      "buy_bonus": {
+                        "type": "boolean",
+                        "description": "Informa se essa transação é uma compra de bônus. (É um campo cujo a vinda dele é opcional)",
+                        "example": true
+                      },
+                      "free_rounds": {
+                        "type": "object",
+                        "description": "Se a transação é uma rodada grátis. (É um campo cujo a vinda dele é opcional)",
+                        "properties": {
+                          "enable": {
+                            "type": "boolean",
+                            "example": true,
+                            "description": "Indica que é uma rodada grátis ativa."
+                          },
+                          "id": {
+                            "type": "string",
+                            "example": 122321,
+                            "description": "Id da rodada grátis"
+                          },
+                          "total_step": {
+                            "type": "integer",
+                            "example": 10,
+                            "description": "Total de rodada grátis disponível."
+                          },
+                          "step": {
+                            "type": "string",
+                            "example": 5,
+                            "description": "Rodada grátis restantes."
+                          },
+                          "win": {
+                            "type": "float",
+                            "example": 10,
+                            "description": "Total pago nessa rodada grátis."
+                          }
+                        }
+                      },
+                      "user_before_balance": {
+                        "type": "float",
+                        "description": "Saldo do usuário antes da transação",
+                        "example": 200
+                      },
+                      "user_after_balance": {
+                        "type": "float",
+                        "description": "Saldo do usuário após a transação",
+                        "example": 250
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "description": "Data e hora da transação (formato ISO 8601)",
+                        "example": "2023-10-01T12:34:56Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Você deve retornar o saldo atualizado do jogador",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "msg": {
+                      "type": "string",
+                      "example": "",
+                      "description": "Indica se a resposta foi bem-sucedida."
+                    },
+                    "balance": {
+                      "type": "float",
+                      "example": 150.75,
+                      "description": "Saldo atualizado do jogador."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Saldo insuficiente",
+            "content": {
+              "application/json": {
+                "example": {
+                  "balance": 0,
+                  "msg": "INSUFFICIENT_USER_FUNDS"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Usuário não encontrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "balance": 0,
+                  "msg": "INVALID_USER"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno no servidor",
+            "content": {
+              "application/json": {
+                "example": {
+                  "balance": 0,
+                  "msg": "ERROR_INTERNAL"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,12 @@
 /**
- * Premiadas > Consultar premiadas: pules premiadas do jogador num dia. A apuração de resultados ainda não
- * existe; até lá a API responde a lista vazia, e as telas já seguem este contrato.
+ * Premiadas > Consultar premiadas: pules premiadas do jogador num dia (data do jogo), gravadas pela apuração de
+ * prêmios. A apuração paga na bolsa de prêmios depois da carência (o resultado precisa ficar alguns minutos sem
+ * correção); até lá a pule não aparece aqui.
  */
 
+import { FAZENDINHA_MODE_CODES } from './quotes.js';
+import type { FazendinhaModeId } from './fazendinha.js';
+import { findLotteryModality, findLotteryPlacement } from './lotteries.js';
 import { isReportDate, reportDates } from './reports.js';
 
 /** Dias para trás (além de hoje) que a consulta aceita: a tela lista hoje e os 7 anteriores. */
@@ -35,6 +39,23 @@ export interface PrizesReport {
   tickets: PrizeTicket[];
   totalPrizeCents: number;
 }
+
+/** Item premiado de Loterias como no comprovante: "MILHAR 1 PRÊMIO". */
+export function lotteryPrizeLabel(modality: string, placement: string): string {
+  const m = findLotteryModality(modality)?.label ?? modality.toUpperCase();
+  const p = findLotteryPlacement(placement)?.label ?? placement;
+  return `${m} ${p}`;
+}
+
+/** Fazendinha: "FZG1 1/1" = Fazendinha, modalidade (G/D/C), valor por número em reais e a colocação (só o 1º prêmio). */
+export const fazendinhaPrizeLabel = (mode: FazendinhaModeId, stakeCents: number) =>
+  `FZ${FAZENDINHA_MODE_CODES[mode][0]}${stakeCents % 100 === 0 ? stakeCents / 100 : (stakeCents / 100).toFixed(2).replace('.', ',')} 1/1`;
+
+/**
+ * Caminho da tela com as premiadas do dia (YYYY-MM-DD) no app da banca. Fica aqui porque a notificação de "pule
+ * premiada", montada pela API, abre a mesma tela.
+ */
+export const prizesViewPath = (date: string) => `/premiadas/consultar/${date}`;
 
 /** Datas consultáveis (YYYY-MM-DD, Brasília), de hoje para trás. */
 export const prizeDates = (nowIso: string): string[] => reportDates(nowIso, PRIZES_MAX_DAYS_BACK);

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { type RateLimitConfig, loadRateLimitConfig } from '../rate-limit/rate-limit.rules.js';
 import { type HoroscopeConfig, loadHoroscopeConfig } from '../horoscope/horoscope.config.js';
 import { type OverdueConfig, loadOverdueConfig } from '../overdue/overdue.config.js';
+import { type PrizesConfig, loadPrizesConfig } from '../prizes/prizes.config.js';
+import { type CasinoConfig, loadCasinoConfig } from '../casino/casino.config.js';
 import { type PushConfig, loadPushConfig } from '../push/push.config.js';
 import { parseResultsWebhookToken } from '../results/results.config.js';
 
@@ -36,6 +38,12 @@ export interface AppConfig {
   overdue: OverdueConfig | null;
   /** Notificações Web Push (WEB_PUSH_*); null = desligadas (a inscrição é recusada e nada é enviado). */
   push: PushConfig | null;
+  /** Apuração de prêmios: carência do resultado (PRIZES_GRACE_MINUTES) e rodada automática. */
+  prizes: PrizesConfig;
+  /** Limpeza diária do descartável (maintenance_purge): intervalo em ms; null = sem rodada automática (testes). */
+  maintenancePurgeMs: number | null;
+  /** Cassino PlayFivers (PLAYFIVERS_*, CASINO_WEBHOOK_TOKEN); null = desligado (o lobby avisa, nenhum jogo abre). */
+  casino: CasinoConfig | null;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -131,5 +139,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     horoscope: loadHoroscopeConfig(env),
     overdue: loadOverdueConfig(env),
     push: loadPushConfig(env),
+    prizes: loadPrizesConfig(env),
+    casino: loadCasinoConfig(env),
+    maintenancePurgeMs: 24 * 60 * 60 * 1000,
   };
 }

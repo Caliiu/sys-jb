@@ -1,3 +1,4 @@
+import { type PublicDraw, type PublicLotteryResult, resultOfDraw } from '@sysjb/contracts';
 import { formatCalendarDate } from './datetime';
 import type { ReceiptPdfContent, ReceiptSection } from './receipt-pdf';
 import { resultPrizeParts } from './result-format';
@@ -6,6 +7,23 @@ import { resultPrizeParts } from './result-format';
 export interface DrawResult {
   drawName: string;
   prizes: string[];
+}
+
+/**
+ * Extrações escolhidas (ids) que já têm resultado no dia, na ordem do cadastro, pelo resultado ligado a cada sorteio.
+ * Sorteio que não existe mais (excluído no painel) fica de fora.
+ */
+export function drawResults(
+  draws: readonly PublicDraw[],
+  ids: readonly string[],
+  results: readonly PublicLotteryResult[],
+): DrawResult[] {
+  return draws
+    .filter((draw) => ids.includes(draw.id))
+    .flatMap((draw) => {
+      const result = resultOfDraw(results, draw.result);
+      return result ? [{ drawName: draw.name, prizes: result.prizes }] : [];
+    });
 }
 
 export interface ResultsReceiptInput {

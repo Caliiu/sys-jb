@@ -45,7 +45,7 @@ const MAIN_ITEMS: MenuItem[] = [
   { label: 'Início', icon: Home, to: ROUTES.home },
   { label: 'Perfil', icon: User, to: ROUTES.profile },
   { label: 'Loterias', icon: Coins, to: ROUTES.lotteries },
-  { label: 'Cassino', icon: Gem },
+  { label: 'Cassino', icon: Gem, to: ROUTES.casino },
   { label: 'Bingo', icon: Disc },
   { label: 'Premiadas', icon: Award, to: ROUTES.prizes },
   { label: 'Resultados', icon: BarChart2, to: ROUTES.results },

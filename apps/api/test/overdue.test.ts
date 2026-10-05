@@ -209,7 +209,7 @@ describe('GET /v1/draws/:id/overdue', () => {
     expect((await http.get('/v1/draws/00000000-0000-4000-8000-000000000000/overdue')).status).toBe(404);
 
     // Sem correspondência no provedor no cadastro padrão.
-    const unlinked = await http.get(`/v1/draws/${await drawId('aurora', 'LT LOTECE 10HS')}/overdue`);
+    const unlinked = await http.get(`/v1/draws/${await drawId('aurora', 'LT CAPITAL 10HS')}/overdue`);
     expect(unlinked.status).toBe(404);
 
     const rio = await drawId('aurora', 'LT PT RIO 09HS');

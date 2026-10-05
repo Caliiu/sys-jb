@@ -8,14 +8,14 @@ import { useToast } from '../ui/Toast';
 const rowClass =
   'w-full flex items-center justify-between rounded-xl bg-white px-4 py-4 text-left text-[14px] font-medium uppercase text-gray-900 shadow-sm active:scale-[0.99] transition-transform';
 
-/** Lista de atalhos em cartões brancos. Item sem `href` avisa que vem em breve. */
+/** Lista de atalhos em cartões brancos. Item sem `href` nem `onSelect` avisa que vem em breve. */
 export default function MenuList({ items, label }: { items: readonly SectionMenuItem[]; label: string }) {
   const toast = useToast();
 
   return (
     <nav aria-label={label}>
       <ul className="flex flex-col gap-1.5 px-3 pt-2">
-        {items.map(({ label: text, href }) => {
+        {items.map(({ label: text, href, onSelect }) => {
           const content = (
             <>
               {text}
@@ -29,7 +29,7 @@ export default function MenuList({ items, label }: { items: readonly SectionMenu
                   {content}
                 </Link>
               ) : (
-                <button type="button" onClick={() => toast.comingSoon(text)} className={rowClass}>
+                <button type="button" onClick={onSelect ?? (() => toast.comingSoon(text))} className={rowClass}>
                   {content}
                 </button>
               )}

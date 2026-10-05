@@ -1,11 +1,10 @@
 import { drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { operationSummaryHref, parseOperationSummaryQuery } from '@/lib/admin/operation-summary-query';
 import OperationSummaryPage from '@/views/admin/OperationSummaryPage';
 
@@ -34,7 +33,7 @@ export default async function Page({
 
   if (!summary.ok) {
     const failure = toAdminFailure(summary.status, summary.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     // Promotor que deixou de ser promotor (link antigo): volta para todos.
     if (summary.status === 404 && query.promoterId) redirect(operationSummaryHref({ ...query, promoterId: '' }));
     return <AdminMessage title="Não foi possível carregar o resumo da operação">{failure.message}</AdminMessage>;

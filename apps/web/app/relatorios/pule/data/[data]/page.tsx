@@ -1,5 +1,5 @@
 import { isReportDate, REPORT_DAYS_BACK } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import PuleList from '@/components/reports/PuleList';
 import PlayerShell from '@/components/section/PlayerShell';
 import SectionBar from '@/components/section/SectionBar';
@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page({ params }: { params: Promise<{ data: string }> }) {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const { data: date } = await params;
   if (!isReportDate(new Date().toISOString(), date, REPORT_DAYS_BACK.pules)) redirect(ROUTES.puleByDate);

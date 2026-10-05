@@ -38,7 +38,9 @@ describe('menu do painel (configuração)', () => {
         .filter((g) => g.display === 'panel')
         .map((g) => g.group),
     ).toEqual(['Relatórios']);
-    expect(ADMIN_NAV_FOOTER.map((g) => [g.group, shape(g)])).toEqual([['Administração', ['Log de auditoria']]]);
+    expect(ADMIN_NAV_FOOTER.map((g) => [g.group, shape(g)])).toEqual([
+      ['Administração', ['Operadores', 'Log de auditoria']],
+    ]);
   });
 
   it('endereços únicos e toda permissão existe em algum perfil', () => {

@@ -1,5 +1,3 @@
-import { resultsViewPath } from '@sysjb/contracts';
-
 /** Rotas do app do cliente (fonte única para links, menu lateral e navegação inferior). */
 export const ROUTES = {
   home: '/',
@@ -8,6 +6,7 @@ export const ROUTES = {
   horoscope: '/loterias/horoscopo',
   overdue: '/loterias/atrasados',
   fazendinha: '/fazendinha',
+  casino: '/cassino',
   results: '/resultados',
   lotteryResults: '/resultados/loterias',
   reports: '/relatorios',
@@ -27,18 +26,14 @@ export const ROUTES = {
   profile: '/perfil',
 } as const;
 
-/** Resultado loterias de um dia (YYYY-MM-DD): escolha das extrações (as já escolhidas voltam marcadas). */
-export const resultsOfDate = (date: string, drawIds: readonly string[] = []) =>
-  `${ROUTES.lotteryResults}/${date}${drawIds.length > 0 ? `?sorteios=${drawIds.join(',')}` : ''}`;
-
-/** Resultado das extrações escolhidas (ids dos sorteios da banca) num dia (o mesmo caminho das notificações). */
-export const resultsViewOf = resultsViewPath;
-
 /** Máximo de extrações num resultado (a banca tem poucas dezenas; protege a URL digitada). */
 const MAX_RESULT_DRAWS = 200;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Ids de `?sorteios=` com tolerância (a URL é digitável): só UUIDs, sem repetir, até o máximo. */
+/**
+ * Ids de `?sorteios=` do link que abre os resultados já no resultado (notificação "Resultado saiu"), com tolerância
+ * (a URL é digitável): só UUIDs, sem repetir, até o máximo.
+ */
 export function parseResultDrawIds(raw: string | string[] | undefined): string[] {
   const value = Array.isArray(raw) ? raw[0] : raw;
   const ids = (value ?? '')

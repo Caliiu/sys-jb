@@ -72,9 +72,21 @@ function ActionBadge({ entry }: { entry: AdminAuditEntry }) {
   );
 }
 
-/** Apostador afetado: link "ID · nome", "Banca" (ação sobre a banca) ou "Apostador removido". */
+/**
+ * Quem foi afetado: link "ID · nome" do apostador, "Banca" (ação sobre a banca), o operador (cadastro, situação ou
+ * senha) ou "Apostador removido".
+ */
 function Target({ entry }: { entry: AdminAuditEntry }) {
   if (entry.targetType === 'tenant') return <span>Banca</span>;
+  if (entry.targetType === 'operator') {
+    return entry.operatorTarget ? (
+      <span>
+        Operador · <span className="font-medium">{entry.operatorTarget.name}</span>
+      </span>
+    ) : (
+      <span className="text-admin-muted">Operador removido</span>
+    );
+  }
   if (!entry.target) return <span className="text-admin-muted">Apostador removido</span>;
   return (
     <Link href={ADMIN_ROUTES.user(entry.target.id)} className="font-medium hover:underline">

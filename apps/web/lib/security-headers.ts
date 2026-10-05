@@ -14,7 +14,11 @@ export function createNonce(): string {
  * Estilos precisam de `'unsafe-inline'` porque o app usa `style={...}` (cor da banca), que nonce não cobre.
  * Imagens aceitam https: porque o logo da banca (`logoUrl`) pode ser um endereço externo.
  */
-export function buildContentSecurityPolicy(nonce: string, isDev: boolean): string {
+export function buildContentSecurityPolicy(
+  nonce: string,
+  isDev: boolean,
+  options: { gameFrame?: boolean } = {},
+): string {
   const directives = [
     "default-src 'self'",
     // Em dev o React usa eval para reconstruir pilhas de erro do servidor.
@@ -29,6 +33,8 @@ export function buildContentSecurityPolicy(nonce: string, isDev: boolean): strin
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    // Só na tela do jogo do cassino: o jogo do provedor (https, endereço variável) roda num iframe isolado.
+    ...(options.gameFrame ? ['frame-src https:'] : []),
     // Em dev as bancas rodam em http://*.localhost; forçar https quebraria tudo.
     ...(isDev ? [] : ['upgrade-insecure-requests']),
   ];

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import AdminPageTitle from '@/components/admin/AdminPageTitle';
@@ -6,7 +6,6 @@ import PersonalizationTabs from '@/components/admin/PersonalizationTabs';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import ValuesPage from '@/views/admin/ValuesPage';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +23,7 @@ export default async function Page() {
   const settings = await adminApi.getCommissionSettings(session);
   if (!settings.ok) {
     const failure = toAdminFailure(settings.status, settings.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     return <AdminMessage title="Não foi possível carregar os valores">{failure.message}</AdminMessage>;
   }
 

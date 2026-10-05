@@ -1,4 +1,4 @@
-import type { AdminPrizeList, AdminPrizeListItem } from '@sysjb/contracts';
+import type { AdminPrizeList, AdminPrizeListItem, AdminPrizeReview } from '@sysjb/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,6 +37,23 @@ const page = (items: AdminPrizeListItem[], over: Partial<AdminPrizeList> = {}): 
   total: items.length,
   totalPages: 1,
   totalPrizeCents: items.reduce((sum, item) => sum + item.prizeCents, 0),
+  reviews: [],
+  reviewsTotal: 0,
+  pendingCount: 0,
+  ...over,
+});
+
+const review = (over: Partial<AdminPrizeReview> = {}): AdminPrizeReview => ({
+  game: 'lotteries',
+  puleNumber: 10002,
+  drawDate: '2026-09-29',
+  lottery: 'LT PT RIO 09HS',
+  drawCode: 'PTRIO09',
+  paidCents: 0,
+  correctedCents: 800_000,
+  settledAt: '2026-09-29T12:30:00.000Z',
+  checkedAt: '2026-09-29T13:30:00.000Z',
+  player: PLAYER,
   ...over,
 });
 
@@ -159,5 +176,33 @@ describe('Pules Premiadas', () => {
     show({ de: TODAY, ate: TODAY }, { result: page([]) });
     expect(screen.getByText(/Período:/).textContent).toBe('Período: 30/09/2026');
     expect(screen.getByText('Nenhuma pule premiada no período.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Resultado corrigido/ })).not.toBeInTheDocument();
+  });
+
+  it('pules aguardando apuração e o aviso de resultado corrigido depois do pagamento', () => {
+    show(
+      { de: '2026-09-01', ate: '2026-09-30' },
+      {
+        result: page([prize()], {
+          pendingCount: 3,
+          reviews: [review(), review({ puleNumber: 10003, paidCents: 800_000, correctedCents: 0 })],
+          reviewsTotal: 5,
+        }),
+      },
+    );
+    expect(screen.getByText(/Aguardando apuração:/).textContent).toBe('Aguardando apuração: 3');
+
+    const notice = screen.getByRole('region', { name: 'Resultado corrigido depois do pagamento (5)' });
+    expect(within(notice).getByText(/Mostrando as 2 mais recentes/)).toBeInTheDocument();
+    const rows = within(within(notice).getByRole('list', { name: 'Pules com resultado corrigido' })).getAllByRole(
+      'listitem',
+    );
+    expect(rows[0]).toHaveTextContent('#10002');
+    expect(rows[0]).toHaveTextContent(/Pago R\$\s0,00 · corrigido R\$\s8\.000,00 · \+R\$\s8\.000,00/);
+    expect(rows[1]).toHaveTextContent(/−R\$\s8\.000,00/);
+    expect(within(rows[0]!).getByRole('link', { name: /Ana Souza Lima/ })).toHaveAttribute(
+      'href',
+      `/usuarios/${PLAYER.id}`,
+    );
   });
 });

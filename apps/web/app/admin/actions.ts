@@ -11,7 +11,9 @@ import type {
   SetFazendinhaQuotesRequest,
   SetTraditionalQuotesRequest,
   AdminUserDetail,
+  AdminOperator,
   OperatorLoginResponse,
+  OperatorPasswordResponse,
 } from '@sysjb/contracts';
 import {
   DRAW_EXCEPTION_KINDS,
@@ -25,6 +27,7 @@ import {
   HOME_BLOCK_IDS,
   MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
+  OPERATOR_ROLES,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
 } from '@sysjb/contracts';
@@ -97,6 +100,60 @@ export async function adminLogoutAction(): Promise<void> {
 }
 
 const userIdSchema = z.uuid();
+
+// ---------------------------------------------------------------------------
+// Operadores (Administração > Operadores): a API confere o perfil (só o Gerente) e as regras; aqui, só o formato.
+// ---------------------------------------------------------------------------
+
+const operatorIdSchema = z.uuid();
+const saveOperatorSchema = z.strictObject({
+  id: operatorIdSchema.optional(),
+  operator: z.strictObject({
+    name: z.string().max(200),
+    email: z.string().max(300),
+    role: z.enum(OPERATOR_ROLES),
+  }),
+});
+
+/** Cadastra (sem id: devolve a senha gerada, mostrada uma vez) ou altera nome, e-mail e perfil. */
+export async function saveOperatorAction(
+  input: unknown,
+): Promise<AdminActionResult<{ operator: AdminOperator; password: string | null }>> {
+  const body = saveOperatorSchema.safeParse(input);
+  if (!body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const { id, operator } = body.data;
+  if (id) {
+    const res = await adminApi.updateOperator(caller, id, operator);
+    return res.ok ? { ok: true, data: { operator: res.data, password: null } } : toAdminFailure(res.status, res.error);
+  }
+  const res = await adminApi.createOperator(caller, operator);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Ativa ou desativa (desativar encerra as sessões do operador na hora). */
+export async function setOperatorStatusAction(id: unknown, active: unknown): Promise<AdminActionResult<AdminOperator>> {
+  const operatorId = operatorIdSchema.safeParse(id);
+  if (!operatorId.success || typeof active !== 'boolean') return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.setOperatorStatus(caller, operatorId.data, active);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Gera uma nova senha (mostrada uma vez) e encerra as sessões do operador. */
+export async function resetOperatorPasswordAction(id: unknown): Promise<AdminActionResult<OperatorPasswordResponse>> {
+  const operatorId = operatorIdSchema.safeParse(id);
+  if (!operatorId.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.resetOperatorPassword(caller, operatorId.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
 
 // Só o formato: as regras de CPF, telefone e e-mail são da API (uma fonte de verdade).
 const profileSchema = z

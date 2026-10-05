@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import HowToPlayScreen from '@/components/help/HowToPlayScreen';
 import PlayerShell from '@/components/section/PlayerShell';
 import { TenantUnavailable } from '@/components/ui/Notice';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   return (
     <PlayerShell tenant={ctx.tenant} inviteCode={ctx.me.inviteCode}>

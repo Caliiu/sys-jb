@@ -23,6 +23,7 @@ import {
   Table2,
   Ticket,
   Trophy,
+  UserCog,
   UserMinus,
   Users,
   UserX,
@@ -214,7 +215,10 @@ export const ADMIN_NAV_FOOTER: NavGroup[] = [
   {
     group: 'Administração',
     icon: ShieldCheck,
-    items: [{ href: ADMIN_ROUTES.audit, label: 'Log de auditoria', icon: ScrollText, permission: 'audit.read' }],
+    items: [
+      { href: ADMIN_ROUTES.operators, label: 'Operadores', icon: UserCog, permission: 'operators.manage' },
+      { href: ADMIN_ROUTES.audit, label: 'Log de auditoria', icon: ScrollText, permission: 'audit.read' },
+    ],
   },
 ];
 

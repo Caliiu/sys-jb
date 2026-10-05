@@ -1,11 +1,10 @@
 import { drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { parsePrizesQuery, prizesHref } from '@/lib/admin/prizes-query';
 import PrizesPage from '@/views/admin/PrizesPage';
 
@@ -36,7 +35,7 @@ export default async function Page({
 
   if (listed && !listed.ok) {
     const failure = toAdminFailure(listed.status, listed.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     return <AdminMessage title="Não foi possível carregar as pules premiadas">{failure.message}</AdminMessage>;
   }
   // Página além do fim (ex.: filtro mudou): leva à última página existente.

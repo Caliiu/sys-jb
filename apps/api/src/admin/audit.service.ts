@@ -19,7 +19,7 @@ export class AuditService {
       ...(query.period ? { createdAt: { gte: auditPeriodStart(query.period) } } : {}),
     };
 
-    const { rows, total, targets } = await this.db.withTenant(tenant.id, async (tx) => {
+    const { rows, total, targets, operators } = await this.db.withTenant(tenant.id, async (tx) => {
       const rows = await tx.auditLog.findMany({
         where,
         include: { operator: { select: { id: true, name: true, email: true } } },
@@ -29,13 +29,24 @@ export class AuditService {
         take: query.pageSize,
       });
       const total = await tx.auditLog.count({ where });
-      // Hoje todo alvo é um usuário (sem FK: a trilha não depende do alvo existir). Uma consulta só.
-      const ids = [...new Set(rows.filter((r) => r.targetType === 'user').map((r) => r.targetId))];
-      const targets = await tx.user.findMany({
-        where: { tenantId: tenant.id, id: { in: ids } },
-        select: { id: true, displayId: true, name: true },
-      });
-      return { rows, total, targets: new Map(targets.map((t) => [t.id, t])) };
+      // Alvos: usuários e operadores (sem FK: a trilha não depende do alvo existir). Uma consulta para cada.
+      const idsOf = (type: string) => [...new Set(rows.filter((r) => r.targetType === type).map((r) => r.targetId))];
+      const [targets, operators] = await Promise.all([
+        tx.user.findMany({
+          where: { tenantId: tenant.id, id: { in: idsOf('user') } },
+          select: { id: true, displayId: true, name: true },
+        }),
+        tx.operator.findMany({
+          where: { tenantId: tenant.id, id: { in: idsOf('operator') } },
+          select: { id: true, name: true, email: true },
+        }),
+      ]);
+      return {
+        rows,
+        total,
+        targets: new Map(targets.map((t) => [t.id, t])),
+        operators: new Map(operators.map((o) => [o.id, o])),
+      };
     });
 
     return {
@@ -44,8 +55,9 @@ export class AuditService {
         createdAt: row.createdAt.toISOString(),
         action: row.action as AuditAction,
         operator: row.operator,
-        targetType: row.targetType === 'tenant' ? ('tenant' as const) : ('user' as const),
+        targetType: row.targetType === 'tenant' || row.targetType === 'operator' ? row.targetType : ('user' as const),
         target: row.targetType === 'user' ? (targets.get(row.targetId) ?? null) : null,
+        operatorTarget: row.targetType === 'operator' ? (operators.get(row.targetId) ?? null) : null,
         details: toDetails(row.details),
       })),
       page: query.page,

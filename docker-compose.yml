@@ -2,6 +2,12 @@ services:
   postgres:
     image: postgres:17.6-alpine
     restart: unless-stopped
+    # Log do container limitado: até 3 arquivos de 10 MB (sem isso, cresce até encher o disco).
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?defina no .env}

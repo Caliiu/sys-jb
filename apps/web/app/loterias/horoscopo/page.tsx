@@ -1,5 +1,5 @@
 import { type HoroscopeTodayResponse, type PublicProfile, drawDateOf } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import { InviteProvider } from '@/components/dashboard/InviteProvider';
 import HoroscopeScreen from '@/components/horoscope/HoroscopeScreen';
 import { TenantUnavailable } from '@/components/ui/Notice';
@@ -20,15 +20,15 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const sessionToken = await readSessionToken();
-  if (!sessionToken) redirect('/login');
+  if (!sessionToken) unauthorized();
   const [profile, horoscope] = await Promise.all([
     apiRequest<PublicProfile>(ctx.hostname, 'GET', '/v1/me/profile', undefined, { sessionToken }),
     apiRequest<HoroscopeTodayResponse>(ctx.hostname, 'GET', '/v1/horoscope', undefined, { sessionToken }),
   ]);
-  if (!profile.ok && profile.error.code === 'SESSION_INVALID') redirect('/login');
+  if (!profile.ok && profile.error.code === 'SESSION_INVALID') unauthorized();
   const userSign = profile.ok ? signOf(profile.data.birthDate) : null;
   const today = drawDateOf(new Date().toISOString(), 0);
   // Previsão de outro dia (virada da meia-noite entre as duas leituras) não vale para hoje.

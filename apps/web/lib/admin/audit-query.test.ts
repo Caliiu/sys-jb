@@ -11,6 +11,7 @@ const entry = (details: AdminAuditEntry['details']): AdminAuditEntry => ({
   operator: { id: 'o', name: 'Op', email: 'op@example.test' },
   targetType: 'user',
   target: null,
+  operatorTarget: null,
   details,
 });
 

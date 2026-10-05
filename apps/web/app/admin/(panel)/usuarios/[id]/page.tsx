@@ -1,10 +1,9 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound, unauthorized } from 'next/navigation';
 import AdminMessage from '@/components/admin/AdminMessage';
 import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import UserDetailPage from '@/views/admin/UserDetailPage';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +23,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     // 400 = id que nem é UUID; para o operador é o mesmo que não existir.
     if (res.status === 404 || res.status === 400) notFound();
     const failure = toAdminFailure(res.status, res.error);
-    if (failure.code === 'SESSION_INVALID') redirect(ADMIN_ROUTES.login);
+    if (failure.code === 'SESSION_INVALID') unauthorized();
     return (
       <AdminMessage title="Não foi possível carregar o usuário" backToUsers>
         {failure.message}

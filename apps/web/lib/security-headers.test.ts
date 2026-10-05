@@ -15,6 +15,11 @@ describe('security headers', () => {
     expect(csp).toContain('upgrade-insecure-requests');
   });
 
+  it('frames só na tela do jogo do cassino, e só https', () => {
+    expect(buildContentSecurityPolicy('abc', false)).not.toContain('frame-src');
+    expect(buildContentSecurityPolicy('abc', false, { gameFrame: true })).toContain('frame-src https:');
+  });
+
   it('em dev libera eval e não força https', () => {
     const csp = buildContentSecurityPolicy('abc', true);
     expect(csp).toContain("'unsafe-eval'");

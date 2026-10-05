@@ -284,7 +284,7 @@ describe('aviso de "resultado saiu"', () => {
         payload: {
           title: 'Resultado saiu',
           body: `LT TESTE PUSH de ${TODAY.slice(8, 10)}/${TODAY.slice(5, 7)}. Toque para conferir.`,
-          url: `/resultados/loterias/${TODAY}/resultado?sorteios=${drawId}`,
+          url: `/resultados/loterias?data=${TODAY}&sorteios=${drawId}`,
           tag: `result:${drawId}:${TODAY}`,
         },
       },

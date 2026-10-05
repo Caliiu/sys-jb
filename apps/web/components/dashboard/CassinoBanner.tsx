@@ -2,8 +2,9 @@
 
 import { ArrowRight } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
 import type { GameModalityResponse } from '@/lib/modalities';
-import { useToast } from '../ui/Toast';
 import { bannerStyle, findModality } from './modality-tiles';
 
 interface CassinoBannerProps {
@@ -15,18 +16,14 @@ const baseClass =
   'relative w-[calc(100%-2rem)] mx-4 mt-1 h-28 rounded-xl2 overflow-hidden shadow-card text-left block active:scale-[0.98] transition-transform';
 
 export default function CassinoBanner({ modalities, isLoading }: CassinoBannerProps) {
-  const toast = useToast();
   const modality = findModality(modalities, 'cassino');
   if (!isLoading && !modality) return null;
 
-  const open = () => toast.comingSoon('Cassino');
-
   if (modality?.bannerUrl) {
     return (
-      <button
-        type="button"
+      <Link
+        href={ROUTES.casino}
         aria-label="Acessar cassino"
-        onClick={open}
         style={bannerStyle(modality.bannerUrl)}
         className={baseClass}
       />
@@ -34,7 +31,7 @@ export default function CassinoBanner({ modalities, isLoading }: CassinoBannerPr
   }
 
   return (
-    <button type="button" onClick={open} className={baseClass}>
+    <Link href={ROUTES.casino} className={baseClass}>
       <span className="absolute inset-0 bg-gradient-to-br from-purple-900 via-fuchsia-800 to-rose-700" />
       <span
         className="absolute inset-y-0 right-0 w-[68%]"
@@ -58,6 +55,6 @@ export default function CassinoBanner({ modalities, isLoading }: CassinoBannerPr
           Acessar cassino <ArrowRight className="w-3.5 h-3.5" aria-hidden />
         </span>
       </span>
-    </button>
+    </Link>
   );
 }

@@ -25,6 +25,8 @@ import type { ResolvedTenant } from '../tenancy/tenant.types.js';
  */
 const SALE_KINDS = ['FAZENDINHA_BET', 'LOTTERY_BET', 'LOTTERY_REFUND'];
 const COMMISSION_KINDS = ['COMMISSION', 'COMMISSION_REVERSAL'];
+/** Prêmio pago pela apuração: listado por pule em "Prêmios". */
+const PRIZE_KIND = 'PRIZE';
 /** Rótulo mostrado ao jogador: pelo tipo, nunca o motivo digitado no painel (pode ser interno). */
 const ENTRY_LABELS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'Ajuste',
@@ -72,16 +74,22 @@ export class ReportsService {
     const deltas = { balanceJbDelta: true, prizesJbDelta: true, bonusJbDelta: true } as const;
 
     return this.db.withTenant(tenant.id, async (tx) => {
-      const [before, byKind, entries] = await Promise.all([
+      const today = { ...owner, createdAt: { gte: start, lt: end } };
+      const [before, byKind, entries, prizeEntries] = await Promise.all([
         tx.walletEntry.aggregate({ where: { ...owner, createdAt: { lt: start } }, _sum: deltas }),
         tx.walletEntry.groupBy({
           by: ['kind'],
-          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { in: [...SALE_KINDS, ...COMMISSION_KINDS] } },
+          where: { ...today, kind: { in: [...SALE_KINDS, ...COMMISSION_KINDS] } },
           _sum: deltas,
         }),
         tx.walletEntry.findMany({
-          where: { ...owner, createdAt: { gte: start, lt: end }, kind: { notIn: [...SALE_KINDS, ...COMMISSION_KINDS] } },
+          where: { ...today, kind: { notIn: [...SALE_KINDS, ...COMMISSION_KINDS, PRIZE_KIND] } },
           select: { kind: true, ...deltas },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        }),
+        tx.walletEntry.findMany({
+          where: { ...today, kind: PRIZE_KIND },
+          select: { ...deltas, pulePrize: { select: { puleNumber: true } } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         }),
       ]);
@@ -90,22 +98,26 @@ export class ReportsService {
         byKind.filter((row) => kinds.includes(row.kind)).reduce((sum, row) => sum + jbDelta(row._sum), 0);
       const salesCents = -sumOf(SALE_KINDS);
       const commissionCents = sumOf(COMMISSION_KINDS);
+      const prizes = prizeEntries.map((row) => ({
+        puleNumber: row.pulePrize?.puleNumber ?? 0,
+        amountCents: jbDelta(row),
+      }));
       const lines = entries
         .map((row) => ({ label: ENTRY_LABELS[row.kind] ?? 'Outros', amountCents: jbDelta(row) }))
         .filter((line) => line.amountCents !== 0);
       const previousCents = jbDelta(before._sum);
+      const sum = (rows: Array<{ amountCents: number }>) => rows.reduce((total, row) => total + row.amountCents, 0);
 
       return {
         date,
         salesCents,
         commissionCents,
-        prizes: [],
+        prizes,
         entries: lines,
         sentCents: 0,
         receivedCents: 0,
         previousCents,
-        balanceCents:
-          previousCents - salesCents + commissionCents + lines.reduce((sum, line) => sum + line.amountCents, 0),
+        balanceCents: previousCents - salesCents + commissionCents + sum(prizes) + sum(lines),
       };
     });
   }
@@ -233,8 +245,9 @@ export class ReportsService {
     // O número da pule é integer no banco: acima disso, a pule não existe.
     if (puleNumber > MAX_PULE_NUMBER) throw puleNotFound();
     try {
-      await this.db.withTenant(tenant.id, (tx) =>
-        tx.$queryRaw`SELECT lottery_cancel(${puleNumber}::integer, ${session.userId}::uuid)::text AS id`,
+      await this.db.withTenant(
+        tenant.id,
+        (tx) => tx.$queryRaw`SELECT lottery_cancel(${puleNumber}::integer, ${session.userId}::uuid)::text AS id`,
       );
     } catch (error) {
       if (hasSqlState(error, 'P0002')) throw puleNotFound();

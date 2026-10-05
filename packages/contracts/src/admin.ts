@@ -31,6 +31,7 @@ export const PERMISSIONS = [
   'branding.manage',
   'tickets.read',
   'operation.read',
+  'operators.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -50,6 +51,8 @@ export type Permission = (typeof PERMISSIONS)[number];
  * MANAGER de novo no fechamento).
  * Bilhetes: `tickets.read` consulta os pules vendidos (todos os perfis; ninguém altera pule pelo painel).
  * Resumo da operação: `operation.read` vê os números financeiros da banca no período (Gerente e Financeiro).
+ * Operadores: `operators.manage` cadastra, altera, ativa/desativa e gera senha dos operadores da própria banca (só o
+ * Gerente; o banco confere o perfil de novo — ver migration operator_management).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -72,6 +75,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'branding.manage',
     'tickets.read',
     'operation.read',
+    'operators.manage',
   ],
   SUPPORT: ['users.read', 'users.update', 'tickets.read'],
   FINANCE: [
@@ -299,10 +303,44 @@ export interface AdminPrizeListItem {
   player: { id: string; displayId: number; name: string };
 }
 
+/**
+ * Pule apurada cujo resultado o provedor corrigiu depois do pagamento e que, pelo resultado corrigido, teria outro
+ * prêmio. O pago não muda sozinho (a carência já tinha passado): é um aviso para o operador conferir e ajustar a
+ * carteira se for o caso.
+ */
+export interface AdminPrizeReview {
+  game: AdminTicketGame;
+  puleNumber: number;
+  /** Data do jogo (sorteio), YYYY-MM-DD. */
+  drawDate: string;
+  lottery: string;
+  drawCode: string;
+  /** Prêmio pago na apuração (0 = a pule não tinha ganhado). */
+  paidCents: number;
+  /** Prêmio pelo resultado corrigido. */
+  correctedCents: number;
+  /** ISO 8601 da apuração e da conferência com o resultado corrigido. */
+  settledAt: string;
+  checkedAt: string;
+  player: { id: string; displayId: number; name: string };
+}
+
+/** Máximo de avisos de resultado corrigido devolvidos numa consulta (os mais recentes). */
+export const ADMIN_PRIZE_REVIEWS_LIMIT = 200;
+
 /** GET /v1/admin/prizes: pules premiadas no período (data do jogo), maiores prêmios primeiro, e as somas do filtro. */
 export interface AdminPrizeList extends Page<AdminPrizeListItem> {
   /** Soma dos prêmios de todo o filtro (não só da página). */
   totalPrizeCents: number;
+  /** Resultados corrigidos depois do pagamento (mesmo filtro, exceto a faixa de prêmio), mais recentes primeiro. */
+  reviews: AdminPrizeReview[];
+  /** Quantos avisos há no filtro (pode passar de ADMIN_PRIZE_REVIEWS_LIMIT). */
+  reviewsTotal: number;
+  /**
+   * Pules do filtro (exceto a faixa de prêmio) cujo sorteio já passou e que ainda não foram apurados: sorteio sem
+   * resultado ligado, resultado que não chegou ou ainda na carência.
+   */
+  pendingCount: number;
 }
 
 export interface AdminPrizeListQuery {
@@ -595,6 +633,8 @@ export const STATEMENT_KINDS = [
   'COMMISSION',
   'COMMISSION_REVERSAL',
   'OPENING_BALANCE',
+  'PRIZE',
+  'CASINO',
 ] as const;
 export type StatementKind = (typeof STATEMENT_KINDS)[number];
 
@@ -604,7 +644,7 @@ export interface AdminStatementEntry {
   /** ISO 8601. */
   createdAt: string;
   kind: StatementKind;
-  /** Número do pule (aposta, devolução e comissão da aposta); null nos outros lançamentos. */
+  /** Número do pule (aposta, devolução, comissão da aposta e prêmio); null nos outros lançamentos. */
   puleNumber: number | null;
   /** Motivo (crédito pelo painel, ajuste, comissão, saldo anterior). */
   note: string | null;
@@ -669,6 +709,11 @@ export const AUDIT_ACTIONS = [
   'mural.delete',
   'branding.update',
   'home.layout.update',
+  'operator.create',
+  'operator.update',
+  'operator.activate',
+  'operator.deactivate',
+  'operator.password',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -679,10 +724,15 @@ export interface AdminAuditEntry {
   createdAt: string;
   action: AuditAction;
   operator: { id: string; name: string; email: string };
-  /** 'tenant' = ação sobre a banca (ex.: % de indicação, fechamento do mês); aí `target` é null. */
-  targetType: 'user' | 'tenant';
+  /**
+   * 'tenant' = ação sobre a banca (ex.: % de indicação, fechamento do mês); 'operator' = sobre um operador (cadastro,
+   * situação, senha). Nos dois, `target` é null.
+   */
+  targetType: 'user' | 'tenant' | 'operator';
   /** Usuário afetado; null em ações sobre a banca ou se o usuário não existir mais nesta banca. */
   target: { id: string; displayId: number; name: string } | null;
+  /** Operador afetado (targetType 'operator'); null nos outros casos ou se não existir mais nesta banca. */
+  operatorTarget: { id: string; name: string; email: string } | null;
   /**
    * Nomes dos campos alterados; na comissão, antes/depois em centésimos de %; no crédito de carteira, o
    * valor em centavos (fields = a bolsa creditada).
@@ -756,4 +806,45 @@ export interface AdminCommissionSettings {
 /** PUT /v1/admin/commissions/settings. */
 export interface SetCommissionSettingsRequest {
   referralCommissionBps: number;
+}
+
+// ---------------------------------------------------------------------------
+// Operadores (Administração > Operadores; só o Gerente, na própria banca)
+// ---------------------------------------------------------------------------
+
+/** Operador da banca como o Gerente vê (nunca o hash da senha). */
+export interface AdminOperator {
+  id: string;
+  name: string;
+  email: string;
+  role: OperatorRole;
+  active: boolean;
+  /** ISO 8601. */
+  createdAt: string;
+  /** ISO 8601 do último login no painel; null se nunca entrou. */
+  lastLoginAt: string | null;
+  /** É o operador da sessão: não muda o próprio perfil, não se desativa e não gera a própria senha por aqui. */
+  self: boolean;
+}
+
+/** POST /v1/admin/operators (cadastro) e PUT /v1/admin/operators/:id (alteração). */
+export interface SaveOperatorRequest {
+  name: string;
+  /** Único no sistema todo: é o login do painel e diz a qual banca o operador pertence. */
+  email: string;
+  role: OperatorRole;
+}
+
+/** PATCH /v1/admin/operators/:id/status. Desativar encerra as sessões abertas do operador na hora. */
+export interface SetOperatorStatusRequest {
+  active: boolean;
+}
+
+/**
+ * Resposta do cadastro e de POST /v1/admin/operators/:id/password: a senha gerada é mostrada UMA vez (o banco guarda
+ * só o hash). Gerar nova senha encerra as sessões abertas do operador.
+ */
+export interface OperatorPasswordResponse {
+  operator: AdminOperator;
+  password: string;
 }

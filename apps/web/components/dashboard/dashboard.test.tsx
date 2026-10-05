@@ -41,12 +41,13 @@ describe('SideMenu', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('cada item leva à sua página; Cassino e Bingo (sem página) avisam "em breve"', async () => {
+  it('cada item leva à sua página; Bingo (sem página) avisa "em breve"', async () => {
     renderWithProviders(<SideMenu id="menu" open onClose={vi.fn()} />);
     const destinations: Array<[string, string]> = [
       ['Início', '/'],
       ['Perfil', '/perfil'],
       ['Loterias', '/loterias'],
+      ['Cassino', '/cassino'],
       ['Premiadas', '/premiadas'],
       ['Resultados', '/resultados'],
       ['Relatórios', '/relatorios'],
@@ -60,7 +61,7 @@ describe('SideMenu', () => {
       await userEvent.click(screen.getByRole('button', { name: label }));
       expect(router.push, label).toHaveBeenCalledExactlyOnceWith(path);
     }
-    for (const label of ['Cassino', 'Bingo']) {
+    for (const label of ['Bingo']) {
       router.push.mockClear();
       await userEvent.click(screen.getByRole('button', { name: label }));
       expect(router.push).not.toHaveBeenCalled();
@@ -128,7 +129,8 @@ describe('Footer', () => {
 
   it('os demais itens ainda avisam "em breve"', async () => {
     renderWithProviders(<Footer version="1.2.3" />);
-    for (const label of ['Cassino', 'Bingo', 'Raspadinha']) {
+    expect(screen.getByRole('link', { name: 'Cassino' })).toHaveAttribute('href', '/cassino');
+    for (const label of ['Bingo', 'Raspadinha']) {
       await userEvent.click(screen.getByRole('button', { name: label }));
       expect(screen.getByRole('status')).toHaveTextContent(`${label}: disponível em breve.`);
     }
@@ -282,8 +284,8 @@ describe('Toast', () => {
   it('some sozinho depois de alguns segundos', () => {
     vi.useFakeTimers();
     renderWithProviders(<SideMenu id="menu" open onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cassino' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Cassino: disponível em breve.');
+    fireEvent.click(screen.getByRole('button', { name: 'Bingo' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Bingo: disponível em breve.');
     act(() => {
       vi.advanceTimersByTime(3000);
     });

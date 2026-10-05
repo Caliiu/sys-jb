@@ -13,6 +13,7 @@ import {
   isDrawOpenAt,
   isLotteryGame,
   isValidLotteryGuess,
+  lotteryCentenaQuoteCents,
   lotteryItemTotalCents,
   lotteryPossiblePrizeCents,
   lotteryQuoteCents,
@@ -58,6 +59,8 @@ export interface ItemRow {
   split: string;
   totalCents: bigint;
   quoteCents: number;
+  /** Só na MILHAR E CENTENA: a cotação da centena (a apuração paga por ela quem acerta só a centena). */
+  centenaQuoteCents: number | null;
   possiblePrizeCents: bigint;
 }
 
@@ -201,7 +204,9 @@ export class LotteriesService {
         if (quoteCents <= 0) throw modalityUnavailable();
         return {
           modality: item.modality,
-          placement: item.placement,
+          // Combos têm colocação fixa: vale a atual da modalidade (pules antigas de Sena 1/5 e Passe 1/2 repetem com
+          // a regra de hoje).
+          placement: modality?.fixedPlacement ?? item.placement,
           guesses: item.guesses,
           amountCents: Number(item.amountCents),
           split: item.split === 'each' ? ('each' as const) : ('total' as const),
@@ -309,6 +314,7 @@ function toItemRow(
     split: item.split,
     totalCents: BigInt(lotteryItemTotalCents(item.amountCents, item.split, item.guesses.length)),
     quoteCents,
+    centenaQuoteCents: lotteryCentenaQuoteCents(modality, quotes),
     possiblePrizeCents: BigInt(
       lotteryPossiblePrizeCents(modality, placement, item.guesses, item.amountCents, item.split, quoteCents),
     ),

@@ -16,11 +16,14 @@ export const RESULT_LOTTERIES = [
   { code: 'sp', name: 'Bandeirantes São Paulo', extractions: [15] },
   { code: 'pb', name: 'PT Paraíba', extractions: [9, 20] },
   { code: 'pb', name: 'Lotep Paraíba', extractions: [10, 12, 15, 18] },
+  { code: 'lce', name: 'Lotece Ceará', extractions: [11, 14, 15, 19] },
   { code: 'ba', name: 'PT Bahia', extractions: [10, 12, 15, 19, 21] },
   { code: 'mba', name: 'Maluca Bahia', extractions: [10, 12, 15, 19, 21] },
   { code: 'mg', name: 'União Juiz de Fora', extractions: [11] },
+  { code: 'mg', name: 'Alvorada Minas', extractions: [12] },
   { code: 'mg', name: 'Salvação Minas', extractions: [13] },
   { code: 'mg', name: 'Minas Dia/Noite', extractions: [15, 19] },
+  { code: 'mg', name: 'Minas Preferida', extractions: [21] },
   { code: 'lbr', name: 'LBR Brasília', extractions: [8, 10, 12, 15, 17, 19, 20, 22, 23] },
   { code: 'rs', name: 'Bicho RS', extractions: [14, 18] },
   { code: 'lp', name: 'Loteria Popular', extractions: [9, 11, 12, 14, 15, 17, 18] },
@@ -81,8 +84,8 @@ export function resultGroupOf(number: string): number {
   return Math.ceil(tens / 4);
 }
 
-/** Loterias do catálogo com 10 prêmios sorteados (Paraíba e Bahia): o 6º e o 7º não são calculados. */
-const TEN_PRIZE_LOTTERIES: ReadonlySet<string> = new Set(['pb', 'ba', 'mba']);
+/** Loterias do catálogo com 10 prêmios sorteados (Paraíba, Ceará e Bahia): o 6º e o 7º não são calculados. */
+const TEN_PRIZE_LOTTERIES: ReadonlySet<string> = new Set(['pb', 'lce', 'ba', 'mba']);
 
 /**
  * Prêmios completos do resultado. As loterias de 7 prêmios sorteiam 5; o provedor manda o 6º e o 7º já calculados
@@ -105,11 +108,12 @@ export function resultFullPrizes(
 export const extractionLabel = (extraction: number) => `${String(extraction).padStart(2, '0')}h`;
 
 /**
- * Caminho da tela com o resultado das extrações escolhidas num dia (YYYY-MM-DD) no app da banca. Fica aqui porque a
+ * Link que abre a tela de resultados (rota única /resultados/loterias) já no resultado das extrações escolhidas num dia
+ * (YYYY-MM-DD). A tela lê a data e os sorteios e deixa o endereço só como /resultados/loterias. Fica aqui porque a
  * notificação de "resultado saiu", montada pela API, abre a mesma tela.
  */
 export const resultsViewPath = (date: string, drawIds: readonly string[]) =>
-  `/resultados/loterias/${date}/resultado?sorteios=${drawIds.join(',')}`;
+  `/resultados/loterias?data=${date}&sorteios=${drawIds.join(',')}`;
 
 /** Resultado do provedor que vale para um sorteio da banca: sigla + extração (a hora do provedor, não a da banca). */
 export interface ResultSource {

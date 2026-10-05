@@ -1,5 +1,5 @@
 import { prizeDates } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { unauthorized } from 'next/navigation';
 import { TenantUnavailable } from '@/components/ui/Notice';
 import { TenantProvider } from '@/components/tenant/TenantProvider';
 import { formatCalendarDate } from '@/lib/datetime';
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const items = prizeDates(new Date().toISOString()).map((date) => ({
     label: formatCalendarDate(date),

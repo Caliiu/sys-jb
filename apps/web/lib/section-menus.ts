@@ -2,8 +2,10 @@ import { ROUTES } from './routes';
 
 export interface SectionMenuItem {
   label: string;
-  /** Rota da página. Sem rota, o item avisa que a funcionalidade vem em breve. */
+  /** Rota da página. Sem rota (e sem `onSelect`), o item avisa que a funcionalidade vem em breve. */
   href?: string;
+  /** Etapa da própria tela (sem trocar de página): só em listas montadas por componentes de cliente. */
+  onSelect?: () => void;
 }
 
 export interface SectionMenu {

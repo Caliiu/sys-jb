@@ -160,6 +160,8 @@ export * from './quotes.js';
 export * from './lotteries.js';
 export * from './draws.js';
 export * from './prizes.js';
+export * from './settlement.js';
+export * from './casino.js';
 export * from './reports.js';
 export * from './murals.js';
 export * from './branding.js';

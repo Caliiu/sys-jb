@@ -1,5 +1,5 @@
 import { isReportDate, normalizePuleCode, REPORT_DAYS_BACK } from '@sysjb/contracts';
-import { redirect } from 'next/navigation';
+import { redirect, unauthorized } from 'next/navigation';
 import PuleReceiptScreen from '@/components/reports/PuleReceiptScreen';
 import PlayerShell from '@/components/section/PlayerShell';
 import { TenantUnavailable } from '@/components/ui/Notice';
@@ -22,7 +22,7 @@ export default async function Page({
 }) {
   const ctx = await resolveRequest();
   if (!ctx.ok) return <TenantUnavailable hostname={ctx.hostname} message={ctx.message} />;
-  if (!ctx.me) redirect('/login');
+  if (!ctx.me) unauthorized();
 
   const code = normalizePuleCode((await params).numero);
   if (code === null) redirect(ROUTES.puleByCode);
