@@ -225,7 +225,12 @@ export type ListPrizesQuery = z.output<typeof listPrizesQuerySchema>;
  * Período de dias de Brasília: datas reais, início antes do fim, até `maxDays` dias (contando os dois) e fim até hoje
  * (ou até `futureDays` dias à frente, para o que é pela data do jogo).
  */
-function checkPeriod(query: { from: string; to: string }, ctx: z.RefinementCtx, maxDays: number, futureDays = 0): void {
+export function checkPeriod(
+  query: { from: string; to: string },
+  ctx: z.RefinementCtx,
+  maxDays: number,
+  futureDays = 0,
+): void {
   const now = new Date().toISOString();
   const from = dayOffsetOf(now, query.from);
   const to = dayOffsetOf(now, query.to);

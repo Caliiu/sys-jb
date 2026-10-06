@@ -1,4 +1,11 @@
-import { AUDIT_ACTIONS, type AdminAuditEntry, type AuditAction, type AuditPeriod } from '@sysjb/contracts';
+import {
+  AUDIT_ACTIONS,
+  PAYMENT_GATEWAY_INFO,
+  type AdminAuditEntry,
+  type AuditAction,
+  type AuditPeriod,
+  type PaymentGatewayId,
+} from '@sysjb/contracts';
 import { ADMIN_ROUTES } from './admin-routes';
 import { formatBrl } from '../currency';
 import { formatCommission } from './commission';
@@ -83,6 +90,11 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'operator.activate': 'success',
   'operator.deactivate': 'danger',
   'operator.password': 'neutral',
+  'payment.gateway.update': 'neutral',
+  'payment.gateway.activate': 'success',
+  'payment.gateway.deactivate': 'danger',
+  'deposit.approve': 'success',
+  'deposit.reject': 'danger',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
@@ -111,6 +123,11 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'operator.activate': 'Operador ativado',
   'operator.deactivate': 'Operador desativado',
   'operator.password': 'Nova senha de operador',
+  'payment.gateway.update': 'Credenciais de pagamento alteradas',
+  'payment.gateway.activate': 'Gateway de pagamento ativado',
+  'payment.gateway.deactivate': 'Gateway de pagamento desativado',
+  'deposit.approve': 'Depósito em análise liberado',
+  'deposit.reject': 'Depósito em análise recusado',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -142,6 +159,10 @@ export function describeAuditDetails(entry: AdminAuditEntry): string {
     return `${kind} em ${day}/${month}/${year}: ${draw}`;
   }
   if (details.draw) return details.fields.length ? `${details.draw}: ${details.fields.join(', ')}` : details.draw;
+  if (details.gateway) {
+    const label = PAYMENT_GATEWAY_INFO[details.gateway as PaymentGatewayId]?.label ?? details.gateway;
+    return details.fields.length ? `${label}: ${details.fields.join(', ')}` : label;
+  }
   if (details.mural) return details.fields.length ? `${details.mural}: ${details.fields.join(', ')}` : details.mural;
   if (details.fields.includes('referralCommissionBps')) {
     return `Indique e ganhe de ${commission(details.from)} para ${commission(details.to)}`;

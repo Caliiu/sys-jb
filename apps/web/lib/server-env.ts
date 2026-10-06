@@ -70,3 +70,9 @@ export function casinoWebhookIpsRaw(): string {
   ensureEnv();
   return process.env.CASINO_WEBHOOK_IPS ?? '';
 }
+
+/** IPs ou faixas (CIDR) de onde o gateway de pagamento chama o aviso de depósito (PAYMENTS_WEBHOOK_IPS), texto cru. */
+export function paymentsWebhookIpsRaw(): string {
+  ensureEnv();
+  return process.env.PAYMENTS_WEBHOOK_IPS ?? '';
+}

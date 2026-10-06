@@ -5,6 +5,12 @@ import type {
   OperatorPasswordResponse,
   SaveOperatorRequest,
   AdminCommissionSettings,
+  AdminDepositList,
+  AdminDepositListItem,
+  AdminPaymentSettings,
+  PaymentGatewayId,
+  PaymentGatewayTestResult,
+  SavePaymentGatewayRequest,
   AdminDrawsResponse,
   AdminBranding,
   AdminCasinoGeneralReport,
@@ -37,6 +43,7 @@ import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import type { AuditQuery } from './audit-query';
 import type { CasinoGeneralQuery } from './casino-general-query';
+import type { DepositsApiQuery } from './wallet-movements-query';
 import type { GeneralReportQuery } from './general-report-query';
 import type { OperationSummaryQuery } from './operation-summary-query';
 import type { PrizesQuery } from './prizes-query';
@@ -227,6 +234,30 @@ export const adminApi = {
   saveBranding: (session: Caller, body: SaveBrandingRequest) =>
     call<AdminBranding>(session, 'PUT', '/v1/admin/branding', body),
 
+  // Configurações > Pagamentos (as credenciais só vão; nunca voltam).
+  getPaymentSettings: (session: Caller) => call<AdminPaymentSettings>(session, 'GET', '/v1/admin/payments'),
+  savePaymentGateway: (session: Caller, gateway: PaymentGatewayId, body: SavePaymentGatewayRequest) =>
+    call<AdminPaymentSettings>(session, 'PUT', `/v1/admin/payments/${gateway}`, body),
+  setPaymentGatewayActive: (session: Caller, gateway: PaymentGatewayId, active: boolean) =>
+    call<AdminPaymentSettings>(session, 'PUT', `/v1/admin/payments/${gateway}/active`, { active }),
+  testPaymentGateway: (session: Caller, gateway: PaymentGatewayId) =>
+    call<PaymentGatewayTestResult>(session, 'POST', `/v1/admin/payments/${gateway}/test`, {}),
+  /** Carteira > Depósitos. */
+  listDeposits(session: Caller, query: DepositsApiQuery) {
+    const params = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    if (query.userId) params.set('userId', query.userId);
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.status) params.set('status', query.status);
+    return call<AdminDepositList>(session, 'GET', `/v1/admin/deposits?${params}`);
+  },
+  /** Depósito em análise: liberar o crédito ou recusar (só o Gerente). */
+  reviewDeposit: (session: Caller, id: string, approve: boolean) =>
+    call<AdminDepositListItem>(session, 'POST', `/v1/admin/deposits/${id}/review`, { approve }),
   getHomeLayout: (session: Caller) => call<HomeLayout>(session, 'GET', '/v1/admin/branding/home'),
 
   saveHomeLayout: (session: Caller, body: HomeLayout) =>

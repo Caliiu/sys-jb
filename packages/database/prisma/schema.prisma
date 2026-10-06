@@ -75,6 +75,8 @@ model Tenant {
   puleSettlements      PuleSettlement[]
   casinoTransactions   CasinoTransaction[]
   betCommissions       BetCommission[]
+  paymentGateways      PaymentGateway[]
+  pixDeposits          PixDeposit[]
 
   @@map("tenants")
 }
@@ -119,6 +121,7 @@ model User {
   pulePrizes         PulePrize[]
   puleSettlements    PuleSettlement[]
   casinoTransactions CasinoTransaction[]
+  pixDeposits        PixDeposit[]
   betCommissions     BetCommission[]     @relation("BetCommissionReferrer")
   commissionedBets   BetCommission[]     @relation("BetCommissionBettor")
 
@@ -203,6 +206,8 @@ model Operator {
   auditLogs          AuditLog[]
   walletEntries      WalletEntry[]
   commissionClosings CommissionClosing[]
+  paymentGateways    PaymentGateway[]
+  reviewedDeposits   PixDeposit[]        @relation("PixDepositReviewer")
 
   @@unique([tenantId, id])
   @@map("operators")
@@ -358,6 +363,8 @@ model WalletEntry {
   pulePrizeId         String?  @map("pule_prize_id") @db.Uuid
   // Rodada do cassino (CASINO): uma movimentação por transação do provedor.
   casinoTransactionId String?  @map("casino_transaction_id") @db.Uuid
+  // Depósito Pix confirmado (DEPOSIT): um crédito por depósito.
+  pixDepositId        String?  @map("pix_deposit_id") @db.Uuid
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -369,6 +376,7 @@ model WalletEntry {
   betCommission     BetCommission?     @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
   pulePrize         PulePrize?         @relation(fields: [tenantId, pulePrizeId], references: [tenantId, id], onDelete: Restrict)
   casinoTransaction CasinoTransaction? @relation(fields: [tenantId, casinoTransactionId], references: [tenantId, id], onDelete: Restrict)
+  pixDeposit        PixDeposit?        @relation(fields: [tenantId, pixDepositId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, fazendinhaBetId])
   @@unique([tenantId, idempotencyKey])
@@ -377,6 +385,7 @@ model WalletEntry {
   @@unique([tenantId, betCommissionId, kind])
   @@unique([tenantId, pulePrizeId])
   @@unique([tenantId, casinoTransactionId])
+  @@unique([tenantId, pixDepositId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@map("wallet_entries")
 }
@@ -952,4 +961,75 @@ model CasinoTransaction {
   @@index([tenantId, createdAt])
   @@index([tenantId, userId, createdAt])
   @@map("casino_transactions")
+}
+
+// Gateway de pagamento da banca (Configurações > Pagamentos). As credenciais chegam cifradas pela API (AES-256-GCM com
+// PAYMENTS_SECRET_KEY): o banco nunca vê o texto. No máximo um ativo por banca (é por ele que saem as cobranças).
+// Gravado só pelas funções payment_gateway_* (o banco confere de novo que quem altera é Gerente ativo da banca).
+model PaymentGateway {
+  tenantId        String   @map("tenant_id") @db.Uuid
+  // Gateway (@sysjb/contracts, PAYMENT_GATEWAYS), ex.: MISTICPAY.
+  gateway         String
+  // iv (12 bytes) + tag (16) + texto cifrado do JSON das credenciais.
+  credentials     Bytes
+  // Pista para o painel reconhecer a credencial sem mostrá-la (ex.: "pk_…ab12").
+  credentialsHint String   @map("credentials_hint")
+  active          Boolean  @default(false)
+  // Operador que gravou por último.
+  updatedBy       String   @map("updated_by") @db.Uuid
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  operator Operator @relation(fields: [tenantId, updatedBy], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, gateway])
+  @@map("payment_gateways")
+}
+
+// Depósito (recarga) via Pix: a cobrança criada no gateway ativo da banca. O nosso id vai como identificador da
+// transação no gateway. Só a função pix_deposit_confirm marca como pago (uma vez, conferindo o valor) e credita a
+// carteira na mesma transação; mudanças de situação só pelas funções pix_deposit_*.
+model PixDeposit {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  // Gateway que gerou a cobrança (o pagamento é conferido nele, mesmo que a banca troque o ativo depois).
+  gateway               String
+  // LOTTERIES (saldo de loterias) ou GAMES (saldo de games).
+  destination           String
+  amountCents           BigInt    @map("amount_cents")
+  // PENDING, PAID, EXPIRED, CANCELED, REVIEW (pago, mas sem conferência do titular: o Gerente decide) ou REJECTED.
+  status                String    @default("PENDING")
+  // Quem pagou, informado pelo aviso do gateway (CPF/CNPJ só dígitos e nome). Só credita sozinho se for o jogador.
+  payerDocument         String?   @map("payer_document")
+  payerName             String?   @map("payer_name")
+  // Quando o gateway confirmou o pagamento pela primeira vez (prazo para o aviso com o pagador chegar).
+  paymentSeenAt         DateTime? @map("payment_seen_at") @db.Timestamptz(3)
+  // Por que está em análise: PAYER_MISMATCH (outro titular) ou PAYER_UNKNOWN (o aviso com o pagador não chegou).
+  reviewReason          String?   @map("review_reason")
+  // Gerente que liberou ou recusou o depósito em análise, e quando.
+  reviewedBy            String?   @map("reviewed_by") @db.Uuid
+  reviewedAt            DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  // Id da cobrança no gateway.
+  providerTransactionId String?   @map("provider_transaction_id")
+  // BR Code (copia e cola) da cobrança.
+  pixCode               String?   @map("pix_code")
+  // Prazo mostrado ao jogador para pagar (pagamento depois disso ainda é creditado).
+  expiresAt             DateTime  @map("expires_at") @db.Timestamptz(3)
+  // Última consulta ao gateway (espaça as consultas da tela e da rodada automática).
+  lastCheckedAt         DateTime? @map("last_checked_at") @db.Timestamptz(3)
+  paidAt                DateTime? @map("paid_at") @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  reviewer    Operator?    @relation("PixDepositReviewer", fields: [tenantId, reviewedBy], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("pix_deposits")
 }

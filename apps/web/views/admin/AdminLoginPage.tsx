@@ -11,7 +11,7 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-admin-bg px-4 font-body text-admin-text">
       <main className="w-full max-w-sm overflow-hidden rounded-xl bg-admin-surface shadow-admin">
         {/* A logo é clara e sem fundo: fica sobre uma faixa escura (a cor de texto do painel). */}
-        <div className="flex items-center justify-center bg-admin-text px-6 py-6">
+        <div className="flex items-center justify-center bg-admin-accent px-6 py-6">
           <Image
             src="/brands/fenix-igaming.webp"
             alt="Fenix iGaming"

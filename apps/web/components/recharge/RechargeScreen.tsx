@@ -23,9 +23,16 @@ interface RechargeScreenProps {
  * O formulário fica montado (só oculto) durante a etapa 2, para voltar sem perder o que foi digitado.
  * O "ocultar saldo" vale para a barra e para o "Saldo atual".
  */
-export default function RechargeScreen({ wallet, holderName, holderDocument, displayId }: RechargeScreenProps) {
+export default function RechargeScreen({
+  wallet: initialWallet,
+  holderName,
+  holderDocument,
+  displayId,
+}: RechargeScreenProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [charge, setCharge] = useState<PixCharge | null>(null);
+  // Atualizada quando o pagamento é confirmado (o saldo do topo já mostra o crédito).
+  const [wallet, setWallet] = useState(initialWallet);
   const balanceCents = balanceAmounts(wallet).main;
 
   // A etapa nova começa no topo, mesmo que a anterior tenha sido rolada.
@@ -55,6 +62,7 @@ export default function RechargeScreen({ wallet, holderName, holderDocument, dis
             holderDocument={holderDocument}
             charge={charge}
             onRestart={() => setCharge(null)}
+            onPaid={setWallet}
           />
         )}
       </main>

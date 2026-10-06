@@ -28,6 +28,18 @@ import { CasinoWebhookGuard } from './casino/casino-webhook.guard.js';
 import { CasinoWebhookService } from './casino/casino-webhook.service.js';
 import { CasinoService } from './casino/casino.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
+import { DepositsService } from './payments/deposits.service.js';
+import {
+  PAYMENT_GATEWAY_ADAPTERS,
+  PaymentGatewaysService,
+  createGatewayAdapters,
+} from './payments/payment-gateways.service.js';
+import {
+  DepositsAdminController,
+  DepositsController,
+  PaymentsAdminController,
+  PaymentsWebhookController,
+} from './payments/payments.controller.js';
 import { PlayerStatementController } from './admin/player-statement.controller.js';
 import { PlayerStatementService } from './admin/player-statement.service.js';
 import { PrizesAdminService } from './admin/prizes-admin.service.js';
@@ -131,6 +143,10 @@ export class AppModule {
         PushController,
         CasinoController,
         CasinoWebhookController,
+        DepositsController,
+        PaymentsWebhookController,
+        PaymentsAdminController,
+        DepositsAdminController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -184,6 +200,9 @@ export class AppModule {
         ResultNotifier,
         CasinoService,
         CasinoWebhookService,
+        { provide: PAYMENT_GATEWAY_ADAPTERS, useValue: createGatewayAdapters(config.payments) },
+        PaymentGatewaysService,
+        DepositsService,
         CasinoWebhookGuard,
         MaintenanceService,
       ],

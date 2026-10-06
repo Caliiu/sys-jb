@@ -32,6 +32,8 @@ export const PERMISSIONS = [
   'tickets.read',
   'operation.read',
   'operators.manage',
+  'payments.read',
+  'payments.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -53,6 +55,9 @@ export type Permission = (typeof PERMISSIONS)[number];
  * Resumo da operação: `operation.read` vê os números financeiros da banca no período (Gerente e Financeiro).
  * Operadores: `operators.manage` cadastra, altera, ativa/desativa e gera senha dos operadores da própria banca (só o
  * Gerente; o banco confere o perfil de novo — ver migration operator_management).
+ * Pagamentos: `payments.read` vê os gateways configurados (sem as credenciais); `payments.manage` grava credenciais,
+ * testa, escolhe o gateway ativo e libera ou recusa depósitos em análise (pagos por outro titular) — só o Gerente; o
+ * banco confere o perfil de novo (migrations payments e deposit_payer).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -76,6 +81,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'tickets.read',
     'operation.read',
     'operators.manage',
+    'payments.read',
+    'payments.manage',
   ],
   SUPPORT: ['users.read', 'users.update', 'tickets.read'],
   FINANCE: [
@@ -86,6 +93,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'draws.read',
     'tickets.read',
     'operation.read',
+    'payments.read',
   ],
 };
 
@@ -714,6 +722,11 @@ export const AUDIT_ACTIONS = [
   'operator.activate',
   'operator.deactivate',
   'operator.password',
+  'payment.gateway.update',
+  'payment.gateway.activate',
+  'payment.gateway.deactivate',
+  'deposit.approve',
+  'deposit.reject',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -758,6 +771,8 @@ export type AuditDetails = {
   date?: string;
   /** Nome do mural. */
   mural?: string;
+  /** Gateway de pagamento (ex.: MISTICPAY); nunca as credenciais. */
+  gateway?: string;
 };
 
 /** GET /v1/admin/audit: mais recentes primeiro; filtros opcionais por ação e por usuário afetado. */

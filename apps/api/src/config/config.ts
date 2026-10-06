@@ -6,6 +6,7 @@ import { type OverdueConfig, loadOverdueConfig } from '../overdue/overdue.config
 import { type PrizesConfig, loadPrizesConfig } from '../prizes/prizes.config.js';
 import { type CasinoConfig, loadCasinoConfig } from '../casino/casino.config.js';
 import { type PushConfig, loadPushConfig } from '../push/push.config.js';
+import { type PaymentsConfig, loadPaymentsConfig } from '../payments/payments.config.js';
 import { parseResultsWebhookToken } from '../results/results.config.js';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
@@ -44,6 +45,8 @@ export interface AppConfig {
   maintenancePurgeMs: number | null;
   /** Cassino PlayFivers (PLAYFIVERS_*, CASINO_WEBHOOK_TOKEN); null = desligado (o lobby avisa, nenhum jogo abre). */
   casino: CasinoConfig | null;
+  /** Pagamentos (PAYMENTS_SECRET_KEY, MISTICPAY_API_URL); null = desligados (recarga indisponível, painel avisa). */
+  payments: PaymentsConfig | null;
 }
 
 export const MIN_SERVICE_KEY_LENGTH = 32;
@@ -141,6 +144,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     push: loadPushConfig(env),
     prizes: loadPrizesConfig(env),
     casino: loadCasinoConfig(env),
+    payments: loadPaymentsConfig(env),
     maintenancePurgeMs: 24 * 60 * 60 * 1000,
   };
 }

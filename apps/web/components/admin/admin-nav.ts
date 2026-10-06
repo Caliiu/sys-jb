@@ -9,6 +9,7 @@ import {
   FileText,
   HandCoins,
   House,
+  Landmark,
   Layers,
   type LucideIcon,
   Megaphone,
@@ -206,6 +207,7 @@ export const ADMIN_NAV: NavEntry[] = [
         // Abas Identidade visual e Cards do início (branding.read) e Valores (commissions.read).
         permission: ['branding.read', 'commissions.read'],
       },
+      { href: ADMIN_ROUTES.payments, label: 'Pagamentos', icon: Landmark, permission: 'payments.read' },
     ],
   },
 ];

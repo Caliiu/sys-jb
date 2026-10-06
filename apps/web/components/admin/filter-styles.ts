@@ -15,6 +15,6 @@ export const smallButtonClass =
 export const chipClass = (active: boolean) =>
   `inline-flex h-10 items-center rounded-md border px-3.5 text-[14px] font-medium ${
     active
-      ? 'border-admin-text bg-admin-text text-white'
+      ? 'border-admin-accent bg-admin-accent text-white'
       : 'border-admin-border bg-admin-surface text-admin-text hover:bg-admin-hover'
   }`;

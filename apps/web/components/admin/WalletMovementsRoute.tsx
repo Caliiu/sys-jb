@@ -4,6 +4,7 @@ import { can, requireAdmin } from '@/lib/admin/admin-context';
 import {
   type WalletMovementKind,
   WALLET_MOVEMENTS,
+  depositsApiQuery,
   parseWalletMovementsQuery,
 } from '@/lib/admin/wallet-movements-query';
 import WalletMovementsPage from '@/views/admin/WalletMovementsPage';
@@ -32,9 +33,10 @@ export default async function WalletMovementsRoute({
 
   const nowIso = new Date().toISOString();
   const query = parseWalletMovementsQuery(kind, await searchParams, nowIso);
-  const [promoters, player] = await Promise.all([
+  const [promoters, player, deposits] = await Promise.all([
     adminApi.listPromoterOptions(session),
     query.userId ? adminApi.getUser(session, query.userId) : null,
+    kind === 'deposits' && query.searched ? adminApi.listDeposits(session, depositsApiQuery(query)) : null,
   ]);
 
   return (
@@ -44,6 +46,8 @@ export default async function WalletMovementsRoute({
       today={drawDateOf(nowIso, 0)}
       promoters={promoters.ok ? promoters.data : null}
       player={player?.ok ? { id: player.data.id, displayId: player.data.displayId, name: player.data.name } : null}
+      deposits={deposits ? (deposits.ok ? deposits.data : 'error') : null}
+      canReview={can(session.operator, 'payments.manage')}
     />
   );
 }

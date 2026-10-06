@@ -7,7 +7,8 @@ vi.mock('./server-env', () => ({
   casinoWebhookIpsRaw: () => allowedIps,
 }));
 
-const { forwardCasinoWebhook, parseSourceAllowlist, sourceAllowed } = await import('./casino-webhook');
+const { forwardCasinoWebhook } = await import('./casino-webhook');
+const { parseSourceAllowlist, sourceAllowed } = await import('./source-allowlist');
 
 const PROVIDER_IP = '203.0.113.10';
 

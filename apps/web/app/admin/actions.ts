@@ -14,6 +14,9 @@ import type {
   AdminOperator,
   OperatorLoginResponse,
   OperatorPasswordResponse,
+  AdminPaymentSettings,
+  AdminDepositListItem,
+  PaymentGatewayTestResult,
 } from '@sysjb/contracts';
 import {
   DRAW_EXCEPTION_KINDS,
@@ -28,6 +31,7 @@ import {
   MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
   OPERATOR_ROLES,
+  PAYMENT_GATEWAYS,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
 } from '@sysjb/contracts';
@@ -500,6 +504,74 @@ export async function saveHomeLayoutAction(input: unknown): Promise<AdminActionR
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.saveHomeLayout(caller, body.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+// ---------------------------------------------------------------------------
+// Configurações > Pagamentos: a API confere o perfil (só o Gerente altera) e o formato das credenciais; aqui, só o
+// tamanho. As credenciais seguem direto para a API e nunca voltam.
+// ---------------------------------------------------------------------------
+
+const gatewaySchema = z.enum(PAYMENT_GATEWAYS);
+const savePaymentGatewaySchema = z.strictObject({
+  clientId: z.string().max(300),
+  clientSecret: z.string().max(300),
+  activate: z.boolean(),
+});
+
+/** Grava as credenciais do gateway (substituem as anteriores); `activate` já o deixa como o gateway da banca. */
+export async function savePaymentGatewayAction(
+  gateway: unknown,
+  input: unknown,
+): Promise<AdminActionResult<AdminPaymentSettings>> {
+  const id = gatewaySchema.safeParse(gateway);
+  const body = savePaymentGatewaySchema.safeParse(input);
+  if (!id.success || !body.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.savePaymentGateway(caller, id.data, body.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Ativa (o único da banca) ou desativa um gateway já configurado. */
+export async function setPaymentGatewayActiveAction(
+  gateway: unknown,
+  active: unknown,
+): Promise<AdminActionResult<AdminPaymentSettings>> {
+  const id = gatewaySchema.safeParse(gateway);
+  if (!id.success || typeof active !== 'boolean') return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.setPaymentGatewayActive(caller, id.data, active);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** "Testar conexão" com as credenciais gravadas. */
+export async function testPaymentGatewayAction(gateway: unknown): Promise<AdminActionResult<PaymentGatewayTestResult>> {
+  const id = gatewaySchema.safeParse(gateway);
+  if (!id.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.testPaymentGateway(caller, id.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+const depositIdSchema = z.uuid();
+
+/** Depósito em análise (pago por outro titular): libera o crédito ou recusa. A API confere o perfil e audita. */
+export async function reviewDepositAction(
+  depositId: unknown,
+  approve: unknown,
+): Promise<AdminActionResult<AdminDepositListItem>> {
+  const id = depositIdSchema.safeParse(depositId);
+  if (!id.success || typeof approve !== 'boolean') return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.reviewDeposit(caller, id.data, approve);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

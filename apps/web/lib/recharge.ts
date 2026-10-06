@@ -1,15 +1,22 @@
+import { DEPOSIT_LIMITS, type DepositDestination } from '@sysjb/contracts';
 import { formatBrl, parseCurrencyInput } from './currency';
 
-/** Valor mínimo de recarga (R$ 1,00), em centavos. */
-export const MIN_RECHARGE_CENTS = 100;
-/** Teto da tela (R$ 10.000,00): evita valores absurdos por digitação ou toques repetidos. */
-export const MAX_RECHARGE_CENTS = 1_000_000;
+/** Valor mínimo de recarga (R$ 1,00), em centavos (o mesmo da API). */
+export const MIN_RECHARGE_CENTS = DEPOSIT_LIMITS.minCents;
+/** Teto (R$ 10.000,00): evita valores absurdos por digitação ou toques repetidos (o mesmo da API). */
+export const MAX_RECHARGE_CENTS = DEPOSIT_LIMITS.maxCents;
 
 /** Valores rápidos (+R$ 30, 50, 100, 200), em centavos. */
 export const QUICK_AMOUNTS_CENTS = [3000, 5000, 10000, 20000] as const;
 export const POPULAR_AMOUNT_CENTS = 5000;
 
 export type RechargeDestination = 'lotteries' | 'games';
+
+/** Destino da tela -> destino do depósito na API. */
+export const DEPOSIT_DESTINATION: Readonly<Record<RechargeDestination, DepositDestination>> = {
+  lotteries: 'LOTTERIES',
+  games: 'GAMES',
+};
 
 export interface DestinationOption {
   value: RechargeDestination;
@@ -39,19 +46,19 @@ export function validateRecharge(cents: number, destination: RechargeDestination
   return null;
 }
 
-/** Tempo para pagar a cobrança Pix, em segundos. */
-export const PIX_CHARGE_SECONDS = 300;
+/** Tempo para pagar a cobrança Pix, em segundos (o mesmo prazo da API). */
+export const PIX_CHARGE_SECONDS = DEPOSIT_LIMITS.expiresInSeconds;
 
 /** Cobrança Pix pronta para pagamento. */
 export interface PixCharge {
+  /** Depósito na API (a tela acompanha a confirmação por ele). */
+  depositId: string;
   /** BR Code "copia e cola"; o mesmo texto vira o QR Code. */
   code: string;
   amountCents: number;
   /** ISO 8601. */
   expiresAt: string;
   durationSeconds: number;
-  /** true: cobrança de desenvolvimento, que nenhum banco consegue pagar. */
-  isTest: boolean;
 }
 
 export interface ChargeRequest {

@@ -31,7 +31,16 @@ describe('menu do painel (configuração)', () => {
       ],
       Carteira: ['Depósitos', 'Extrato apostador', 'Saques'],
       CRM: ['Apostadores inativos', 'Nunca depositantes'],
-      Configurações: ['Grupos de cobrança', 'Rotas', 'Seções', 'Cotações', 'Sorteios', 'Mural', 'Personalização'],
+      Configurações: [
+        'Grupos de cobrança',
+        'Rotas',
+        'Seções',
+        'Cotações',
+        'Sorteios',
+        'Mural',
+        'Personalização',
+        'Pagamentos',
+      ],
     });
     expect(
       ADMIN_NAV.filter(isNavGroup)
@@ -59,6 +68,15 @@ describe('menu do painel (configuração)', () => {
       expect(canSeeNavLink(ROLE_PERMISSIONS.FINANCE, item), item.label).toBe(true);
       expect(canSeeNavLink(ROLE_PERMISSIONS.SUPPORT, item), item.label).toBe(false);
     }
+  });
+
+  it('Pagamentos: Gerente e Financeiro veem (só o Gerente altera, na própria página); Suporte não', () => {
+    const { item } = findNavItem('/configuracoes/pagamentos')!;
+    expect(item.soon).toBeUndefined();
+    expect(canSeeNavLink(ROLE_PERMISSIONS.MANAGER, item)).toBe(true);
+    expect(canSeeNavLink(ROLE_PERMISSIONS.FINANCE, item)).toBe(true);
+    expect(canSeeNavLink(ROLE_PERMISSIONS.SUPPORT, item)).toBe(false);
+    expect(breadcrumbOf('/configuracoes/pagamentos')).toEqual(['Configurações', 'Pagamentos']);
   });
 
   it('cadastros "em breve" de Configurações são só do Gerente', () => {

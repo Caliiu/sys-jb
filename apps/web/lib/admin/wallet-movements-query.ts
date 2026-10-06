@@ -1,11 +1,12 @@
-import { OPERATION_SUMMARY_MAX_DAYS, drawDateOf } from '@sysjb/contracts';
+import { type DepositStatus, OPERATION_SUMMARY_MAX_DAYS, drawDateOf } from '@sysjb/contracts';
 import { ADMIN_ROUTES } from './admin-routes';
+import { parsePageSize } from './page-size';
 import { isValidPeriod } from './period';
 
 /**
- * Carteira > Depósitos e Carteira > Saques: as mesmas telas de filtro, cada uma com os seus status. Os registros ainda
- * não existem no sistema (dependem da integração de pagamento); por isso os status ficam aqui, só na tela, até virarem
- * contrato da API.
+ * Carteira > Depósitos e Carteira > Saques: as mesmas telas de filtro, cada uma com os seus status. Depósitos vêm da
+ * API (integração de pagamento); os saques ainda não são registrados no sistema, então os status deles ficam só aqui,
+ * na tela, até virarem contrato da API.
  */
 export type WalletMovementKind = 'deposits' | 'withdrawals';
 
@@ -14,6 +15,25 @@ interface StatusOption {
   param: string;
   label: string;
 }
+
+/** Situação do depósito na URL (em português) -> na API. */
+export const DEPOSIT_STATUS_PARAMS: Readonly<Record<string, DepositStatus>> = {
+  pendente: 'PENDING',
+  'em-analise': 'REVIEW',
+  pago: 'PAID',
+  expirado: 'EXPIRED',
+  cancelado: 'CANCELED',
+  recusado: 'REJECTED',
+};
+
+export const DEPOSIT_STATUS_LABELS: Readonly<Record<DepositStatus, string>> = {
+  PENDING: 'Pendente',
+  REVIEW: 'Em análise',
+  PAID: 'Pago',
+  EXPIRED: 'Expirado',
+  CANCELED: 'Cancelado',
+  REJECTED: 'Recusado',
+};
 
 export interface WalletMovementConfig {
   title: string;
@@ -32,11 +52,13 @@ export const WALLET_MOVEMENTS: Readonly<Record<WalletMovementKind, WalletMovemen
     noun: 'depósito',
     statuses: [
       { param: 'pendente', label: 'Pendente' },
+      { param: 'em-analise', label: 'Em análise' },
       { param: 'pago', label: 'Pago' },
       { param: 'expirado', label: 'Expirado' },
       { param: 'cancelado', label: 'Cancelado' },
+      { param: 'recusado', label: 'Recusado' },
     ],
-    columns: ['ID', 'Data/Hora', 'Apostador', 'Forma', 'Valor', 'Status'],
+    columns: ['Data/Hora', 'Apostador', 'Pagador', 'Destino', 'Gateway', 'Valor', 'Status'],
   },
   withdrawals: {
     title: 'Saques',
@@ -66,6 +88,31 @@ export interface WalletMovementsQuery {
   promoterId: string;
   /** Status da lista do tipo; '' = todos. */
   status: string;
+  page: number;
+  pageSize: number;
+}
+
+/** Filtros no formato da API de depósitos. */
+export interface DepositsApiQuery {
+  from: string;
+  to: string;
+  page: number;
+  pageSize: number;
+  userId?: string;
+  promoterId?: string;
+  status?: DepositStatus;
+}
+
+export function depositsApiQuery(query: WalletMovementsQuery): DepositsApiQuery {
+  return {
+    from: query.from,
+    to: query.to,
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.userId ? { userId: query.userId } : {}),
+    ...(query.promoterId ? { promoterId: query.promoterId } : {}),
+    ...(query.status ? { status: DEPOSIT_STATUS_PARAMS[query.status] } : {}),
+  };
 }
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -85,6 +132,7 @@ export function parseWalletMovementsQuery(
   const to = first(raw.ate) ?? '';
   const valid = isValidPeriod(nowIso, from, to, OPERATION_SUMMARY_MAX_DAYS);
   const status = first(raw.status) ?? '';
+  const page = Number(first(raw.page));
   return {
     searched: valid,
     from: valid ? from : today,
@@ -92,14 +140,21 @@ export function parseWalletMovementsQuery(
     userId: uuidOf(raw.apostador),
     promoterId: uuidOf(raw.promotor),
     status: WALLET_MOVEMENTS[kind].statuses.some((option) => option.param === status) ? status : '',
+    page: Number.isInteger(page) && page >= 1 && page <= 1_000_000 ? page : 1,
+    pageSize: parsePageSize(raw.pageSize),
   };
 }
 
 /** Endereço da lista com os filtros (o período sempre vai: é ele que marca "pesquisado"); omite o que é padrão. */
-export function walletMovementsHref(kind: WalletMovementKind, query: Omit<WalletMovementsQuery, 'searched'>): string {
+export function walletMovementsHref(
+  kind: WalletMovementKind,
+  query: Omit<WalletMovementsQuery, 'searched' | 'page' | 'pageSize'> & { page?: number; pageSize?: number },
+): string {
   const params = new URLSearchParams({ de: query.from, ate: query.to });
   if (query.userId) params.set('apostador', query.userId);
   if (query.status) params.set('status', query.status);
   if (query.promoterId) params.set('promotor', query.promoterId);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  if (query.pageSize && query.pageSize !== parsePageSize(undefined)) params.set('pageSize', String(query.pageSize));
   return `${WALLET_MOVEMENTS[kind].href}?${params}`;
 }

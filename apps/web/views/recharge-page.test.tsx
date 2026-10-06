@@ -6,12 +6,14 @@ import type { PixCharge } from '@/lib/recharge';
 import { renderWithProviders, router, tenant, user } from '@/test/render';
 
 const createPixChargeAction = vi.fn();
+const depositStatusAction = vi.fn();
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ logout: vi.fn() }) }));
 vi.mock('@/app/auth-actions', () => ({ meAction: vi.fn() }));
 vi.mock('@/app/recharge-actions', () => ({
   createPixChargeAction: (...args: unknown[]) => createPixChargeAction(...args),
+  depositStatusAction: (...args: unknown[]) => depositStatusAction(...args),
 }));
 
 const { default: RechargePage } = await import('./RechargePage');
@@ -25,11 +27,11 @@ const code = buildStaticPixPayload({
   txid: 'LOT0123456789',
 });
 const charge: PixCharge = {
+  depositId: '6f0c3a52-1d9b-4c55-8a4e-2f1b9c7d3e10',
   code,
   amountCents: 5000,
   durationSeconds: 300,
   expiresAt: new Date(NOW.getTime() + 271_000).toISOString(), // 04:31
-  isTest: false,
 };
 
 const amount = () => screen.getByRole('textbox', { name: 'Quanto deseja creditar?' });
@@ -38,6 +40,7 @@ const advance = () => screen.getByRole('button', { name: /Avançar|Gerando/ });
 beforeEach(() => {
   vi.clearAllMocks();
   createPixChargeAction.mockResolvedValue({ ok: true, charge });
+  depositStatusAction.mockResolvedValue({ ok: true, status: 'PENDING', wallet: null });
   // setTimeout fica real: o asyncWrapper do Testing Library depende dele (o contador só usa Date e setInterval).
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(NOW);
@@ -262,9 +265,82 @@ describe('RechargePage: pagamento', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Recarga Pix' })).toBeInTheDocument();
   });
 
-  it('cobrança de teste é sinalizada', async () => {
-    createPixChargeAction.mockResolvedValue({ ok: true, charge: { ...charge, isTest: true } });
+  it('acompanha o depósito: pendente continua na tela; pago mostra a confirmação e o saldo novo no topo', async () => {
+    const ui = setup();
+    await openPayment(ui);
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(depositStatusAction).toHaveBeenCalledWith(charge.depositId);
+    expect(screen.getByRole('timer')).toBeInTheDocument();
+
+    depositStatusAction.mockResolvedValue({
+      ok: true,
+      status: 'PAID',
+      wallet: { ...user.wallet, balanceJb: user.wallet.balanceJb + 5000 },
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Pagamento confirmado!' })).toBeInTheDocument();
+    expect(screen.getByText('R$ 50,00 creditado na sua carteira.')).toBeInTheDocument();
+    // Saldo do topo e do formulário já com o crédito (era R$ 1.235,00).
+    expect(screen.getAllByText('R$ 1.285,00').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'Voltar ao início' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('timer')).toBeNull();
+
+    // Pago: não pergunta mais.
+    const calls = depositStatusAction.mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+    });
+    expect(depositStatusAction).toHaveBeenCalledTimes(calls);
+
+    await ui.click(screen.getByRole('button', { name: 'Fazer outra recarga' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Recarga Pix' })).toBeInTheDocument();
+  });
+
+  it('pago por outra conta: mostra "em análise" (sem crédito) e para de perguntar', async () => {
+    depositStatusAction.mockResolvedValue({ ok: true, status: 'REVIEW', wallet: null });
     await openPayment(setup());
-    expect(screen.getByRole('note')).toHaveTextContent('Cobrança de teste');
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Pagamento em análise' })).toBeInTheDocument();
+    expect(screen.getByText(/não saiu de uma conta no seu CPF/)).toBeInTheDocument();
+    expect(screen.queryByText('R$ 1.285,00')).toBeNull();
+    const calls = depositStatusAction.mock.calls.length;
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+    });
+    expect(depositStatusAction).toHaveBeenCalledTimes(calls);
+  });
+
+  it('recusado pela banca: orienta a falar com o suporte', async () => {
+    depositStatusAction.mockResolvedValue({ ok: true, status: 'REJECTED', wallet: null });
+    await openPayment(setup());
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Pagamento recusado' })).toBeInTheDocument();
+    expect(screen.getByText(/Fale com o suporte/)).toBeInTheDocument();
+  });
+
+  it('sessão encerrada durante o acompanhamento leva ao login', async () => {
+    depositStatusAction.mockResolvedValue({ ok: false, code: 'SESSION_INVALID' });
+    await openPayment(setup());
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(router.replace).toHaveBeenCalledWith('/login');
+  });
+
+  it('falha de rede ao acompanhar não quebra a tela', async () => {
+    depositStatusAction.mockRejectedValue(new Error('rede'));
+    await openPayment(setup());
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(screen.getByRole('timer')).toBeInTheDocument();
   });
 });

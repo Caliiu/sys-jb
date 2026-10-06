@@ -39,6 +39,8 @@ export const ADMIN_ROUTES = {
   homeLayout: '/personalizacao/cards-inicio',
   /** Valores: "Indique e ganhe" e o fechamento mensal das comissões (antes, Carteira > Comissões em /comissoes). */
   values: '/personalizacao/valores',
+  /** Gateways de pagamento (credenciais e o gateway ativo da banca). */
+  payments: '/configuracoes/pagamentos',
   // Administração (rodapé do menu)
   operators: '/operadores',
   audit: '/auditoria',
