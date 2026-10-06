@@ -153,7 +153,7 @@ describe('GET /v1/admin/operation-summary', () => {
       result: { wageredCents: 0, prizesCents: 0, grossCents: 0, commissionCents: 0, netCents: 0 },
       lotteries: { turnoverCents: 0, payoutCents: 0, netCents: 0 },
       casino: { turnoverCents: 0, payoutCents: 0, netCents: 0 },
-      unavailable: ['deposits', 'withdrawals', 'casino'],
+      unavailable: ['casino'],
     });
   });
 

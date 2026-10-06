@@ -101,10 +101,22 @@ describe('forwardPaymentWebhook', () => {
       [`?d=nao-uuid&t=${TOKEN}`, 'misticpay'],
       [`?d=${DEPOSIT}&t=curto`, 'misticpay'],
       [signed, '../admin'],
+      // Depósito e saque ao mesmo tempo: ambíguo.
+      [`?d=${DEPOSIT}&s=${DEPOSIT}&t=${TOKEN}`, 'misticpay'],
+      [`?s=nao-uuid&t=${TOKEN}`, 'misticpay'],
     ] as const) {
       expect((await forwardPaymentWebhook(post(query), gateway, GATEWAY_IP)).status).toBe(401);
     }
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('aviso de saque (?s=): repassa o id do saque e a assinatura à API', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await forwardPaymentWebhook(post(`?s=${DEPOSIT}&t=${TOKEN}`), 'misticpay', GATEWAY_IP);
+    expect(res.status).toBe(200);
+    const [url] = fetchMock.mock.calls[0] as unknown as [URL];
+    expect(String(url)).toBe(`http://api.internal:4000/v1/integrations/payments/misticpay?s=${DEPOSIT}&t=${TOKEN}`);
   });
 
   it('assinatura recusada pela API = 401; API fora do ar ou erro = 502 (o gateway reenvia)', async () => {

@@ -16,12 +16,31 @@ interface WithdrawalListProps {
   nowIso: string;
   refreshing: boolean;
   onRefresh: () => void;
+  /** Sem saques: mostra o estado vazio (false quando a lista não pôde ser lida). */
+  showEmpty?: boolean;
 }
 
 /** Lista "Meus saques": contagem, atualizar, grupos por dia e detalhes ao tocar. Sem saques, o estado vazio. */
-export default function WithdrawalList({ items, holderName, nowIso, refreshing, onRefresh }: WithdrawalListProps) {
-  const [selected, setSelected] = useState<WithdrawalItem | null>(null);
+export default function WithdrawalList({
+  items,
+  holderName,
+  nowIso,
+  refreshing,
+  onRefresh,
+  showEmpty = true,
+}: WithdrawalListProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const groups = useMemo(() => groupWithdrawalsByDay(items, nowIso), [items, nowIso]);
+  // O detalhe segue a lista: depois de atualizar (ex.: cancelado), mostra a situação nova.
+  const selected = items.find((item) => item.id === selectedId) ?? null;
+
+  if (items.length === 0 && !showEmpty) {
+    return (
+      <div className="flex justify-center pt-6">
+        <RefreshButton refreshing={refreshing} onRefresh={onRefresh} />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -43,15 +62,7 @@ export default function WithdrawalList({ items, holderName, nowIso, refreshing, 
         <p className="text-[11.5px] font-semibold uppercase tracking-wide text-gray-500">
           {items.length} {items.length === 1 ? 'resgate' : 'resgates'}
         </p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 text-[13px] font-semibold text-brand-primary disabled:opacity-60"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} aria-hidden />
-          Atualizar
-        </button>
+        <RefreshButton refreshing={refreshing} onRefresh={onRefresh} />
       </div>
 
       {groups.map((group) => (
@@ -62,7 +73,7 @@ export default function WithdrawalList({ items, holderName, nowIso, refreshing, 
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={() => setSelected(item)}
+                  onClick={() => setSelectedId(item.id)}
                   aria-label={`Resgate de ${formatBrl(item.amountCents)}, ${formatTime(item.createdAt)}`}
                   className="flex w-full items-center gap-2 rounded-xl bg-white px-4 py-3 text-left shadow-sm active:scale-[0.99] transition-transform"
                 >
@@ -88,7 +99,26 @@ export default function WithdrawalList({ items, holderName, nowIso, refreshing, 
         </section>
       ))}
 
-      <WithdrawalDetailsSheet item={selected} holderName={holderName} onClose={() => setSelected(null)} />
+      <WithdrawalDetailsSheet
+        item={selected}
+        holderName={holderName}
+        onClose={() => setSelectedId(null)}
+        onChanged={onRefresh}
+      />
     </>
+  );
+}
+
+function RefreshButton({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRefresh}
+      disabled={refreshing}
+      className="flex items-center gap-1.5 text-[13px] font-semibold text-brand-primary disabled:opacity-60"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} aria-hidden />
+      Atualizar
+    </button>
   );
 }

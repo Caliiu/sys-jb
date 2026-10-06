@@ -18,12 +18,21 @@ export default async function Page() {
     return <AdminMessage title="Sem permissão">Seu perfil não pode consultar os pagamentos.</AdminMessage>;
   }
 
-  const res = await adminApi.getPaymentSettings(session);
+  const [res, withdrawals] = await Promise.all([
+    adminApi.getPaymentSettings(session),
+    adminApi.getWithdrawalSettings(session),
+  ]);
   if (!res.ok) {
     const failure = toAdminFailure(res.status, res.error);
     if (failure.code === 'SESSION_INVALID') unauthorized();
     return <AdminMessage title="Não foi possível carregar os pagamentos">{failure.message}</AdminMessage>;
   }
 
-  return <PaymentsPage settings={res.data} canManage={can(session.operator, 'payments.manage')} />;
+  return (
+    <PaymentsPage
+      settings={res.data}
+      withdrawals={withdrawals.ok ? withdrawals.data : null}
+      canManage={can(session.operator, 'payments.manage')}
+    />
+  );
 }

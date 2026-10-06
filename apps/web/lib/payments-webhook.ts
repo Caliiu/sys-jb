@@ -15,8 +15,9 @@ const reply = (status: number) =>
   Response.json({ ok: status === 200 }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 /**
- * Aviso (webhook) do gateway de pagamento. O endereço de cada depósito leva o id e a assinatura dele
- * (/integracoes/pagamentos/<gateway>?d=...&t=...); aqui passam id, assinatura (no formato certo) e o corpo JSON (com
+ * Aviso (webhook) do gateway de pagamento. O endereço de cada depósito (d) ou saque (s) leva o id e a assinatura dele
+ * (/integracoes/pagamentos/<gateway>?d=...&t=... ou ?s=...&t=...); aqui passam id, assinatura (no formato certo) e
+ * o corpo JSON (com
  * limite de tamanho) para a API, que não é exposta à internet. A API confere a assinatura e só aproveita do corpo quem
  * pagou; situação e valor ela confere no próprio gateway. Antes, a origem precisa estar em PAYMENTS_WEBHOOK_IPS: com a
  * lista, nem um endereço vazado (com a assinatura) serve a quem não é o gateway. O web não guarda segredo nenhum da
@@ -34,9 +35,17 @@ export async function forwardPaymentWebhook(
     return reply(403);
   }
   const params = new URL(request.url).searchParams;
-  const depositId = params.get('d') ?? '';
+  // Aviso de um depósito (d) ou de um saque (s): exatamente um dos dois.
+  const depositId = params.get('d');
+  const withdrawalId = params.get('s');
+  const subject: ['d' | 's', string] | null =
+    depositId !== null && withdrawalId === null
+      ? ['d', depositId]
+      : withdrawalId !== null && depositId === null
+        ? ['s', withdrawalId]
+        : null;
   const token = params.get('t') ?? '';
-  if (!GATEWAY.test(gateway) || !UUID.test(depositId) || !TOKEN.test(token)) {
+  if (!GATEWAY.test(gateway) || !subject || !UUID.test(subject[1]) || !TOKEN.test(token)) {
     await request.body?.cancel();
     return reply(401);
   }
@@ -49,7 +58,7 @@ export async function forwardPaymentWebhook(
   if (body === null) return reply(413);
 
   const target = new URL(`/v1/integrations/payments/${gateway}`, apiBaseUrl());
-  target.searchParams.set('d', depositId);
+  target.searchParams.set(subject[0], subject[1]);
   target.searchParams.set('t', token);
   let res: Response;
   try {

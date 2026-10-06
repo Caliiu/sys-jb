@@ -7,6 +7,11 @@ import type {
   AdminCommissionSettings,
   AdminDepositList,
   AdminDepositListItem,
+  AdminWithdrawalList,
+  CrmInactiveList,
+  CrmNeverDepositedList,
+  AdminWithdrawalListItem,
+  WithdrawalSettings,
   AdminPaymentSettings,
   PaymentGatewayId,
   PaymentGatewayTestResult,
@@ -43,7 +48,8 @@ import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
 import type { AuditQuery } from './audit-query';
 import type { CasinoGeneralQuery } from './casino-general-query';
-import type { DepositsApiQuery } from './wallet-movements-query';
+import { type CrmQuery, crmApiQuery } from './crm-query';
+import type { DepositsApiQuery, WithdrawalsApiQuery } from './wallet-movements-query';
 import type { GeneralReportQuery } from './general-report-query';
 import type { OperationSummaryQuery } from './operation-summary-query';
 import type { PrizesQuery } from './prizes-query';
@@ -124,6 +130,18 @@ export const adminApi = {
     if (query.userId) params.set('userId', query.userId);
     if (query.type) params.set('type', query.type);
     return call<AdminCasinoGeneralReport>(session, 'GET', `/v1/admin/reports/casino/general?${params}`);
+  },
+  /** CRM: Apostadores inativos ou Nunca depositantes, com os filtros da tela. */
+  crmList<L extends CrmQuery['list']>(session: Caller, query: CrmQuery & { list: L }) {
+    const params = new URLSearchParams(
+      Object.entries(crmApiQuery(query)).map(([key, value]) => [key, String(value)] as [string, string]),
+    );
+    const path = query.list === 'inactive' ? 'inactive' : 'never-deposited';
+    return call<L extends 'inactive' ? CrmInactiveList : CrmNeverDepositedList>(
+      session,
+      'GET',
+      `/v1/admin/crm/${path}?${params}`,
+    );
   },
   generalReport(session: Caller, query: GeneralReportQuery) {
     const params = new URLSearchParams({
@@ -258,6 +276,29 @@ export const adminApi = {
   /** Depósito em análise: liberar o crédito ou recusar (só o Gerente). */
   reviewDeposit: (session: Caller, id: string, approve: boolean) =>
     call<AdminDepositListItem>(session, 'POST', `/v1/admin/deposits/${id}/review`, { approve }),
+  /** Carteira > Saques. */
+  listWithdrawals(session: Caller, query: WithdrawalsApiQuery) {
+    const params = new URLSearchParams({
+      from: query.from,
+      to: query.to,
+      page: String(query.page),
+      pageSize: String(query.pageSize),
+    });
+    if (query.userId) params.set('userId', query.userId);
+    if (query.promoterId) params.set('promoterId', query.promoterId);
+    if (query.status) params.set('status', query.status);
+    return call<AdminWithdrawalList>(session, 'GET', `/v1/admin/withdrawals?${params}`);
+  },
+  reviewWithdrawal: (session: Caller, id: string, approve: boolean, note?: string) =>
+    call<AdminWithdrawalListItem>(session, 'POST', `/v1/admin/withdrawals/${id}/review`, {
+      approve,
+      ...(note ? { note } : {}),
+    }),
+  resolveWithdrawal: (session: Caller, id: string, paid: boolean) =>
+    call<AdminWithdrawalListItem>(session, 'POST', `/v1/admin/withdrawals/${id}/resolve`, { paid }),
+  getWithdrawalSettings: (session: Caller) => call<WithdrawalSettings>(session, 'GET', '/v1/admin/withdrawal-settings'),
+  saveWithdrawalSettings: (session: Caller, body: WithdrawalSettings) =>
+    call<WithdrawalSettings>(session, 'PUT', '/v1/admin/withdrawal-settings', body),
   getHomeLayout: (session: Caller) => call<HomeLayout>(session, 'GET', '/v1/admin/branding/home'),
 
   saveHomeLayout: (session: Caller, body: HomeLayout) =>

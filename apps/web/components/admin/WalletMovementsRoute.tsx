@@ -6,6 +6,7 @@ import {
   WALLET_MOVEMENTS,
   depositsApiQuery,
   parseWalletMovementsQuery,
+  withdrawalsApiQuery,
 } from '@/lib/admin/wallet-movements-query';
 import WalletMovementsPage from '@/views/admin/WalletMovementsPage';
 import AdminMessage from './AdminMessage';
@@ -33,10 +34,11 @@ export default async function WalletMovementsRoute({
 
   const nowIso = new Date().toISOString();
   const query = parseWalletMovementsQuery(kind, await searchParams, nowIso);
-  const [promoters, player, deposits] = await Promise.all([
+  const [promoters, player, deposits, withdrawals] = await Promise.all([
     adminApi.listPromoterOptions(session),
     query.userId ? adminApi.getUser(session, query.userId) : null,
     kind === 'deposits' && query.searched ? adminApi.listDeposits(session, depositsApiQuery(query)) : null,
+    kind === 'withdrawals' && query.searched ? adminApi.listWithdrawals(session, withdrawalsApiQuery(query)) : null,
   ]);
 
   return (
@@ -47,6 +49,7 @@ export default async function WalletMovementsRoute({
       promoters={promoters.ok ? promoters.data : null}
       player={player?.ok ? { id: player.data.id, displayId: player.data.displayId, name: player.data.name } : null}
       deposits={deposits ? (deposits.ok ? deposits.data : 'error') : null}
+      withdrawals={withdrawals ? (withdrawals.ok ? withdrawals.data : 'error') : null}
       canReview={can(session.operator, 'payments.manage')}
     />
   );

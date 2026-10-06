@@ -1,13 +1,9 @@
-import { type DepositStatus, OPERATION_SUMMARY_MAX_DAYS, drawDateOf } from '@sysjb/contracts';
+import { type DepositStatus, OPERATION_SUMMARY_MAX_DAYS, type WithdrawalStatus, drawDateOf } from '@sysjb/contracts';
 import { ADMIN_ROUTES } from './admin-routes';
 import { parsePageSize } from './page-size';
 import { isValidPeriod } from './period';
 
-/**
- * Carteira > Depósitos e Carteira > Saques: as mesmas telas de filtro, cada uma com os seus status. Depósitos vêm da
- * API (integração de pagamento); os saques ainda não são registrados no sistema, então os status deles ficam só aqui,
- * na tela, até virarem contrato da API.
- */
+/** Carteira > Depósitos e Carteira > Saques: as mesmas telas de filtro, cada uma com os seus status (da API). */
 export type WalletMovementKind = 'deposits' | 'withdrawals';
 
 interface StatusOption {
@@ -35,13 +31,36 @@ export const DEPOSIT_STATUS_LABELS: Readonly<Record<DepositStatus, string>> = {
   REJECTED: 'Recusado',
 };
 
+/** Situação do saque na URL (em português) -> na API. */
+export const WITHDRAWAL_STATUS_PARAMS: Readonly<Record<string, WithdrawalStatus>> = {
+  'em-analise': 'REVIEW',
+  'na-fila': 'QUEUED',
+  enviando: 'SENDING',
+  processando: 'PROCESSING',
+  pago: 'PAID',
+  'nao-pago': 'FAILED',
+  recusado: 'REJECTED',
+  cancelado: 'CANCELED',
+};
+
+export const WITHDRAWAL_STATUS_LABELS: Readonly<Record<WithdrawalStatus, string>> = {
+  REVIEW: 'Em análise',
+  QUEUED: 'Na fila',
+  SENDING: 'Enviando',
+  PROCESSING: 'Processando',
+  PAID: 'Pago',
+  FAILED: 'Não pago',
+  REJECTED: 'Recusado',
+  CANCELED: 'Cancelado',
+};
+
 export interface WalletMovementConfig {
   title: string;
   href: string;
   /** "depósito" / "saque", para as mensagens. */
   noun: string;
   statuses: readonly StatusOption[];
-  /** Colunas da lista (a lista ainda vem vazia). */
+  /** Colunas da lista. */
   columns: readonly string[];
 }
 
@@ -64,14 +83,11 @@ export const WALLET_MOVEMENTS: Readonly<Record<WalletMovementKind, WalletMovemen
     title: 'Saques',
     href: ADMIN_ROUTES.withdrawals,
     noun: 'saque',
-    statuses: [
-      { param: 'pendente', label: 'Pendente' },
-      { param: 'aprovado', label: 'Aprovado' },
-      { param: 'pago', label: 'Pago' },
-      { param: 'recusado', label: 'Recusado' },
-      { param: 'cancelado', label: 'Cancelado' },
-    ],
-    columns: ['ID', 'Data/Hora', 'Apostador', 'Chave Pix', 'Valor', 'Status'],
+    statuses: Object.entries(WITHDRAWAL_STATUS_PARAMS).map(([param, status]) => ({
+      param,
+      label: WITHDRAWAL_STATUS_LABELS[status],
+    })),
+    columns: ['Data/Hora', 'Apostador', 'Chave Pix', 'Origem', 'Valor', 'Status'],
   },
 };
 
@@ -101,6 +117,23 @@ export interface DepositsApiQuery {
   userId?: string;
   promoterId?: string;
   status?: DepositStatus;
+}
+
+/** Filtros no formato da API de saques. */
+export interface WithdrawalsApiQuery extends Omit<DepositsApiQuery, 'status'> {
+  status?: WithdrawalStatus;
+}
+
+export function withdrawalsApiQuery(query: WalletMovementsQuery): WithdrawalsApiQuery {
+  return {
+    from: query.from,
+    to: query.to,
+    page: query.page,
+    pageSize: query.pageSize,
+    ...(query.userId ? { userId: query.userId } : {}),
+    ...(query.promoterId ? { promoterId: query.promoterId } : {}),
+    ...(query.status ? { status: WITHDRAWAL_STATUS_PARAMS[query.status] } : {}),
+  };
 }
 
 export function depositsApiQuery(query: WalletMovementsQuery): DepositsApiQuery {

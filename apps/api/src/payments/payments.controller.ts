@@ -19,6 +19,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { DepositsService } from './deposits.service.js';
+import { WithdrawalsService } from './withdrawals.service.js';
 import { PaymentGatewaysService } from './payment-gateways.service.js';
 import {
   type CreateDepositInput,
@@ -26,7 +27,7 @@ import {
   type SavePaymentGatewayInput,
   createDepositSchema,
   depositIdSchema,
-  depositWebhookQuerySchema,
+  paymentWebhookQuerySchema,
   listDepositsQuerySchema,
   paymentGatewayParamSchema,
   reviewDepositSchema,
@@ -70,7 +71,10 @@ export class DepositsController {
  */
 @Controller('v1/integrations/payments')
 export class PaymentsWebhookController {
-  constructor(@Inject(DepositsService) private readonly deposits: DepositsService) {}
+  constructor(
+    @Inject(DepositsService) private readonly deposits: DepositsService,
+    @Inject(WithdrawalsService) private readonly withdrawals: WithdrawalsService,
+  ) {}
 
   @Post(':gateway')
   @HttpCode(200)
@@ -81,9 +85,12 @@ export class PaymentsWebhookController {
     @Body() body: unknown,
   ): Promise<{ ok: true }> {
     const gateway = paymentGatewayParamSchema.safeParse(rawGateway.toUpperCase());
-    const query = depositWebhookQuerySchema.safeParse(rawQuery);
+    const query = paymentWebhookQuerySchema.safeParse(rawQuery);
     if (!gateway.success || !query.success) throw invalidWebhook();
-    const accepted = await this.deposits.webhook(gateway.data, query.data.d, query.data.t, body);
+    const accepted =
+      'd' in query.data
+        ? await this.deposits.webhook(gateway.data, query.data.d, query.data.t, body)
+        : await this.withdrawals.webhook(gateway.data, query.data.s, query.data.t);
     if (!accepted) throw invalidWebhook();
     return { ok: true };
   }

@@ -10,14 +10,31 @@ vi.mock('@/app/auth-actions', () => ({ meAction: vi.fn() }));
 vi.mock('@/app/withdrawal-actions', () => ({ requestWithdrawalAction: vi.fn() }));
 
 const { default: WithdrawalsPage } = await import('./WithdrawalsPage');
+const { DEFAULT_WITHDRAWAL_LIMITS } = await import('@/lib/withdrawal');
 
-/** Saldo das loterias: 30.000 de prêmios (livre), 5.000 de recarga e 1.000 de bônus => disponível R$ 300,00. */
+/**
+ * Saldo: 25.000 de prêmios das loterias, 5.000 de ganhos do cassino, 5.000 de recarga e 1.000 de bônus => sacável
+ * R$ 300,00 (só os prêmios). Limites da banca: os padrões (R$ 10,00 a R$ 5.000,00, 3 por dia).
+ */
 const richUser: PublicUser = {
   ...user,
-  wallet: { ...user.wallet, balanceJb: 5000, bonusJb: 1000, prizesJb: 30000, totalAvailableJb: 36000 },
+  wallet: {
+    ...user.wallet,
+    balanceJb: 5000,
+    bonusJb: 1000,
+    prizesJb: 25000,
+    prizesGames: 5000,
+    totalAvailableJb: 31000,
+    withdrawable: 30000,
+  },
 };
+/** Só prêmios das loterias: R$ 25,00 sacáveis. */
+const withPrizes = (cents: number): PublicUser => ({
+  ...richUser,
+  wallet: { ...richUser.wallet, prizesJb: cents, prizesGames: 0, withdrawable: cents },
+});
 
-const EXPLAIN_TITLE = 'Bônus e recargas não podem ser resgatados';
+const EXPLAIN_TITLE = 'Só prêmios podem ser resgatados';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -151,13 +168,30 @@ describe('Novo saque: valor do resgate', () => {
   const chip = (reais: number) => screen.getByRole('button', { name: `Sacar R$ ${reais},00` });
   const advance = () => screen.getByRole('button', { name: 'Avançar' });
 
-  it('resumo do saldo: total − recarga − bônus = disponível', async () => {
+  it('resumo do saldo: prêmios das loterias + ganhos do cassino = disponível', async () => {
     await toAmountStep();
     const summary = screen.getByRole('region', { name: 'Resumo do saldo' });
-    expect(within(summary).getByText('R$ 360,00')).toBeInTheDocument();
-    expect(within(summary).getByText('R$ 50,00')).toBeInTheDocument();
-    expect(within(summary).getByText('R$ 10,00')).toBeInTheDocument();
+    expect(within(summary).getByText('Prêmios das loterias').nextElementSibling).toHaveTextContent('R$ 250,00');
+    expect(within(summary).getByText('+ Ganhos do cassino').nextElementSibling).toHaveTextContent('R$ 50,00');
     expect(within(summary).getByText('Disponível para resgate').nextElementSibling).toHaveTextContent('R$ 300,00');
+  });
+
+  it('mostra os limites da banca', async () => {
+    await toAmountStep();
+    expect(screen.getByText(/de R\$ 10,00 a R\$ 5\.000,00; até 3 saques por dia/)).toBeInTheDocument();
+  });
+
+  it('pausado ou com o limite do dia atingido: aviso e nada habilitado', async () => {
+    const ui = userEvent.setup();
+    renderWithProviders(
+      <WithdrawalsPage tenant={tenant} user={richUser} limits={{ ...DEFAULT_WITHDRAWAL_LIMITS, usedToday: 3 }} />,
+    );
+    await ui.click(screen.getByRole('button', { name: 'Novo saque' }));
+    await ui.click(screen.getByRole('radio', { name: 'CPF' }));
+    await ui.click(screen.getByRole('button', { name: 'Avançar' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Você já fez 3 saques hoje. Tente amanhã.');
+    await ui.click(chip(50));
+    expect(advance()).toBeDisabled();
   });
 
   it('mostra o valor zerado, a dica, para quem vai e o botão desabilitado', async () => {
@@ -193,13 +227,29 @@ describe('Novo saque: valor do resgate', () => {
     expect(advance()).toBeDisabled();
   });
 
-  it('abaixo do mínimo (R$ 1,00): erro e botão desabilitado', async () => {
+  it('abaixo do mínimo da banca (R$ 10,00): erro e botão desabilitado', async () => {
     const ui = await toAmountStep();
-    await ui.type(amount(), '50');
-    expect(screen.getByRole('alert')).toHaveTextContent('Valor mínimo para saque: R$ 1,00');
+    await ui.type(amount(), '500');
+    expect(screen.getByRole('alert')).toHaveTextContent('Valor mínimo para saque: R$ 10,00');
     expect(advance()).toBeDisabled();
     await ui.type(amount(), '0');
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(advance()).toBeEnabled();
+  });
+
+  it('acima do máximo da banca: erro, e "Valor máximo" para no limite', async () => {
+    const ui = userEvent.setup();
+    renderWithProviders(
+      <WithdrawalsPage tenant={tenant} user={richUser} limits={{ ...DEFAULT_WITHDRAWAL_LIMITS, maxCents: 20000 }} />,
+    );
+    await ui.click(screen.getByRole('button', { name: 'Novo saque' }));
+    await ui.click(screen.getByRole('radio', { name: 'CPF' }));
+    await ui.click(screen.getByRole('button', { name: 'Avançar' }));
+    await ui.type(amount(), '25000');
+    expect(screen.getByRole('alert')).toHaveTextContent('Valor máximo por saque: R$ 200,00');
+    expect(advance()).toBeDisabled();
+    await ui.click(screen.getByRole('button', { name: 'Valor máximo' }));
+    expect(amount()).toHaveValue('200,00');
     expect(advance()).toBeEnabled();
   });
 
@@ -210,8 +260,7 @@ describe('Novo saque: valor do resgate', () => {
   });
 
   it('valores rápidos acima do disponível ficam desabilitados', async () => {
-    const poorer: PublicUser = { ...richUser, wallet: { ...richUser.wallet, prizesJb: 2500, totalAvailableJb: 8500 } };
-    await toAmountStep(poorer); // disponível R$ 25,00
+    await toAmountStep(withPrizes(2500)); // disponível R$ 25,00
     expect(chip(10)).toBeEnabled();
     expect(chip(20)).toBeEnabled();
     expect(chip(50)).toBeDisabled();
@@ -219,11 +268,7 @@ describe('Novo saque: valor do resgate', () => {
   });
 
   it('sem saldo livre (só recarga e bônus): tudo desabilitado, como no print', async () => {
-    const broke: PublicUser = {
-      ...richUser,
-      wallet: { ...richUser.wallet, prizesJb: 0, totalAvailableJb: 6000 },
-    };
-    const ui = await toAmountStep(broke);
+    const ui = await toAmountStep(withPrizes(0));
     const summary = screen.getByRole('region', { name: 'Resumo do saldo' });
     expect(within(summary).getByText('Disponível para resgate').nextElementSibling).toHaveTextContent('R$ 0,00');
     for (const reais of [10, 20, 50, 100]) expect(chip(reais)).toBeDisabled();
@@ -254,7 +299,8 @@ describe('Novo saque: valor do resgate', () => {
     const dialog = screen.getByRole('dialog', { name: EXPLAIN_TITLE });
     expect(within(dialog).getByText('Uso do saldo nas apostas')).toBeInTheDocument();
     expect(within(dialog).getByText('Disponível para saque')).toBeInTheDocument();
-    expect(within(dialog).getByText(/1º Saldo livre/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Recargas e bônus servem para jogar/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/volta para os prêmios se o saque for cancelado/)).toBeInTheDocument();
 
     await ui.keyboard('{Escape}');
     // A folha desce deslizando antes de sair.

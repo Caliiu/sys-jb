@@ -17,6 +17,8 @@ import { OperationSummaryController } from './admin/operation-summary.controller
 import { OperationSummaryService } from './admin/operation-summary.service.js';
 import { GeneralReportController } from './admin/general-report.controller.js';
 import { GeneralReportService } from './admin/general-report.service.js';
+import { CrmController } from './admin/crm.controller.js';
+import { CrmService } from './admin/crm.service.js';
 import { SalesByDrawController } from './admin/sales-by-draw.controller.js';
 import { SalesByDrawService } from './admin/sales-by-draw.service.js';
 import { CasinoGeneralController } from './admin/casino-general.controller.js';
@@ -29,6 +31,12 @@ import { CasinoWebhookService } from './casino/casino-webhook.service.js';
 import { CasinoService } from './casino/casino.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
 import { DepositsService } from './payments/deposits.service.js';
+import {
+  WithdrawalSettingsController,
+  WithdrawalsAdminController,
+  WithdrawalsController,
+} from './payments/withdrawals.controller.js';
+import { WithdrawalsService } from './payments/withdrawals.service.js';
 import {
   PAYMENT_GATEWAY_ADAPTERS,
   PaymentGatewaysService,
@@ -123,6 +131,7 @@ export class AppModule {
         PrizesAdminController,
         OperationSummaryController,
         GeneralReportController,
+        CrmController,
         SalesByDrawController,
         CasinoGeneralController,
         CasinoClosingController,
@@ -147,6 +156,9 @@ export class AppModule {
         PaymentsWebhookController,
         PaymentsAdminController,
         DepositsAdminController,
+        WithdrawalsController,
+        WithdrawalsAdminController,
+        WithdrawalSettingsController,
       ],
       providers: [
         { provide: APP_CONFIG, useValue: config },
@@ -175,6 +187,7 @@ export class AppModule {
         PrizesAdminService,
         OperationSummaryService,
         GeneralReportService,
+        CrmService,
         SalesByDrawService,
         CasinoGeneralService,
         CasinoClosingService,
@@ -203,6 +216,7 @@ export class AppModule {
         { provide: PAYMENT_GATEWAY_ADAPTERS, useValue: createGatewayAdapters(config.payments) },
         PaymentGatewaysService,
         DepositsService,
+        WithdrawalsService,
         CasinoWebhookGuard,
         MaintenanceService,
       ],

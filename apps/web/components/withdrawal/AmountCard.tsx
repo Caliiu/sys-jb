@@ -1,19 +1,34 @@
 'use client';
 
 import { formatCents } from '@/lib/currency';
-import { MIN_WITHDRAWAL_CENTS, parseWithdrawalAmount, withdrawalAmountProblem } from '@/lib/withdrawal';
+import {
+  maxWithdrawalCents,
+  parseWithdrawalAmount,
+  type WithdrawalLimits,
+  withdrawalAmountProblem,
+} from '@/lib/withdrawal';
 
 interface AmountCardProps {
   cents: number;
   availableCents: number;
+  limits: WithdrawalLimits;
   holderName: string;
   holderDocument: string;
   onChange: (cents: number) => void;
 }
 
 /** Valor do saque em destaque (máscara de moeda), dica ou erro, e para quem vai. */
-export default function AmountCard({ cents, availableCents, holderName, holderDocument, onChange }: AmountCardProps) {
-  const problem = withdrawalAmountProblem(cents, availableCents);
+export default function AmountCard({
+  cents,
+  availableCents,
+  limits,
+  holderName,
+  holderDocument,
+  onChange,
+}: AmountCardProps) {
+  const problem = withdrawalAmountProblem(cents, availableCents, limits);
+  /** "Valor máximo": o disponível, até o máximo por saque da banca. */
+  const max = maxWithdrawalCents(availableCents, limits);
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
@@ -23,8 +38,8 @@ export default function AmountCard({ cents, availableCents, holderName, holderDo
         </label>
         <button
           type="button"
-          onClick={() => onChange(availableCents)}
-          disabled={availableCents < MIN_WITHDRAWAL_CENTS}
+          onClick={() => onChange(max)}
+          disabled={max < limits.minCents}
           className="rounded-full bg-brand-primary px-3 py-1 text-[12px] font-bold text-white active:scale-95 transition-transform disabled:opacity-60"
         >
           Valor máximo

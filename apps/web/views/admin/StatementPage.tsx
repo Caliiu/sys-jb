@@ -36,6 +36,9 @@ export const KIND_LABELS: Record<StatementKind, string> = {
   OPENING_BALANCE: 'Saldo anterior',
   PRIZE: 'Prêmio',
   CASINO: 'Cassino',
+  DEPOSIT: 'Recarga Pix',
+  WITHDRAWAL: 'Saque',
+  WITHDRAWAL_REFUND: 'Saque devolvido',
 };
 
 const BUCKETS: ReadonlyArray<{ key: 'balanceCents' | 'bonusCents' | 'prizesCents' | 'gamesCents'; label: string }> = [

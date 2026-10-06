@@ -1,3 +1,5 @@
+import { WITHDRAWALS_PATH } from '@sysjb/contracts';
+
 /** Rotas do app do cliente (fonte única para links, menu lateral e navegação inferior). */
 export const ROUTES = {
   home: '/',
@@ -20,7 +22,7 @@ export const ROUTES = {
   prizesCheck: '/premiadas/consultar',
   prizeClaim: '/premiadas/reclame',
   pixTopUp: '/recarga-pix',
-  withdrawals: '/saques',
+  withdrawals: WITHDRAWALS_PATH,
   howToPlay: '/como-jogar',
   settings: '/configuracoes',
   profile: '/perfil',

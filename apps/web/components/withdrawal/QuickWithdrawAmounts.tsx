@@ -2,20 +2,32 @@
 
 import { Flame } from 'lucide-react';
 import { formatBrl } from '@/lib/currency';
-import { HOT_WITHDRAWAL_CENTS, QUICK_WITHDRAWAL_CENTS } from '@/lib/withdrawal';
+import {
+  HOT_WITHDRAWAL_CENTS,
+  maxWithdrawalCents,
+  QUICK_WITHDRAWAL_CENTS,
+  type WithdrawalLimits,
+} from '@/lib/withdrawal';
 
 interface QuickWithdrawAmountsProps {
   amountCents: number;
   availableCents: number;
+  limits: WithdrawalLimits;
   onSelect: (cents: number) => void;
 }
 
-/** Valores rápidos (definem o valor). Os acima do disponível ficam desabilitados. */
-export default function QuickWithdrawAmounts({ amountCents, availableCents, onSelect }: QuickWithdrawAmountsProps) {
+/** Valores rápidos (definem o valor). Os fora dos limites da banca ou acima do disponível ficam desabilitados. */
+export default function QuickWithdrawAmounts({
+  amountCents,
+  availableCents,
+  limits,
+  onSelect,
+}: QuickWithdrawAmountsProps) {
+  const max = maxWithdrawalCents(availableCents, limits);
   return (
     <div className="grid grid-cols-4 gap-2 rounded-2xl bg-white p-3 shadow-sm">
       {QUICK_WITHDRAWAL_CENTS.map((cents) => {
-        const unavailable = cents > availableCents;
+        const unavailable = cents > max || cents < limits.minCents;
         const selected = amountCents === cents;
         return (
           <button

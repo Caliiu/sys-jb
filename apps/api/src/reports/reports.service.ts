@@ -32,6 +32,9 @@ const ENTRY_LABELS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'Ajuste',
   OPERATOR_CREDIT: 'Crédito',
   OPENING_BALANCE: 'Saldo inicial',
+  DEPOSIT: 'Recarga Pix',
+  WITHDRAWAL: 'Saque',
+  WITHDRAWAL_REFUND: 'Saque devolvido',
 };
 
 const DAY_MS = 86_400_000;

@@ -77,6 +77,7 @@ model Tenant {
   betCommissions       BetCommission[]
   paymentGateways      PaymentGateway[]
   pixDeposits          PixDeposit[]
+  pixWithdrawals       PixWithdrawal[]
 
   @@map("tenants")
 }
@@ -122,6 +123,7 @@ model User {
   puleSettlements    PuleSettlement[]
   casinoTransactions CasinoTransaction[]
   pixDeposits        PixDeposit[]
+  pixWithdrawals     PixWithdrawal[]
   betCommissions     BetCommission[]     @relation("BetCommissionReferrer")
   commissionedBets   BetCommission[]     @relation("BetCommissionBettor")
 
@@ -201,13 +203,15 @@ model Operator {
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  sessions           OperatorSession[]
-  auditLogs          AuditLog[]
-  walletEntries      WalletEntry[]
-  commissionClosings CommissionClosing[]
-  paymentGateways    PaymentGateway[]
-  reviewedDeposits   PixDeposit[]        @relation("PixDepositReviewer")
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sessions            OperatorSession[]
+  auditLogs           AuditLog[]
+  walletEntries       WalletEntry[]
+  commissionClosings  CommissionClosing[]
+  paymentGateways     PaymentGateway[]
+  reviewedDeposits    PixDeposit[]        @relation("PixDepositReviewer")
+  reviewedWithdrawals PixWithdrawal[]     @relation("PixWithdrawalReviewer")
+  resolvedWithdrawals PixWithdrawal[]     @relation("PixWithdrawalResolver")
 
   @@unique([tenantId, id])
   @@map("operators")
@@ -365,6 +369,8 @@ model WalletEntry {
   casinoTransactionId String?  @map("casino_transaction_id") @db.Uuid
   // Depósito Pix confirmado (DEPOSIT): um crédito por depósito.
   pixDepositId        String?  @map("pix_deposit_id") @db.Uuid
+  // Saque (WITHDRAWAL: reserva na solicitação; WITHDRAWAL_REFUND: devolução se não for pago).
+  pixWithdrawalId     String?  @map("pix_withdrawal_id") @db.Uuid
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -377,6 +383,7 @@ model WalletEntry {
   pulePrize         PulePrize?         @relation(fields: [tenantId, pulePrizeId], references: [tenantId, id], onDelete: Restrict)
   casinoTransaction CasinoTransaction? @relation(fields: [tenantId, casinoTransactionId], references: [tenantId, id], onDelete: Restrict)
   pixDeposit        PixDeposit?        @relation(fields: [tenantId, pixDepositId], references: [tenantId, id], onDelete: Restrict)
+  pixWithdrawal     PixWithdrawal?     @relation(fields: [tenantId, pixWithdrawalId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, fazendinhaBetId])
   @@unique([tenantId, idempotencyKey])
@@ -385,6 +392,7 @@ model WalletEntry {
   @@unique([tenantId, betCommissionId, kind])
   @@unique([tenantId, pulePrizeId])
   @@unique([tenantId, casinoTransactionId])
+  @@unique([tenantId, pixWithdrawalId, kind])
   @@unique([tenantId, pixDepositId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@map("wallet_entries")
@@ -392,12 +400,20 @@ model WalletEntry {
 
 // Configurações da banca editáveis pelo painel. Uma linha por banca (criada na primeira alteração).
 model TenantSettings {
-  tenantId              String   @id @map("tenant_id") @db.Uuid
+  tenantId                 String   @id @map("tenant_id") @db.Uuid
   // "Indique e ganhe": % (centésimos) do valor apostado pelos indicados, pago a quem indicou no fechamento.
-  referralCommissionBps Int      @default(0) @map("referral_commission_bps")
+  referralCommissionBps    Int      @default(0) @map("referral_commission_bps")
   // Ordem e visibilidade dos blocos/cards do início do app (@sysjb/contracts, home-layout). Null = padrão.
-  homeLayout            Json?    @map("home_layout")
-  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  homeLayout               Json?    @map("home_layout")
+  // Saques (Configurações > Pagamentos): ligados, mínimo e máximo por saque, quantos por dia e até quanto vai direto
+  // ao gateway (acima disso, o Gerente aprova; 0 = todos passam pela aprovação). Centavos. Padrões no banco
+  // (dbgenerated): o Prisma não os envia ao criar a linha, e a role de runtime não grava estas colunas.
+  withdrawalsEnabled       Boolean  @default(dbgenerated("true")) @map("withdrawals_enabled")
+  withdrawalMinCents       Int      @default(dbgenerated("1000")) @map("withdrawal_min_cents")
+  withdrawalMaxCents       Int      @default(dbgenerated("500000")) @map("withdrawal_max_cents")
+  withdrawalDailyCount     Int      @default(dbgenerated("3")) @map("withdrawal_daily_count")
+  withdrawalAutoLimitCents Int      @default(dbgenerated("20000")) @map("withdrawal_auto_limit_cents")
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -1032,4 +1048,56 @@ model PixDeposit {
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("pix_deposits")
+}
+
+model PixWithdrawal {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  // Clique duplo / reenvio da tela: a mesma chave devolve o mesmo saque.
+  idempotencyKey        String    @map("idempotency_key") @db.Uuid
+  amountCents           BigInt    @map("amount_cents")
+  // De onde saiu (reservado na solicitação): prêmios das loterias e prêmios de games (cassino).
+  fromPrizesJbCents     BigInt    @map("from_prizes_jb_cents")
+  fromPrizesGamesCents  BigInt    @map("from_prizes_games_cents")
+  // CPF, EMAIL, PHONE ou RANDOM; a chave normalizada (CPF e celular só dígitos; e-mail e aleatória em minúsculas).
+  keyType               String    @map("key_type")
+  keyValue              String    @map("key_value")
+  // REVIEW (aguarda o Gerente), QUEUED (aprovado, a enviar), SENDING (enviando ao gateway), PROCESSING (no gateway),
+  // PAID, FAILED (o gateway não pagou: devolvido), REJECTED (recusado pelo Gerente: devolvido), CANCELED (pelo
+  // jogador, em análise: devolvido).
+  status                String
+  // Gateway que recebeu o envio (definido ao enviar).
+  gateway               String?
+  providerTransactionId String?   @map("provider_transaction_id")
+  // Por que voltou para análise ou falhou (código curto, sem dados do pedido).
+  failureReason         String?   @map("failure_reason")
+  // Motivo da recusa digitado pelo Gerente (mostrado ao jogador).
+  decisionNote          String?   @map("decision_note")
+  reviewedBy            String?   @map("reviewed_by") @db.Uuid
+  reviewedAt            DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  // Conclusão manual de um envio sem resposta (o Gerente conferiu no gateway).
+  resolvedBy            String?   @map("resolved_by") @db.Uuid
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz(3)
+  // Quem recebeu, segundo o gateway (conferência do titular depois do pagamento).
+  beneficiaryDocument   String?   @map("beneficiary_document")
+  beneficiaryName       String?   @map("beneficiary_name")
+  sendStartedAt         DateTime? @map("send_started_at") @db.Timestamptz(3)
+  lastCheckedAt         DateTime? @map("last_checked_at") @db.Timestamptz(3)
+  paidAt                DateTime? @map("paid_at") @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  reviewer      Operator?     @relation("PixWithdrawalReviewer", fields: [tenantId, reviewedBy], references: [tenantId, id], onDelete: Restrict)
+  resolver      Operator?     @relation("PixWithdrawalResolver", fields: [tenantId, resolvedBy], references: [tenantId, id], onDelete: Restrict)
+  walletEntries WalletEntry[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, idempotencyKey])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("pix_withdrawals")
 }

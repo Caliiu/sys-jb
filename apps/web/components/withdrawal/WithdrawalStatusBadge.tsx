@@ -1,8 +1,10 @@
 import { WITHDRAWAL_STATUS_LABELS, type WithdrawalStatus } from '@/lib/withdrawal';
 
 const STYLES: Record<WithdrawalStatus, { badge: string; dot: string }> = {
-  PENDING: { badge: 'bg-amber-50 text-amber-800', dot: 'bg-amber-500' },
+  REVIEW: { badge: 'bg-amber-50 text-amber-800', dot: 'bg-amber-500' },
+  PROCESSING: { badge: 'bg-sky-50 text-sky-800', dot: 'bg-sky-500' },
   PAID: { badge: 'bg-green-50 text-green-800', dot: 'bg-green-500' },
+  FAILED: { badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
   REJECTED: { badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
   CANCELED: { badge: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
 };

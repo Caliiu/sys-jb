@@ -1,4 +1,4 @@
-import type { PaymentGatewayId } from '@sysjb/contracts';
+import type { PaymentGatewayId, WithdrawalKeyType } from '@sysjb/contracts';
 import type { GatewayCredentials } from './credentials-box.js';
 
 /**
@@ -18,7 +18,44 @@ export interface PaymentGatewayAdapter {
    * com o endereço do aviso assinado e a transação do aviso igual à do depósito.
    */
   parseWebhook(body: unknown): WebhookPayer | null;
+
+  /**
+   * Envia um saque (Pix para a chave). O gateway NÃO recebe um id nosso: repetir o envio pode pagar duas vezes. Por isso
+   * só se chama uma vez por saque (a situação SENDING garante), e a falha sem resposta não é repetida.
+   */
+  createPayout(credentials: GatewayCredentials, input: PayoutInput): Promise<PayoutResult>;
+  /** Situação do saque no gateway, pelo id da transação de lá. É a única fonte aceita para concluir. */
+  checkPayout(credentials: GatewayCredentials, providerTransactionId: string): Promise<CheckedPayout>;
+  /**
+   * Procura no gateway um saque cujo envio ficou sem resposta (pela descrição, que leva o id do saque). Devolve o id da
+   * transação de lá, ou null se não achou.
+   */
+  findPayout(credentials: GatewayCredentials, withdrawalId: string): Promise<string | null>;
 }
+
+export interface PayoutInput {
+  withdrawalId: string;
+  amountCents: number;
+  keyType: WithdrawalKeyType;
+  /** Chave normalizada (CPF e celular só dígitos; e-mail e aleatória em minúsculas). */
+  keyValue: string;
+  /** Texto da transação no gateway; leva o id do saque (é por ele que findPayout procura). */
+  description: string;
+  /** Endereço do aviso (webhook) deste saque; null = sem aviso (a rodada automática confere). */
+  webhookUrl: string | null;
+}
+
+export interface PayoutResult {
+  providerTransactionId: string;
+}
+
+export type CheckedPayout =
+  | { state: 'PENDING' }
+  /** Pago: quem recebeu, segundo o gateway (null se ele não informar). */
+  | { state: 'PAID'; beneficiary: { document: string; name: string | null } | null }
+  /** O gateway não conseguiu pagar (chave inexistente, banco recusou...). */
+  | { state: 'FAILED' }
+  | { state: 'NOT_FOUND' };
 
 export interface WebhookPayer {
   /** Id da transação no gateway (tem de ser o do depósito). */

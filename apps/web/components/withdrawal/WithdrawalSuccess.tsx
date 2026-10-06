@@ -27,7 +27,11 @@ export default function WithdrawalSuccess({ withdrawal, onTrack }: WithdrawalSuc
             <CircleCheck className="h-11 w-11 text-emerald-500" strokeWidth={1.75} />
           </span>
           <h2 className="mt-5 text-[24px] font-extrabold text-gray-900">Solicitação enviada</h2>
-          <p className="mt-1 text-[14px] text-gray-500">Seu saque está sendo processado.</p>
+          <p className="mt-1 text-[14px] text-gray-500">
+            {withdrawal.status === 'REVIEW'
+              ? 'Seu saque está em análise pela banca. Você acompanha a situação em Meus saques.'
+              : 'Seu saque está sendo processado.'}
+          </p>
         </div>
 
         <div className="mt-6">

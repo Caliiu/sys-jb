@@ -22,8 +22,8 @@ export function toPublicWallet(wallet: Wallet): PublicWallet {
     balanceGames,
     bonusGames,
     prizesGames,
-    // Sem regra de saque nesta fase.
-    withdrawable: 0,
+    // Sacável: prêmios das loterias + prêmios do cassino (recarga e bônus nunca; saques pendentes já saíram).
+    withdrawable: toCents(wallet.prizesJb + wallet.prizesGames),
     // Totais derivados na leitura (CHECK no banco garante que a soma é um inteiro seguro).
     totalAvailableJb: toCents(wallet.balanceJb + wallet.bonusJb + wallet.prizesJb),
     totalAvailableGames: toCents(wallet.balanceGames + wallet.bonusGames + wallet.prizesGames),

@@ -56,8 +56,9 @@ export type Permission = (typeof PERMISSIONS)[number];
  * Operadores: `operators.manage` cadastra, altera, ativa/desativa e gera senha dos operadores da própria banca (só o
  * Gerente; o banco confere o perfil de novo — ver migration operator_management).
  * Pagamentos: `payments.read` vê os gateways configurados (sem as credenciais); `payments.manage` grava credenciais,
- * testa, escolhe o gateway ativo e libera ou recusa depósitos em análise (pagos por outro titular) — só o Gerente; o
- * banco confere o perfil de novo (migrations payments e deposit_payer).
+ * testa, escolhe o gateway ativo e libera ou recusa depósitos em análise (pagos por outro titular); nos saques, define
+ * os limites, aprova ou recusa os que estão em análise e conclui à mão um envio sem resposta — só o Gerente; o banco
+ * confere o perfil de novo (migrations payments, deposit_payer e withdrawals).
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -643,6 +644,9 @@ export const STATEMENT_KINDS = [
   'OPENING_BALANCE',
   'PRIZE',
   'CASINO',
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'WITHDRAWAL_REFUND',
 ] as const;
 export type StatementKind = (typeof STATEMENT_KINDS)[number];
 
@@ -727,6 +731,10 @@ export const AUDIT_ACTIONS = [
   'payment.gateway.deactivate',
   'deposit.approve',
   'deposit.reject',
+  'withdrawal.approve',
+  'withdrawal.reject',
+  'withdrawal.resolve',
+  'withdrawal.settings',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

@@ -1,14 +1,18 @@
 import {
   type AdminDepositList,
   type AdminPromoterOption,
+  type AdminWithdrawalList,
+  type AdminWithdrawalListItem,
   type DepositStatus,
   PAYMENT_GATEWAY_INFO,
+  type WithdrawalFailureReason,
+  type WithdrawalStatus,
 } from '@sysjb/contracts';
-import { Info } from 'lucide-react';
 import Link from 'next/link';
 import type { PlayerOption } from '@/app/admin/actions';
 import AdminPageTitle from '@/components/admin/AdminPageTitle';
 import DepositReviewActions from '@/components/admin/DepositReviewActions';
+import WithdrawalActions from '@/components/admin/WithdrawalActions';
 import FilterActions from '@/components/admin/FilterActions';
 import FilterForm from '@/components/admin/FilterForm';
 import FilterSelect from '@/components/admin/FilterSelect';
@@ -20,13 +24,14 @@ import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import {
   DEPOSIT_STATUS_LABELS,
   WALLET_MOVEMENTS,
+  WITHDRAWAL_STATUS_LABELS,
   type WalletMovementKind,
   type WalletMovementsQuery,
   walletMovementsHref,
 } from '@/lib/admin/wallet-movements-query';
 import { formatBrl } from '@/lib/currency';
 import { formatCalendarDate, formatDateTime } from '@/lib/datetime';
-import { maskCpfInput } from '@/lib/masks';
+import { maskCpfInput, maskPhoneInput } from '@/lib/masks';
 
 interface WalletMovementsPageProps {
   kind: WalletMovementKind;
@@ -38,7 +43,9 @@ interface WalletMovementsPageProps {
   player: PlayerOption | null;
   /** Depósitos do filtro (só em Depósitos, depois de pesquisar); 'error' = a API não respondeu. */
   deposits?: AdminDepositList | 'error' | null;
-  /** Gerente: libera ou recusa depósitos em análise (pagos por outro titular). */
+  /** Saques do filtro (só em Saques, depois de pesquisar); 'error' = a API não respondeu. */
+  withdrawals?: AdminWithdrawalList | 'error' | null;
+  /** Gerente: libera ou recusa depósitos em análise; aprova, recusa e conclui saques. */
   canReview?: boolean;
 }
 
@@ -52,6 +59,33 @@ const STATUS_STYLES: Record<DepositStatus, string> = {
   REVIEW: 'border-orange-300 bg-orange-50 text-orange-700',
   REJECTED: 'border-admin-danger/25 bg-admin-danger/10 text-admin-danger',
 };
+
+const WITHDRAWAL_STATUS_STYLES: Record<WithdrawalStatus, string> = {
+  REVIEW: 'border-orange-300 bg-orange-50 text-orange-700',
+  QUEUED: 'border-amber-300 bg-amber-50 text-amber-700',
+  SENDING: 'border-amber-300 bg-amber-50 text-amber-700',
+  PROCESSING: 'border-sky-300 bg-sky-50 text-sky-700',
+  PAID: 'border-admin-success/25 bg-admin-success/10 text-admin-success',
+  FAILED: 'border-admin-danger/25 bg-admin-danger/10 text-admin-danger',
+  REJECTED: 'border-admin-danger/25 bg-admin-danger/10 text-admin-danger',
+  CANCELED: 'border-admin-border bg-admin-hover text-admin-muted',
+};
+
+const FAILURE_REASON_LABELS: Record<WithdrawalFailureReason, string> = {
+  GATEWAY_REJECTED: 'O gateway recusou o envio',
+  GATEWAY_AUTH: 'Credencial do gateway recusada (confira Configurações > Pagamentos)',
+  NO_GATEWAY: 'Sem gateway ativo no envio',
+  GATEWAY_FAILED: 'O gateway não conseguiu pagar',
+  MANUAL_NOT_PAID: 'Concluído à mão: não pago',
+};
+
+/** Chave Pix como o operador lê: CPF e celular com máscara. */
+const formatPixKey = (item: AdminWithdrawalListItem) =>
+  item.keyType === 'CPF'
+    ? maskCpfInput(item.keyValue)
+    : item.keyType === 'PHONE'
+      ? maskPhoneInput(item.keyValue)
+      : item.keyValue;
 
 const REVIEW_REASON_LABELS = {
   PAYER_MISMATCH: 'Pago por outro titular',
@@ -71,8 +105,7 @@ const UNAVAILABLE = 'Cadastro ainda não disponível.';
 
 /**
  * Carteira > Depósitos / Saques: filtros (apostador, status, período, promotor) e, depois de pesquisar, a lista.
- * Depósitos vêm da integração de pagamento (Recarga Pix); os saques ainda não são registrados: a lista vem vazia, com
- * o aviso. Componente de servidor.
+ * Componente de servidor.
  */
 export default function WalletMovementsPage({
   kind,
@@ -81,9 +114,12 @@ export default function WalletMovementsPage({
   promoters,
   player,
   deposits = null,
+  withdrawals = null,
   canReview = false,
 }: WalletMovementsPageProps) {
   const config = WALLET_MOVEMENTS[kind];
+  // A lista do tipo da tela (para total, paginação e estados vazio/erro).
+  const list = kind === 'deposits' ? deposits : withdrawals;
   const idPrefix = `movements-${kind}`;
 
   return (
@@ -165,11 +201,11 @@ export default function WalletMovementsPage({
                     : `${formatCalendarDate(query.from)} – ${formatCalendarDate(query.to)}`}
                 </strong>
               </span>
-              {deposits && deposits !== 'error' && (
+              {list && list !== 'error' && (
                 <span className="rounded-md border border-admin-border px-3 py-1.5 text-[14px] text-admin-muted">
                   Total pago:{' '}
                   <strong className="font-semibold text-admin-success tabular-nums">
-                    {formatBrl(deposits.paidTotalCents)}
+                    {formatBrl(list.paidTotalCents)}
                   </strong>
                 </span>
               )}
@@ -247,38 +283,122 @@ export default function WalletMovementsPage({
                     ))}
                   </tbody>
                 )}
+                {withdrawals && withdrawals !== 'error' && withdrawals.items.length > 0 && (
+                  <tbody>
+                    {withdrawals.items.map((item) => (
+                      <WithdrawalRow key={item.id} item={item} canReview={canReview} />
+                    ))}
+                  </tbody>
+                )}
               </table>
-              {deposits === 'error' ? (
+              {list === 'error' ? (
                 <p role="alert" className="py-10 text-center text-[14px] text-admin-danger">
-                  Não foi possível carregar os depósitos. Tente novamente.
+                  Não foi possível carregar os {config.title.toLowerCase()}. Tente novamente.
                 </p>
               ) : (
-                (!deposits || deposits.items.length === 0) && (
+                (!list || list.items.length === 0) && (
                   <p className="py-10 text-center text-[14px] text-admin-muted">Nenhum resultado encontrado</p>
                 )
               )}
             </div>
-            {deposits && deposits !== 'error' && deposits.total > 0 && (
+            {list && list !== 'error' && list.total > 0 && (
               <Pagination
                 hrefFor={(page) => walletMovementsHref(kind, { ...query, page })}
-                page={deposits.page}
-                totalPages={Math.max(1, Math.ceil(deposits.total / deposits.pageSize))}
-                total={deposits.total}
-                pageSize={deposits.pageSize}
-                unit={['depósito', 'depósitos']}
+                page={list.page}
+                totalPages={Math.max(1, Math.ceil(list.total / list.pageSize))}
+                total={list.total}
+                pageSize={list.pageSize}
+                unit={kind === 'deposits' ? ['depósito', 'depósitos'] : ['saque', 'saques']}
               />
-            )}
-            {kind === 'withdrawals' && (
-              <p className="flex items-start gap-2 px-6 pb-5 text-[12.5px] text-admin-muted">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span>
-                  Os pedidos de {config.noun} ainda não são registrados no sistema: dependem da integração de pagamento.
-                </span>
-              </p>
             )}
           </>
         )}
       </section>
     </div>
+  );
+}
+
+/** Uma linha de saque: quem, para qual chave, de onde saiu, valor, situação e as ações do Gerente. */
+function WithdrawalRow({ item, canReview }: { item: AdminWithdrawalListItem; canReview: boolean }) {
+  return (
+    <tr className="border-b border-admin-border last:border-0">
+      <td className={`${cellClass} whitespace-nowrap tabular-nums`}>{formatDateTime(item.createdAt)}</td>
+      <td className={cellClass}>
+        <Link href={ADMIN_ROUTES.user(item.user.id)} className="font-medium text-admin-accent">
+          {item.user.displayId} - {item.user.name}
+        </Link>
+      </td>
+      <td className={`${cellClass} break-all`}>
+        {formatPixKey(item)}
+        {item.beneficiaryMatches === false && (
+          <span className="mt-1 block text-[12px] font-medium text-admin-danger">
+            Pago a outro titular
+            {item.beneficiary
+              ? ` · ${item.beneficiary.name ? `${item.beneficiary.name} ` : ''}${formatDocument(item.beneficiary.document)}`
+              : null}
+          </span>
+        )}
+      </td>
+      <td className={`${cellClass} whitespace-nowrap text-[13px] text-admin-muted`}>
+        {item.fromPrizesJbCents > 0 && <span className="block">Loterias {formatBrl(item.fromPrizesJbCents)}</span>}
+        {item.fromPrizesGamesCents > 0 && <span className="block">Cassino {formatBrl(item.fromPrizesGamesCents)}</span>}
+      </td>
+      <td className={`${cellClass} whitespace-nowrap text-right font-medium tabular-nums`}>
+        {formatBrl(item.amountCents)}
+      </td>
+      <td className={cellClass}>
+        <span
+          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[12px] font-medium ${WITHDRAWAL_STATUS_STYLES[item.status]}`}
+        >
+          {WITHDRAWAL_STATUS_LABELS[item.status]}
+        </span>
+        {item.failureReason && (
+          <span className="mt-1 block text-[12px] text-admin-muted">{FAILURE_REASON_LABELS[item.failureReason]}</span>
+        )}
+        {item.note && <span className="mt-1 block text-[12px] text-admin-muted">Motivo: {item.note}</span>}
+        {item.reviewedBy && (
+          <span className="mt-1 block text-[12px] text-admin-muted">
+            {item.status === 'REJECTED' ? 'Recusado' : 'Aprovado'} por {item.reviewedBy.name}
+          </span>
+        )}
+        {item.resolvedBy && (
+          <span className="mt-1 block text-[12px] text-admin-muted">Concluído à mão por {item.resolvedBy.name}</span>
+        )}
+        {item.providerTransactionId && (
+          <span className="mt-1 block text-[12px] tabular-nums text-admin-muted">
+            {item.gateway ? PAYMENT_GATEWAY_INFO[item.gateway].label : 'Gateway'} #{item.providerTransactionId}
+          </span>
+        )}
+        {item.status === 'SENDING' && !item.resolvable && (
+          <span className="mt-1 block text-[12px] text-amber-700">
+            Sem resposta do gateway: procurando automaticamente.
+          </span>
+        )}
+        {canReview && item.status === 'REVIEW' && (
+          <div className="mt-2">
+            <WithdrawalActions
+              withdrawalId={item.id}
+              amountCents={item.amountCents}
+              playerName={item.user.name}
+              mode="review"
+            />
+          </div>
+        )}
+        {canReview && item.resolvable && (
+          <div className="mt-2">
+            <span className="mb-1 block text-[12px] text-amber-700">
+              Confira no painel do gateway antes de concluir.
+            </span>
+            <WithdrawalActions
+              withdrawalId={item.id}
+              amountCents={item.amountCents}
+              playerName={item.user.name}
+              mode="resolve"
+              providerTransactionId={item.providerTransactionId}
+            />
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }

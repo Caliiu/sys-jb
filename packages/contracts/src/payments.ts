@@ -26,7 +26,7 @@ export const PAYMENT_GATEWAY_INFO: Readonly<Record<PaymentGatewayId, PaymentGate
     clientSecretLabel: 'Client Secret (sk_…)',
     requirements:
       'Crie uma chave de acesso em API → Chaves de Acesso com os escopos TRANSACTION_CREATE e TRANSACTION_READ ' +
-      '(BALANCE_READ é opcional e permite o teste mostrar o saldo).',
+      '(depósitos) e WITHDRAW_CREATE (saques). BALANCE_READ é opcional e permite o teste mostrar o saldo.',
   },
 };
 
@@ -169,4 +169,169 @@ export interface AdminDepositList {
   pageSize: number;
   /** Soma dos depósitos pagos no filtro (centavos). */
   paidTotalCents: number;
+}
+
+// ---------------------------------------------------------------------------
+// Saques (Pix). O valor sai dos prêmios (loterias, depois cassino) na solicitação e volta se o saque não for pago.
+// ---------------------------------------------------------------------------
+
+/** Tela "Meus saques" do app do jogador (aberta pelos avisos de saque). */
+export const WITHDRAWALS_PATH = '/saques';
+
+/** Tipo da chave Pix de destino. CPF é sempre o do titular da conta. */
+export const WITHDRAWAL_KEY_TYPES = ['CPF', 'EMAIL', 'PHONE', 'RANDOM'] as const;
+export type WithdrawalKeyType = (typeof WITHDRAWAL_KEY_TYPES)[number];
+
+/**
+ * Situação completa (painel). REVIEW: aguarda o Gerente. QUEUED: aprovado, a enviar. SENDING: enviando ao gateway (sem
+ * confirmação de que chegou lá). PROCESSING: no gateway. PAID: pago. FAILED: o gateway não pagou (valor devolvido).
+ * REJECTED: recusado pelo Gerente (devolvido). CANCELED: cancelado pelo jogador em análise (devolvido).
+ */
+export const WITHDRAWAL_STATUSES = [
+  'REVIEW',
+  'QUEUED',
+  'SENDING',
+  'PROCESSING',
+  'PAID',
+  'FAILED',
+  'REJECTED',
+  'CANCELED',
+] as const;
+export type WithdrawalStatus = (typeof WITHDRAWAL_STATUSES)[number];
+
+/** Situação vista pelo jogador: fila, envio e gateway viram "Processando". */
+export const PUBLIC_WITHDRAWAL_STATUSES = ['REVIEW', 'PROCESSING', 'PAID', 'FAILED', 'REJECTED', 'CANCELED'] as const;
+export type PublicWithdrawalStatus = (typeof PUBLIC_WITHDRAWAL_STATUSES)[number];
+
+export const publicWithdrawalStatus = (status: WithdrawalStatus): PublicWithdrawalStatus =>
+  status === 'QUEUED' || status === 'SENDING' ? 'PROCESSING' : status;
+
+/** Por que voltou para análise ou falhou (painel). */
+export const WITHDRAWAL_FAILURE_REASONS = [
+  'GATEWAY_REJECTED',
+  'GATEWAY_AUTH',
+  'NO_GATEWAY',
+  'GATEWAY_FAILED',
+  'MANUAL_NOT_PAID',
+] as const;
+export type WithdrawalFailureReason = (typeof WITHDRAWAL_FAILURE_REASONS)[number];
+
+/** Faixa aceita na configuração da banca (o banco confere de novo). */
+export const WITHDRAWAL_LIMITS = {
+  /** R$ 1,00 a R$ 1.000.000,00 por saque. */
+  minCents: 100,
+  maxCents: 100_000_000,
+  /** Até 50 saques por dia por jogador. */
+  maxDailyCount: 50,
+  /** Motivo da recusa: 3 a 200 caracteres. */
+  noteMin: 3,
+  noteMax: 200,
+} as const;
+
+/** Limites de saque da banca (Configurações > Pagamentos). Centavos. */
+export interface WithdrawalSettings {
+  /** false = saques pausados (ninguém solicita). */
+  enabled: boolean;
+  minCents: number;
+  maxCents: number;
+  /** Saques por jogador por dia (Brasília); cancelados, recusados e falhos não contam. */
+  dailyCount: number;
+  /** Até este valor o saque vai direto ao gateway; acima, o Gerente aprova. 0 = todos passam pela aprovação. */
+  autoLimitCents: number;
+}
+
+// Jogador -----------------------------------------------------------------
+
+export interface PublicWithdrawal {
+  id: string;
+  amountCents: number;
+  status: PublicWithdrawalStatus;
+  keyType: WithdrawalKeyType;
+  /** Chave normalizada (CPF e celular só dígitos). */
+  keyValue: string;
+  /** ISO 8601. */
+  createdAt: string;
+  paidAt: string | null;
+  /** Motivo da recusa informado pelo Gerente (só em REJECTED). */
+  note: string | null;
+  /** Pode cancelar agora (só em análise). */
+  cancellable: boolean;
+}
+
+/** GET /v1/me/withdrawals: os saques recentes, quanto pode sacar e os limites de hoje. */
+export interface MyWithdrawals {
+  items: PublicWithdrawal[];
+  /** Prêmios das loterias + prêmios do cassino (centavos). */
+  withdrawableCents: number;
+  limits: WithdrawalSettings & {
+    /** Saques que já contam no limite de hoje. */
+    usedToday: number;
+  };
+}
+
+/** POST /v1/me/withdrawals. A mesma `idempotencyKey` devolve o mesmo saque (clique duplo, reenvio). */
+export interface CreateWithdrawalRequest {
+  amountCents: number;
+  keyType: WithdrawalKeyType;
+  keyValue: string;
+  idempotencyKey: string;
+}
+
+/** Saque criado ou cancelado, com a carteira já atualizada. */
+export interface WithdrawalResult {
+  withdrawal: PublicWithdrawal;
+  wallet: PublicWallet;
+}
+
+// Painel: Carteira > Saques --------------------------------------------------
+
+export interface AdminWithdrawalListItem {
+  id: string;
+  createdAt: string;
+  paidAt: string | null;
+  user: { id: string; displayId: number; name: string };
+  amountCents: number;
+  /** De onde saiu: prêmios das loterias e do cassino. */
+  fromPrizesJbCents: number;
+  fromPrizesGamesCents: number;
+  keyType: WithdrawalKeyType;
+  keyValue: string;
+  status: WithdrawalStatus;
+  gateway: PaymentGatewayId | null;
+  /** Id da transação no gateway (para conferir lá). */
+  providerTransactionId: string | null;
+  failureReason: WithdrawalFailureReason | null;
+  /** Motivo da recusa. */
+  note: string | null;
+  reviewedBy: { id: string; name: string } | null;
+  reviewedAt: string | null;
+  /** Gerente que concluiu à mão um envio sem resposta. */
+  resolvedBy: { id: string; name: string } | null;
+  resolvedAt: string | null;
+  /** Quem recebeu, segundo o gateway; null se não informado ou para perfil sem `payments.read`. */
+  beneficiary: { name: string | null; document: string } | null;
+  /** Quem recebeu é o titular (CPF do jogador)? null enquanto o gateway não informar. */
+  beneficiaryMatches: boolean | null;
+  /** O Gerente pode concluir à mão (envio sem resposta há 10 min, ou no gateway sem conclusão há 1 h). */
+  resolvable: boolean;
+}
+
+export interface AdminWithdrawalList {
+  items: AdminWithdrawalListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Soma dos saques pagos no filtro (centavos). */
+  paidTotalCents: number;
+}
+
+/** Aprovar (vai para o gateway) ou recusar (devolve; motivo opcional, mostrado ao jogador). */
+export interface ReviewWithdrawalRequest {
+  approve: boolean;
+  note?: string;
+}
+
+/** Conclusão manual, depois de conferir no painel do gateway: pago ou não pago (devolve). */
+export interface ResolveWithdrawalRequest {
+  paid: boolean;
 }

@@ -6,29 +6,40 @@ import type { WithdrawalItem } from '@/lib/withdrawal';
 import { renderWithProviders, router, tenant, user } from '@/test/render';
 
 const requestWithdrawalAction = vi.fn();
+const cancelWithdrawalAction = vi.fn();
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ logout: vi.fn() }) }));
 vi.mock('@/app/auth-actions', () => ({ meAction: vi.fn() }));
 vi.mock('@/app/withdrawal-actions', () => ({
   requestWithdrawalAction: (...args: unknown[]) => requestWithdrawalAction(...args),
+  cancelWithdrawalAction: (...args: unknown[]) => cancelWithdrawalAction(...args),
 }));
 
 const { default: WithdrawalsPage } = await import('./WithdrawalsPage');
 
-/** Saldo: 30.000 de prêmios (livre), 5.000 de recarga e 1.000 de bônus => disponível R$ 300,00. */
+/** Saldo: 30.000 de prêmios, 5.000 de recarga e 1.000 de bônus => sacável R$ 300,00 (só os prêmios). */
 const richUser: PublicUser = {
   ...user,
-  wallet: { ...user.wallet, balanceJb: 5000, bonusJb: 1000, prizesJb: 30000, totalAvailableJb: 36000 },
+  wallet: {
+    ...user.wallet,
+    balanceJb: 5000,
+    bonusJb: 1000,
+    prizesJb: 30000,
+    totalAvailableJb: 36000,
+    withdrawable: 30000,
+  },
 };
 
 const created: WithdrawalItem = {
   id: 'w1',
   amountCents: 5000,
-  status: 'PENDING',
+  status: 'PROCESSING',
   keyType: 'cpf',
   keyValue: richUser.document,
   createdAt: '2026-09-26T14:10:00.000Z',
+  note: null,
+  cancellable: false,
 };
 
 type Ui = ReturnType<typeof userEvent.setup>;
@@ -72,7 +83,7 @@ describe('Confirmar saque', () => {
     expect(requestWithdrawalAction).not.toHaveBeenCalled();
   });
 
-  it('confirmar envia só tipo, chave normalizada e valor', async () => {
+  it('confirmar envia só tipo, chave normalizada, valor e a chave de idempotência', async () => {
     requestWithdrawalAction.mockResolvedValue({ ok: false, code: 'UNAVAILABLE', message: 'x' });
     const { ui, dialog } = await openConfirm();
     await ui.click(within(dialog).getByRole('button', { name: 'Confirmar saque' }));
@@ -80,7 +91,28 @@ describe('Confirmar saque', () => {
       keyType: 'cpf',
       keyValue: richUser.document,
       amountCents: 5000,
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
+  });
+
+  it('tentar de novo no mesmo diálogo repete a chave (o mesmo saque); uma nova confirmação usa outra', async () => {
+    requestWithdrawalAction.mockResolvedValue({ ok: false, code: 'UNAVAILABLE', message: 'Sem rede.' });
+    const { ui, dialog } = await openConfirm();
+    await ui.click(within(dialog).getByRole('button', { name: 'Confirmar saque' }));
+    await within(dialog).findByRole('alert');
+    await ui.click(within(dialog).getByRole('button', { name: 'Confirmar saque' }));
+    const [first, second] = requestWithdrawalAction.mock.calls.map(
+      ([input]) => (input as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(second).toBe(first);
+
+    await ui.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await ui.click(screen.getByRole('button', { name: 'Avançar' }));
+    await ui.click(
+      within(screen.getByRole('dialog', { name: 'Confirmar saque' })).getByRole('button', { name: 'Confirmar saque' }),
+    );
+    const third = (requestWithdrawalAction.mock.calls[2]![0] as { idempotencyKey: string }).idempotencyKey;
+    expect(third).not.toBe(first);
   });
 
   it('enquanto envia: botões travados, Esc não fecha e o segundo clique não duplica o pedido', async () => {
@@ -148,6 +180,11 @@ describe('Solicitação enviada', () => {
     await screen.findByRole('heading', { name: 'Solicitação enviada', level: 2 });
     return ui;
   }
+
+  it('em análise: avisa que a banca vai analisar', async () => {
+    await confirmWithSuccess({ ...created, status: 'REVIEW', cancellable: true });
+    expect(screen.getByText(/está em análise pela banca/)).toBeInTheDocument();
+  });
 
   it('só aparece depois de o servidor confirmar; mostra valor, forma e destino', async () => {
     await confirmWithSuccess();
@@ -237,14 +274,14 @@ describe('Meus saques: lista e detalhes', () => {
     const today = within(screen.getByRole('region', { name: 'Hoje' }));
     const row = today.getByRole('button', { name: 'Resgate de R$ 50,00, 11:10' });
     expect(within(row).getByText('Pix')).toBeInTheDocument();
-    expect(within(row).getByText('Pendente')).toBeInTheDocument();
+    expect(within(row).getByText('Processando')).toBeInTheDocument();
     expect(within(row).getByText('R$ 50,00')).toBeInTheDocument();
     expect(within(row).getByText('11:10')).toBeInTheDocument();
   });
 
   it('cada status tem o seu nome', () => {
     renderList();
-    for (const label of ['Pendente', 'Pago', 'Recusado', 'Cancelado']) {
+    for (const label of ['Processando', 'Pago', 'Recusado', 'Cancelado']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
@@ -260,7 +297,9 @@ describe('Meus saques: lista e detalhes', () => {
     await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 50,00, 11:10' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Detalhes do resgate' });
-    expect(within(dialog).getByText('Pendente')).toBeInTheDocument();
+    expect(within(dialog).getByText('Processando')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Enviado para pagamento/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Cancelar saque' })).toBeNull();
     expect(within(dialog).getByText('R$ 50,00')).toBeInTheDocument();
     expect(within(dialog).getByText('Pix', { selector: 'dd' })).toBeInTheDocument();
     expect(within(dialog).getByText(richUser.name)).toBeInTheDocument();
@@ -282,6 +321,38 @@ describe('Meus saques: lista e detalhes', () => {
     renderList();
     await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 20,00, 09:00' }));
     expect(screen.getByText('(11) 91234-5678')).toBeInTheDocument();
+  });
+
+  it('recusado mostra o motivo da banca', async () => {
+    const ui = userEvent.setup();
+    renderList([{ ...items[2]!, note: 'Chave de outra pessoa' }]);
+    await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 20,00, 09:00' }));
+    expect(screen.getByText('Motivo: Chave de outra pessoa')).toBeInTheDocument();
+  });
+
+  it('em análise: cancelar pede confirmação, chama o servidor e atualiza a lista', async () => {
+    const ui = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    cancelWithdrawalAction.mockResolvedValue({ ok: true, withdrawal: { ...created, status: 'CANCELED' } });
+    renderList([{ ...created, status: 'REVIEW', cancellable: true }]);
+    await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 50,00, 11:10' }));
+    await ui.click(screen.getByRole('button', { name: 'Cancelar saque' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(cancelWithdrawalAction).toHaveBeenCalledExactlyOnceWith(created.id);
+    expect(router.refresh).toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('cancelar recusado pelo servidor mostra o motivo e não atualiza', async () => {
+    const ui = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    cancelWithdrawalAction.mockResolvedValue({ ok: false, code: 'INVALID_REQUEST', message: 'A situação mudou.' });
+    renderList([{ ...created, status: 'REVIEW', cancellable: true }]);
+    await ui.click(screen.getByRole('button', { name: 'Resgate de R$ 50,00, 11:10' }));
+    await ui.click(screen.getByRole('button', { name: 'Cancelar saque' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('A situação mudou.');
+    expect(router.refresh).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it('"Atualizar" busca a lista de novo no servidor', async () => {

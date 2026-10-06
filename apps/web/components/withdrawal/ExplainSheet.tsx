@@ -9,7 +9,7 @@ interface ExplainSheetProps {
   onClose: () => void;
 }
 
-/** "Entenda": por que bônus e recargas não podem ser resgatados e como o saldo é usado. */
+/** "Entenda": só prêmios podem ser resgatados (recarga e bônus não) e como o saldo é usado nas apostas. */
 export default function ExplainSheet({ open, onClose }: ExplainSheetProps) {
   const titleId = useId();
 
@@ -17,8 +17,11 @@ export default function ExplainSheet({ open, onClose }: ExplainSheetProps) {
     <BottomSheet open={open} onClose={onClose} titleId={titleId}>
       <h2 id={titleId} className="flex items-center gap-2 text-[15px] font-bold text-brand-orangeDark">
         <CircleAlert className="h-5 w-5 shrink-0" aria-hidden />
-        Bônus e recargas não podem ser resgatados
+        Só prêmios podem ser resgatados
       </h2>
+      <p className="mt-2 text-[14px] text-gray-800">
+        Recargas e bônus servem para jogar e não podem ser sacados. Prêmios das loterias e ganhos do cassino podem.
+      </p>
 
       <h3 className="mt-5 text-[15px] font-bold text-gray-900">Uso do saldo nas apostas</h3>
       <p className="mt-2 text-[14px] text-gray-800">
@@ -30,9 +33,11 @@ export default function ExplainSheet({ open, onClose }: ExplainSheetProps) {
 
       <h3 className="mt-5 text-[15px] font-bold text-gray-900">Disponível para saque</h3>
       <p className="mt-2 text-[14px] text-gray-800">
-        Saldo total <span aria-hidden>( − )</span>
-        <span className="sr-only"> menos </span> Recarga <span aria-hidden>( − )</span>
-        <span className="sr-only"> menos </span> Bônus
+        Prêmios das loterias <span aria-hidden>( + )</span>
+        <span className="sr-only"> mais </span> Ganhos do cassino
+      </p>
+      <p className="mt-2 text-[13px] text-gray-500">
+        O valor do saque sai na hora do pedido e volta para os prêmios se o saque for cancelado, recusado ou não pago.
       </p>
 
       <button

@@ -6,7 +6,12 @@ import { APP_CONFIG, type AppConfig } from '../config/config.js';
 export type TenantTx = Prisma.TransactionClient;
 
 /** Chaves de leitura antes de haver banca (policies *_lookup da migration do painel único). */
-export type LookupKey = 'app.login_email' | 'app.session_hash' | 'app.casino_user' | 'app.pix_deposit';
+export type LookupKey =
+  | 'app.login_email'
+  | 'app.session_hash'
+  | 'app.casino_user'
+  | 'app.pix_deposit'
+  | 'app.pix_withdrawal';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

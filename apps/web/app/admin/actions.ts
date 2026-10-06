@@ -16,7 +16,9 @@ import type {
   OperatorPasswordResponse,
   AdminPaymentSettings,
   AdminDepositListItem,
+  AdminWithdrawalListItem,
   PaymentGatewayTestResult,
+  WithdrawalSettings,
 } from '@sysjb/contracts';
 import {
   DRAW_EXCEPTION_KINDS,
@@ -34,6 +36,7 @@ import {
   PAYMENT_GATEWAYS,
   USER_STATUSES,
   WALLET_CREDIT_BUCKETS,
+  WITHDRAWAL_LIMITS,
 } from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { z } from 'zod';
@@ -572,6 +575,65 @@ export async function reviewDepositAction(
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.reviewDeposit(caller, id.data, approve);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+const withdrawalIdSchema = z.uuid();
+const withdrawalNoteSchema = z
+  .string()
+  .trim()
+  .min(WITHDRAWAL_LIMITS.noteMin)
+  .max(WITHDRAWAL_LIMITS.noteMax)
+  .regex(/^[^\p{Cc}]*$/u)
+  .optional();
+
+/** Saque em análise: aprova (vai para o gateway) ou recusa com motivo opcional (devolve). A API confere e audita. */
+export async function reviewWithdrawalAction(
+  withdrawalId: unknown,
+  approve: unknown,
+  note?: unknown,
+): Promise<AdminActionResult<AdminWithdrawalListItem>> {
+  const id = withdrawalIdSchema.safeParse(withdrawalId);
+  const reason = withdrawalNoteSchema.safeParse(typeof note === 'string' && note.trim() === '' ? undefined : note);
+  if (!id.success || typeof approve !== 'boolean' || !reason.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.reviewWithdrawal(caller, id.data, approve, approve ? undefined : reason.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+/** Envio sem resposta: o Gerente conferiu no painel do gateway e informa se foi pago (não pago = devolve). */
+export async function resolveWithdrawalAction(
+  withdrawalId: unknown,
+  paid: unknown,
+): Promise<AdminActionResult<AdminWithdrawalListItem>> {
+  const id = withdrawalIdSchema.safeParse(withdrawalId);
+  if (!id.success || typeof paid !== 'boolean') return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.resolveWithdrawal(caller, id.data, paid);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+const centsField = z.number().int().min(0).max(WITHDRAWAL_LIMITS.maxCents);
+const withdrawalSettingsSchema = z.strictObject({
+  enabled: z.boolean(),
+  minCents: centsField.min(WITHDRAWAL_LIMITS.minCents),
+  maxCents: centsField.min(WITHDRAWAL_LIMITS.minCents),
+  dailyCount: z.number().int().min(1).max(WITHDRAWAL_LIMITS.maxDailyCount),
+  autoLimitCents: centsField,
+});
+
+/** Configurações > Pagamentos > Saques: limites da banca (a API e o banco conferem a coerência de novo). */
+export async function saveWithdrawalSettingsAction(input: unknown): Promise<AdminActionResult<WithdrawalSettings>> {
+  const parsed = withdrawalSettingsSchema.safeParse(input);
+  if (!parsed.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.saveWithdrawalSettings(caller, parsed.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

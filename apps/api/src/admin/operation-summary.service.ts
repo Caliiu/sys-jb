@@ -16,6 +16,11 @@ interface SummaryRow {
   credited: bigint | null;
   bonus_credited: bigint | null;
   wallets: bigint | null;
+  withdrawable: bigint | null;
+  deposits: bigint | null;
+  withdrawals: bigint | null;
+  first_deposits: bigint;
+  first_deposit_avg: string | null;
 }
 
 const cents = (value: bigint | null) => Number(value ?? 0n);
@@ -37,7 +42,8 @@ const game = (turnoverCents: number, payoutCents: number): OperationGameTotals =
  * - comissão: comissões creditadas no período (na hora de cada aposta), menos os estornos de pules cancelados;
  * - creditado / bônus creditado: créditos pelo painel e ajustes manuais do período (só a parte positiva);
  * - saldo total: soma das carteiras agora.
- * Depósitos, saques, primeiro depósito e cassino ainda não existem no sistema: vêm zerados e listados em `unavailable`.
+ * Depósitos e saques pagos (pela data do pagamento), primeiro depósito dos cadastros do período e o que pode ser sacado.
+ * O cassino ainda não entra aqui: vem zerado e listado em `unavailable`.
  */
 @Injectable()
 export class OperationSummaryService {
@@ -105,25 +111,57 @@ export class OperationSummaryService {
                       + w."prizes_games")
             FROM "wallets" w
             WHERE w."tenant_id" = ${tenantId} ${player(Prisma.sql`w."user_id"`)}
-          ) AS wallets`;
+          ) AS wallets,
+          (SELECT sum(w."prizes_jb" + w."prizes_games") FROM "wallets" w
+            WHERE w."tenant_id" = ${tenantId} ${player(Prisma.sql`w."user_id"`)}
+          ) AS withdrawable,
+          (SELECT sum(d."amount_cents") FROM "pix_deposits" d
+            WHERE d."tenant_id" = ${tenantId} AND d."status" = 'PAID' AND ${inPeriod(Prisma.sql`d."paid_at"`)}
+              ${player(Prisma.sql`d."user_id"`)}
+          ) AS deposits,
+          (SELECT sum(w."amount_cents") FROM "pix_withdrawals" w
+            WHERE w."tenant_id" = ${tenantId} AND w."status" = 'PAID' AND ${inPeriod(Prisma.sql`w."paid_at"`)}
+              ${player(Prisma.sql`w."user_id"`)}
+          ) AS withdrawals,
+          -- Primeiro depósito (FTD): cadastros do período que já têm um depósito pago, e a média do primeiro.
+          (SELECT count(f.amount) FROM (
+             SELECT (SELECT d."amount_cents" FROM "pix_deposits" d
+                      WHERE d."tenant_id" = ${tenantId} AND d."user_id" = u."id" AND d."status" = 'PAID'
+                      ORDER BY d."paid_at", d."id" LIMIT 1) AS amount
+             FROM "users" u
+             WHERE u."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`u."created_at"`)}
+               ${promoter ? Prisma.sql`AND u."referred_by_user_id" = ${promoter.id}::uuid` : Prisma.empty}
+           ) f) AS first_deposits,
+          (SELECT round(avg(f.amount)) FROM (
+             SELECT (SELECT d."amount_cents" FROM "pix_deposits" d
+                      WHERE d."tenant_id" = ${tenantId} AND d."user_id" = u."id" AND d."status" = 'PAID'
+                      ORDER BY d."paid_at", d."id" LIMIT 1) AS amount
+             FROM "users" u
+             WHERE u."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`u."created_at"`)}
+               ${promoter ? Prisma.sql`AND u."referred_by_user_id" = ${promoter.id}::uuid` : Prisma.empty}
+           ) f)::text AS first_deposit_avg`;
 
       const wageredCents = cents(row?.wagered ?? null);
       const prizesCents = cents(row?.prizes ?? null);
       const commissionCents = cents(row?.commission ?? null);
+      const signups = Number(row?.signups ?? 0n);
+      const firstDeposits = Number(row?.first_deposits ?? 0n);
+      const depositsCents = cents(row?.deposits ?? null);
+      const withdrawalsCents = cents(row?.withdrawals ?? null);
       return {
         from: query.from,
         to: query.to,
         promoter,
         newUsers: {
-          signups: Number(row?.signups ?? 0n),
-          firstDeposits: 0,
-          firstDepositRateBps: 0,
-          firstDepositAverageCents: 0,
+          signups,
+          firstDeposits,
+          firstDepositRateBps: signups > 0 ? Math.round((firstDeposits * 10_000) / signups) : 0,
+          firstDepositAverageCents: Number(row?.first_deposit_avg ?? 0),
         },
-        cashflow: { depositsCents: 0, withdrawalsCents: 0, netCents: 0 },
+        cashflow: { depositsCents, withdrawalsCents, netCents: depositsCents - withdrawalsCents },
         balances: {
-          // Sem regra de saque nesta fase (PublicWallet.withdrawable é sempre 0).
-          withdrawableCents: 0,
+          // Prêmios das loterias + do cassino (o que os jogadores podem sacar agora).
+          withdrawableCents: cents(row?.withdrawable ?? null),
           totalCents: cents(row?.wallets ?? null),
           creditedCents: cents(row?.credited ?? null),
           bonusCreditedCents: cents(row?.bonus_credited ?? null),
@@ -137,7 +175,7 @@ export class OperationSummaryService {
         },
         lotteries: game(wageredCents, prizesCents),
         casino: game(0, 0),
-        unavailable: ['deposits', 'withdrawals', 'casino'],
+        unavailable: ['casino'],
       };
     });
   }

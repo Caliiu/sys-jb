@@ -150,7 +150,7 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
  */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE pix_deposits, payment_gateways, casino_transactions, casino_games, pule_settlements, pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE pix_withdrawals, pix_deposits, payment_gateways, casino_transactions, casino_games, pule_settlements, pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
   await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
 }

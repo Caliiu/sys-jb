@@ -15,7 +15,7 @@ export interface PublicWallet {
   balanceGames: Cents;
   bonusGames: Cents;
   prizesGames: Cents;
-  /** Sempre 0 nesta fase: não há regra de saque definida. */
+  /** Pode sacar: prêmios das loterias + prêmios do cassino (recarga e bônus nunca). Saques pendentes já saíram. */
   withdrawable: Cents;
   /** Derivado na leitura: balanceJb + bonusJb + prizesJb. Não define elegibilidade para apostas ou saque. */
   totalAvailableJb: Cents;
@@ -163,6 +163,7 @@ export * from './prizes.js';
 export * from './settlement.js';
 export * from './casino.js';
 export * from './payments.js';
+export * from './crm.js';
 export * from './reports.js';
 export * from './murals.js';
 export * from './branding.js';

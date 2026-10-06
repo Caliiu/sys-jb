@@ -24,10 +24,10 @@ beforeEach(() => vi.clearAllMocks());
 describe('páginas "Em breve"', () => {
   it('com a permissão do item: título, ícone e o aviso', async () => {
     as(ROLE_PERMISSIONS.FINANCE);
-    render(await ComingSoonRoute({ href: '/crm/nunca-depositantes' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Nunca depositantes' })).toBeInTheDocument();
+    render(await ComingSoonRoute({ href: '/relatorios/cassino/fechamento' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Fechamento cassino' })).toBeInTheDocument();
     expect(screen.getByText('Em breve')).toBeInTheDocument();
-    expect(comingSoonMetadata('/crm/nunca-depositantes')).toEqual({ title: 'Nunca depositantes' });
+    expect(comingSoonMetadata('/relatorios/cassino/fechamento')).toEqual({ title: 'Fechamento cassino' });
   });
 
   it('sem a permissão (endereço digitado): bloqueia no servidor', async () => {
@@ -39,13 +39,15 @@ describe('páginas "Em breve"', () => {
 
   it('fora do painel disponível: mostra o aviso de indisponível', async () => {
     gate.mockResolvedValue({ ok: false, hostname: null, message: 'Indisponível neste endereço.' });
-    render(await ComingSoonRoute({ href: '/crm/inativos' }));
+    render(await ComingSoonRoute({ href: '/relatorios/cassino/fechamento' }));
     expect(screen.getByText('Indisponível neste endereço.')).toBeInTheDocument();
   });
 
   it('rota fora do menu ou que já tem tela: 404 (antes de consultar a sessão)', async () => {
     await expect(ComingSoonRoute({ href: '/nao-existe' })).rejects.toThrow('NEXT_NOT_FOUND');
     await expect(ComingSoonRoute({ href: '/usuarios' })).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(ComingSoonRoute({ href: '/crm/inativos' })).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(ComingSoonRoute({ href: '/crm/nunca-depositantes' })).rejects.toThrow('NEXT_NOT_FOUND');
     expect(gate).not.toHaveBeenCalled();
   });
 });

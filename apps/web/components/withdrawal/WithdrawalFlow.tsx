@@ -2,12 +2,18 @@
 
 import type { PublicWallet } from '@sysjb/contracts';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { requestWithdrawalAction } from '@/app/withdrawal-actions';
 import { useRecentPixKeys } from '@/hooks/useRecentPixKeys';
 import { formatPixKeyInput, initialPixKey, normalizePixKey, type PixKeyType, pixKeyProblem } from '@/lib/pix-key';
 import { normalizeRecentKey, type RecentPixKey, recentKeyFieldValue } from '@/lib/recent-pix-keys';
-import { isWithdrawalAmountValid, type WithdrawalItem, withdrawalSummary } from '@/lib/withdrawal';
+import {
+  isWithdrawalAmountValid,
+  type WithdrawalItem,
+  type WithdrawalLimits,
+  withdrawalBlocker,
+  withdrawalSummary,
+} from '@/lib/withdrawal';
 import SectionBar from '../section/SectionBar';
 import AmountStep from './AmountStep';
 import ConfirmWithdrawalSheet from './ConfirmWithdrawalSheet';
@@ -20,6 +26,8 @@ interface WithdrawalFlowProps {
   /** Usuário logado: as chaves recentes ficam guardadas por usuário. */
   userId: string;
   wallet: PublicWallet;
+  /** Limites de saque da banca e o uso de hoje. */
+  limits: WithdrawalLimits;
   /** Titular da conta: nome e CPF do cadastro. O saque só vale para a conta com este CPF. */
   holderName: string;
   holderDocument: string;
@@ -36,6 +44,7 @@ interface WithdrawalFlowProps {
 export default function WithdrawalFlow({
   userId,
   wallet,
+  limits,
   holderName,
   holderDocument,
   onExit,
@@ -54,6 +63,12 @@ export default function WithdrawalFlow({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /**
+   * Chave de idempotência da confirmação aberta: repetir o envio (rede caiu, clique duplo) devolve o mesmo saque.
+   * Nova a cada confirmação aberta; valor ou chave diferentes abrem outra confirmação.
+   */
+  const idempotencyKey = useRef<string | null>(null);
+  const blocker = withdrawalBlocker(limits);
 
   // A etapa nova começa no topo, mesmo que a anterior tenha sido rolada.
   useEffect(() => {
@@ -87,6 +102,12 @@ export default function WithdrawalFlow({
     setStep(2);
   }
 
+  function openConfirm() {
+    idempotencyKey.current = crypto.randomUUID();
+    setSubmitError(null);
+    setConfirmOpen(true);
+  }
+
   function cancelConfirm() {
     setConfirmOpen(false);
     setSubmitError(null);
@@ -94,7 +115,7 @@ export default function WithdrawalFlow({
 
   /** O servidor revalida tudo (sessão, chave e valor contra o saldo de agora); a tela só mostra o resultado. */
   async function confirmWithdrawal() {
-    if (submitting || !keyType) return;
+    if (submitting || !keyType || !idempotencyKey.current) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -102,6 +123,7 @@ export default function WithdrawalFlow({
         keyType,
         keyValue: normalizePixKey(keyType, keyValue),
         amountCents,
+        idempotencyKey: idempotencyKey.current,
       });
       if (result.ok) {
         setConfirmOpen(false);
@@ -144,6 +166,8 @@ export default function WithdrawalFlow({
         ) : (
           <AmountStep
             summary={summary}
+            limits={limits}
+            blocker={blocker}
             holderName={holderName}
             holderDocument={holderDocument}
             amountCents={amountCents}
@@ -161,8 +185,8 @@ export default function WithdrawalFlow({
         ) : (
           <button
             type="button"
-            onClick={() => setConfirmOpen(true)}
-            disabled={!isWithdrawalAmountValid(amountCents, summary.available)}
+            onClick={openConfirm}
+            disabled={!isWithdrawalAmountValid(amountCents, summary.available, limits)}
             className={ACTION_BUTTON_CLASS}
           >
             Avançar

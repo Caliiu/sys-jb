@@ -1,13 +1,16 @@
 'use client';
 
-import type { AdminPaymentSettings } from '@sysjb/contracts';
+import type { AdminPaymentSettings, WithdrawalSettings } from '@sysjb/contracts';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import AdminPageTitle from '@/components/admin/AdminPageTitle';
 import PaymentGatewayCard from '@/components/admin/PaymentGatewayCard';
+import WithdrawalSettingsCard from '@/components/admin/WithdrawalSettingsCard';
 
 interface PaymentsPageProps {
   settings: AdminPaymentSettings;
+  /** Limites de saque da banca; null = não foi possível ler (o cartão não aparece). */
+  withdrawals?: WithdrawalSettings | null;
   /** Gerente (payments.manage): grava, testa e ativa. */
   canManage: boolean;
 }
@@ -16,7 +19,7 @@ interface PaymentsPageProps {
  * Configurações > Pagamentos: os gateways disponíveis e qual a banca usa nas recargas Pix. Um ativo por vez; sem
  * nenhum ativo, a recarga fica indisponível para os jogadores.
  */
-export default function PaymentsPage({ settings: initial, canManage }: PaymentsPageProps) {
+export default function PaymentsPage({ settings: initial, withdrawals = null, canManage }: PaymentsPageProps) {
   const [settings, setSettings] = useState(initial);
   const active = settings.gateways.find((gateway) => gateway.active);
 
@@ -54,6 +57,8 @@ export default function PaymentsPage({ settings: initial, canManage }: PaymentsP
           onSettings={setSettings}
         />
       ))}
+
+      {withdrawals && <WithdrawalSettingsCard settings={withdrawals} canManage={canManage} />}
     </div>
   );
 }

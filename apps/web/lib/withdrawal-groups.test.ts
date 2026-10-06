@@ -7,10 +7,12 @@ const NOW = '2026-09-26T17:00:00.000Z';
 const item = (id: string, createdAt: string): WithdrawalItem => ({
   id,
   amountCents: 1000,
-  status: 'PENDING',
+  status: 'PROCESSING',
   keyType: 'cpf',
   keyValue: '52998224725',
   createdAt,
+  note: null,
+  cancellable: false,
 });
 
 describe('groupWithdrawalsByDay', () => {

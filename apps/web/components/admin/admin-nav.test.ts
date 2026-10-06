@@ -115,10 +115,12 @@ describe('menu do painel (configuração)', () => {
 
   it('acha o item, o grupo e o subgrupo pela rota exata', () => {
     expect(findNavItem('/crm/inativos')).toMatchObject({
-      item: { label: 'Apostadores inativos', soon: true },
+      item: { label: 'Apostadores inativos' },
       group: { group: 'CRM' },
       section: null,
     });
+    expect(findNavItem('/crm/inativos')!.item.soon).toBeUndefined();
+    expect(findNavItem('/crm/nunca-depositantes')!.item.soon).toBeUndefined();
     expect(findNavItem('/saques')).toMatchObject({ item: { label: 'Saques' }, group: { group: 'Carteira' } });
     expect(findNavItem('/saques')!.item.soon).toBeUndefined();
     expect(findNavItem('/relatorios/cassino/fechamento')).toMatchObject({

@@ -1,17 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_WITHDRAWAL_CENTS, parseWithdrawalRequest } from './withdrawal';
+import { WITHDRAWAL_LIMITS } from '@sysjb/contracts';
+import { parseWithdrawalRequest } from './withdrawal';
 
 const DOC = '52998224725';
 const RANDOM = '123e4567-e89b-42d3-a456-426614174000';
 const AVAILABLE = 30000; // R$ 300,00
 
-const parse = (input: unknown, available = AVAILABLE) => parseWithdrawalRequest(input, DOC, available);
+const KEY = '0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b';
+/** Piso do sistema (os limites da banca a API confere). */
+const MIN = WITHDRAWAL_LIMITS.minCents;
+
+/** Pedido com a chave de idempotência (quando o teste não a define). */
+const parse = (input: unknown, available = AVAILABLE) =>
+  parseWithdrawalRequest(
+    typeof input === 'object' && input !== null && !Array.isArray(input) && !('idempotencyKey' in input)
+      ? { ...input, idempotencyKey: KEY }
+      : input,
+    DOC,
+    available,
+  );
 
 describe('parseWithdrawalRequest', () => {
   it('aceita um pedido válido e devolve a chave normalizada', () => {
     expect(parse({ keyType: 'cpf', keyValue: '529.982.247-25', amountCents: 5000 })).toEqual({
       ok: true,
-      request: { keyType: 'cpf', keyValue: DOC, amountCents: 5000 },
+      request: { keyType: 'cpf', keyValue: DOC, amountCents: 5000, idempotencyKey: KEY },
     });
     expect(parse({ keyType: 'email', keyValue: ' Ana@Example.COM ', amountCents: 100 })).toMatchObject({
       ok: true,
@@ -28,7 +41,7 @@ describe('parseWithdrawalRequest', () => {
   });
 
   it('aceita exatamente o mínimo e exatamente o disponível', () => {
-    expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: MIN_WITHDRAWAL_CENTS }).ok).toBe(true);
+    expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: MIN }).ok).toBe(true);
     expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: AVAILABLE }).ok).toBe(true);
   });
 
@@ -81,16 +94,25 @@ describe('parseWithdrawalRequest', () => {
   });
 
   it('abaixo do mínimo, zero e negativo são recusados', () => {
-    expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: MIN_WITHDRAWAL_CENTS - 1 })).toEqual({
+    expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: MIN - 1 })).toEqual({
       ok: false,
-      message: 'Valor mínimo para saque: R$ 1,00',
+      message: 'Pedido de saque inválido.',
     });
     expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: 0 }).ok).toBe(false);
     expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: -100 }).ok).toBe(false);
   });
 
-  it('campos extras são ignorados: só chave e valor entram no pedido', () => {
+  it('campos extras são ignorados: só chave, valor e a chave de idempotência entram no pedido', () => {
     const result = parse({ keyType: 'cpf', keyValue: DOC, amountCents: 5000, userId: 'outro', status: 'PAID' });
-    expect(result).toEqual({ ok: true, request: { keyType: 'cpf', keyValue: DOC, amountCents: 5000 } });
+    expect(result).toEqual({
+      ok: true,
+      request: { keyType: 'cpf', keyValue: DOC, amountCents: 5000, idempotencyKey: KEY },
+    });
+  });
+
+  it('sem chave de idempotência válida, o pedido é recusado (sem ela, um clique duplo viraria dois saques)', () => {
+    for (const idempotencyKey of [undefined, '', 'abc', 123, KEY.slice(1)]) {
+      expect(parse({ keyType: 'cpf', keyValue: DOC, amountCents: 5000, idempotencyKey }).ok).toBe(false);
+    }
   });
 });

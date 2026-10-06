@@ -1,4 +1,4 @@
-import type { AdminDepositList } from '@sysjb/contracts';
+import type { AdminDepositList, AdminWithdrawalList, AdminWithdrawalListItem } from '@sysjb/contracts';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,13 +7,18 @@ import {
   depositsApiQuery,
   parseWalletMovementsQuery,
   walletMovementsHref,
+  withdrawalsApiQuery,
 } from '@/lib/admin/wallet-movements-query';
 import { renderWithProviders, router } from '@/test/render';
 
 const reviewDepositAction = vi.fn();
+const reviewWithdrawalAction = vi.fn();
+const resolveWithdrawalAction = vi.fn();
 vi.mock('@/app/admin/actions', () => ({
   searchPlayersAction: vi.fn(async () => ({ ok: true, data: [] })),
   reviewDepositAction: (...args: unknown[]) => reviewDepositAction(...args),
+  reviewWithdrawalAction: (...args: unknown[]) => reviewWithdrawalAction(...args),
+  resolveWithdrawalAction: (...args: unknown[]) => resolveWithdrawalAction(...args),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/depositos' }));
 
@@ -30,6 +35,7 @@ const show = (
   raw: Record<string, string> = {},
   deposits: AdminDepositList | 'error' | null = null,
   canReview = false,
+  withdrawals: AdminWithdrawalList | 'error' | null = null,
 ) =>
   renderWithProviders(
     <WalletMovementsPage
@@ -39,6 +45,7 @@ const show = (
       promoters={[PROMOTER]}
       player={null}
       deposits={deposits}
+      withdrawals={withdrawals}
       canReview={canReview}
     />,
   );
@@ -61,9 +68,9 @@ describe('filtros de depósitos e saques na URL', () => {
       NOW,
     );
     expect(query).toMatchObject({ searched: true, status: 'recusado', userId: ID, promoterId: '' });
-    // "Aprovado" é só de saque; "expirado" e "em análise", só de depósito.
-    expect(parseWalletMovementsQuery('deposits', { status: 'aprovado' }, NOW).status).toBe('');
-    expect(parseWalletMovementsQuery('withdrawals', { status: 'em-analise' }, NOW).status).toBe('');
+    // "Na fila" é só de saque; "expirado", só de depósito; "em análise" existe nos dois.
+    expect(parseWalletMovementsQuery('deposits', { status: 'na-fila' }, NOW).status).toBe('');
+    expect(parseWalletMovementsQuery('withdrawals', { status: 'em-analise' }, NOW).status).toBe('em-analise');
     expect(parseWalletMovementsQuery('withdrawals', { status: 'expirado' }, NOW).status).toBe('');
     expect(parseWalletMovementsQuery('deposits', { de: TODAY, ate: '2026-05-30' }, NOW).searched).toBe(false);
     expect(walletMovementsHref('withdrawals', query)).toBe(
@@ -72,6 +79,11 @@ describe('filtros de depósitos e saques na URL', () => {
     expect(walletMovementsHref('withdrawals', { ...query, page: 3, pageSize: 50 })).toBe(
       `/saques?de=2026-05-01&ate=${TODAY}&apostador=${ID}&status=recusado&page=3&pageSize=50`,
     );
+  });
+
+  it('saques: status e filtros no formato da API', () => {
+    const query = parseWalletMovementsQuery('withdrawals', { de: TODAY, ate: TODAY, status: 'nao-pago' }, NOW);
+    expect(withdrawalsApiQuery(query)).toEqual({ from: TODAY, to: TODAY, page: 1, pageSize: 25, status: 'FAILED' });
   });
 
   it('depósitos: status e filtros no formato da API', () => {
@@ -93,7 +105,12 @@ describe('filtros de depósitos e saques na URL', () => {
 
 describe.each([
   ['deposits', 'Depósitos', '/depositos', ['Pendente', 'Em análise', 'Pago', 'Expirado', 'Cancelado', 'Recusado']],
-  ['withdrawals', 'Saques', '/saques', ['Pendente', 'Aprovado', 'Pago', 'Recusado', 'Cancelado']],
+  [
+    'withdrawals',
+    'Saques',
+    '/saques',
+    ['Em análise', 'Na fila', 'Enviando', 'Processando', 'Pago', 'Não pago', 'Recusado', 'Cancelado'],
+  ],
 ] as const)('%s', (kind, title, href, statuses) => {
   it('filtros da referência; antes de pesquisar, o pedido para aplicar um filtro', async () => {
     show(kind);
@@ -132,8 +149,135 @@ describe.each([
     expect(within(results).getByText(/^Período:/).textContent).toBe('Período: 01/05/2026 – 29/05/2026');
     expect(within(results).getByRole('table', { name: title })).toBeInTheDocument();
     expect(within(results).getByText('Nenhum resultado encontrado')).toBeInTheDocument();
-    // Só os saques ainda dependem da integração; os depósitos já vêm da Recarga Pix.
-    expect(within(results).queryByText(/dependem da integração de pagamento/) !== null).toBe(kind === 'withdrawals');
+    expect(within(results).queryByText(/dependem da integração de pagamento/)).toBeNull();
+  });
+});
+
+describe('saques registrados', () => {
+  const base: AdminWithdrawalListItem = {
+    id: '33333333-3333-4333-8333-333333333333',
+    createdAt: '2026-05-29T13:05:00.000Z',
+    paidAt: '2026-05-29T13:07:00.000Z',
+    user: { id: ID, displayId: 100012, name: 'Pessoa Sintética' },
+    amountCents: 5000,
+    fromPrizesJbCents: 3000,
+    fromPrizesGamesCents: 2000,
+    keyType: 'CPF',
+    keyValue: '52998224725',
+    status: 'PAID',
+    gateway: 'MISTICPAY',
+    providerTransactionId: '54345',
+    failureReason: null,
+    note: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    resolvedBy: null,
+    resolvedAt: null,
+    beneficiary: { name: 'Pessoa Sintética', document: '52998224725' },
+    beneficiaryMatches: true,
+    resolvable: false,
+  };
+  const LIST: AdminWithdrawalList = {
+    items: [
+      base,
+      {
+        ...base,
+        id: '44444444-4444-4444-8444-444444444444',
+        createdAt: '2026-05-29T12:00:00.000Z',
+        paidAt: null,
+        amountCents: 30000,
+        fromPrizesJbCents: 30000,
+        fromPrizesGamesCents: 0,
+        keyType: 'PHONE',
+        keyValue: '11987654321',
+        status: 'REVIEW',
+        gateway: null,
+        providerTransactionId: null,
+        beneficiary: null,
+        beneficiaryMatches: null,
+      },
+      {
+        ...base,
+        id: '55555555-5555-4555-8555-555555555555',
+        createdAt: '2026-05-29T11:00:00.000Z',
+        paidAt: null,
+        status: 'SENDING',
+        providerTransactionId: null,
+        beneficiary: null,
+        beneficiaryMatches: null,
+        resolvable: true,
+      },
+    ],
+    total: 3,
+    page: 1,
+    pageSize: 25,
+    paidTotalCents: 5000,
+  };
+
+  it('linhas com data, apostador, chave (com máscara), origem, valor e situação; total pago', () => {
+    show('withdrawals', { de: TODAY, ate: TODAY }, null, false, LIST);
+    const results = screen.getByRole('region', { name: 'Resultados' });
+    const rows = within(results).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(3);
+    expect(within(rows[0]!).getByText('529.982.247-25')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Loterias R$ 30,00')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Cassino R$ 20,00')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('Pago')).toBeInTheDocument();
+    expect(within(rows[0]!).getByText('MisticPay #54345')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('(11) 98765-4321')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('Em análise')).toBeInTheDocument();
+    expect(within(results).getByText(/^Total pago:/).textContent).toBe('Total pago: R$ 50,00');
+    expect(screen.getByRole('navigation', { name: 'Paginação' })).toHaveTextContent('Mostrando 1 a 3 de 3 saques');
+    // Sem perfil de Gerente, nenhuma ação.
+    expect(screen.queryByRole('button', { name: 'Aprovar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Foi pago' })).toBeNull();
+  });
+
+  it('pago a outro titular fica destacado', () => {
+    show('withdrawals', { de: TODAY, ate: TODAY }, null, true, {
+      ...LIST,
+      items: [{ ...base, beneficiary: { name: 'Outra Pessoa', document: '11144477735' }, beneficiaryMatches: false }],
+    });
+    expect(screen.getByText(/Pago a outro titular · Outra Pessoa 111\.444\.777-35/)).toBeInTheDocument();
+  });
+
+  it('Gerente aprova com confirmação e recusa com motivo; cancelar não chama a API', async () => {
+    const ui = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce(null).mockReturnValueOnce('Chave de outra pessoa');
+    reviewWithdrawalAction.mockResolvedValue({ ok: true, data: LIST.items[1] });
+    show('withdrawals', { de: TODAY, ate: TODAY }, null, true, LIST);
+
+    await ui.click(screen.getByRole('button', { name: 'Aprovar' }));
+    expect(reviewWithdrawalAction).not.toHaveBeenCalled();
+    await ui.click(screen.getByRole('button', { name: 'Aprovar' }));
+    expect(reviewWithdrawalAction).toHaveBeenLastCalledWith(LIST.items[1]!.id, true);
+
+    await ui.click(screen.getByRole('button', { name: 'Recusar' }));
+    expect(reviewWithdrawalAction).toHaveBeenCalledTimes(1);
+    await ui.click(screen.getByRole('button', { name: 'Recusar' }));
+    expect(reviewWithdrawalAction).toHaveBeenLastCalledWith(LIST.items[1]!.id, false, 'Chave de outra pessoa');
+    expect(router.refresh).toHaveBeenCalled();
+    confirm.mockRestore();
+    prompt.mockRestore();
+  });
+
+  it('envio sem resposta: o Gerente conclui à mão depois de conferir no gateway', async () => {
+    const ui = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    resolveWithdrawalAction.mockResolvedValue({ ok: false, code: 'CONFLICT', message: 'A situação mudou.' });
+    show('withdrawals', { de: TODAY, ate: TODAY }, null, true, LIST);
+    expect(screen.getByText('Confira no painel do gateway antes de concluir.')).toBeInTheDocument();
+    await ui.click(screen.getByRole('button', { name: 'Não foi pago' }));
+    expect(confirm.mock.calls[0]![0]).toMatch(/NÃO FOI PAGO.*recebe duas vezes/s);
+    expect(resolveWithdrawalAction).toHaveBeenCalledWith(LIST.items[2]!.id, false);
+    expect(await screen.findByRole('alert')).toHaveTextContent('A situação mudou.');
+    confirm.mockRestore();
+  });
+
+  it('API fora do ar: avisa sem quebrar a tela', () => {
+    show('withdrawals', { de: TODAY, ate: TODAY }, null, true, 'error');
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível carregar os saques. Tente novamente.');
   });
 });
 

@@ -4,11 +4,11 @@ import type { WithdrawalSummary } from '@/lib/withdrawal';
 
 interface BalanceSummaryProps {
   summary: WithdrawalSummary;
-  /** Abre a explicação "Bônus e recargas não podem ser resgatados". */
+  /** Abre a explicação "Só prêmios podem ser resgatados". */
   onExplain: () => void;
 }
 
-/** Resumo do saldo: total, menos recarga, menos bônus, igual ao disponível para resgate. */
+/** Resumo do saldo: prêmios das loterias + ganhos do cassino = disponível para resgate. */
 export default function BalanceSummary({ summary, onExplain }: BalanceSummaryProps) {
   return (
     <section aria-labelledby="withdraw-summary-title" className="rounded-2xl bg-white p-4 shadow-sm">
@@ -24,16 +24,12 @@ export default function BalanceSummary({ summary, onExplain }: BalanceSummaryPro
 
       <dl className="mt-3 flex flex-col gap-1.5 text-[13px] tabular-nums">
         <div className="flex justify-between">
-          <dt className="text-gray-700">Saldo total</dt>
-          <dd className="font-bold text-gray-900">{formatBrl(summary.total)}</dd>
+          <dt className="text-gray-700">Prêmios das loterias</dt>
+          <dd className="font-semibold text-gray-900">{formatBrl(summary.lotteries)}</dd>
         </div>
-        <div className="flex justify-between text-gray-400">
-          <dt>− Recarga</dt>
-          <dd>{formatBrl(summary.recharge)}</dd>
-        </div>
-        <div className="flex justify-between text-gray-400">
-          <dt>− Bônus</dt>
-          <dd>{formatBrl(summary.bonus)}</dd>
+        <div className="flex justify-between">
+          <dt className="text-gray-700">+ Ganhos do cassino</dt>
+          <dd className="font-semibold text-gray-900">{formatBrl(summary.casino)}</dd>
         </div>
       </dl>
 

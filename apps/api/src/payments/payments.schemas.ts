@@ -61,8 +61,10 @@ export const listDepositsQuerySchema = z
   .superRefine((query, ctx) => checkPeriod(query, ctx, OPERATION_SUMMARY_MAX_DAYS));
 export type ListDepositsQuery = z.output<typeof listDepositsQuerySchema>;
 
-/** Endereço do aviso (webhook): o id do depósito e a assinatura dele (HMAC), como vieram na URL. */
-export const depositWebhookQuerySchema = z.object({
-  d: z.uuid(),
-  t: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-});
+const webhookToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/** Endereço do aviso (webhook): o id do depósito (d) ou do saque (s) e a assinatura dele (HMAC), como vieram na URL. */
+export const paymentWebhookQuerySchema = z.union([
+  z.object({ d: z.uuid(), t: webhookToken }),
+  z.object({ s: z.uuid(), t: webhookToken }),
+]);

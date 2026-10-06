@@ -95,6 +95,10 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'payment.gateway.deactivate': 'danger',
   'deposit.approve': 'success',
   'deposit.reject': 'danger',
+  'withdrawal.approve': 'success',
+  'withdrawal.reject': 'danger',
+  'withdrawal.resolve': 'neutral',
+  'withdrawal.settings': 'neutral',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
@@ -128,6 +132,10 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'payment.gateway.deactivate': 'Gateway de pagamento desativado',
   'deposit.approve': 'Depósito em análise liberado',
   'deposit.reject': 'Depósito em análise recusado',
+  'withdrawal.approve': 'Saque aprovado',
+  'withdrawal.reject': 'Saque recusado',
+  'withdrawal.resolve': 'Saque concluído à mão',
+  'withdrawal.settings': 'Limites de saque alterados',
 };
 
 const FIELD_LABELS: Record<string, string> = {

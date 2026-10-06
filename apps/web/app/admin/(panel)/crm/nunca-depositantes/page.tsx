@@ -1,10 +1,13 @@
-import ComingSoonRoute, { comingSoonMetadata } from '@/components/admin/ComingSoonRoute';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
+import { CrmRoute } from '@/lib/admin/crm-route';
 
 export const dynamic = 'force-dynamic';
-export const metadata = comingSoonMetadata(ADMIN_ROUTES.neverDeposited);
+export const metadata = { title: 'Nunca depositantes' };
 
-/** Página ainda não construída: "Em breve" (com sessão e permissão conferidas). */
-export default function Page() {
-  return <ComingSoonRoute href={ADMIN_ROUTES.neverDeposited} />;
+/** CRM > Nunca depositantes: abre nos cadastros dos últimos 7 dias, os mais antigos primeiro. */
+export default function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <CrmRoute list="never-deposited" searchParams={searchParams} />;
 }
