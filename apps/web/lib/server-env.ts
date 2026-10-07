@@ -22,12 +22,6 @@ export function hostnameOnly(host: string | null): string | null {
   return /^[a-z0-9.-]{1,253}$/.test(name) ? name : null;
 }
 
-/** A demonstração só existe em desenvolvimento e em hostnames *.localhost. */
-export function demoAllowed(hostname: string | null): boolean {
-  if (process.env.NODE_ENV === 'production') return false;
-  return hostname === 'localhost' || (hostname?.endsWith('.localhost') ?? false);
-}
-
 export function apiBaseUrl(): string {
   ensureEnv();
   return process.env.WEB_API_URL ?? 'http://127.0.0.1:4000';

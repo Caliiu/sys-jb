@@ -95,6 +95,8 @@ describe('Movimento loterias', () => {
 const lotteryDetail: PuleDetail = {
   game: 'lotteries',
   cancellable: true,
+  cancellableUntil: '2099-01-01T00:00:00.000Z',
+  canceledAt: null,
   ticket: {
     puleNumber: 562361031,
     game: 'tradicional',

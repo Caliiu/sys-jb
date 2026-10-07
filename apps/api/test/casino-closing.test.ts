@@ -250,7 +250,12 @@ describe('POST /v1/admin/reports/casino/closing/pay', () => {
     expect(after.balanceCents).toBe(before.balanceCents);
     const [year, month] = previous.split('-');
     expect(after.entries).toEqual([
-      { kind: 'CASINO_COMMISSION', balance_jb_delta: '0', prizes_jb_delta: '2000', note: `Comissão de cassino ${month}/${year}` },
+      {
+        kind: 'CASINO_COMMISSION',
+        balance_jb_delta: '0',
+        prizes_jb_delta: '2000',
+        note: `Comissão de cassino ${month}/${year}`,
+      },
     ]);
     const audit = await session.http.get('/v1/admin/audit?action=casino.commission.pay');
     expect(audit.status).toBe(200);

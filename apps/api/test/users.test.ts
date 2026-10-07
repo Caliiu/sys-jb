@@ -15,6 +15,8 @@ import {
   SYNTHETIC_PASSWORD,
   syntheticUser,
   tenantId,
+  meOf,
+  loginPlayer,
 } from './helpers.js';
 
 const CONTRACT_KEYS = [
@@ -115,9 +117,9 @@ describe('1. cadastro e contrato público', () => {
     });
   });
 
-  it('GET devolve o mesmo contrato, com nullables explícitos', async () => {
+  it('GET /v1/me devolve o mesmo contrato, com nullables explícitos', async () => {
     const created = await createUser(app, 'aurora');
-    const res = await api(app, 'aurora').get(`/v1/users/${created.id}`);
+    const res = await (await loginPlayer(app, 'aurora', created)).http.get('/v1/me');
     expect(res.status).toBe(200);
     expect(res.body).toEqual(created);
     expect(res.text).toContain('"email":null');
@@ -218,37 +220,34 @@ describe('7. campos protegidos e semântica do PATCH', () => {
     expect(await countRows(auroraId)).toEqual({ users: 0, wallets: 0 });
   });
 
-  it('PATCH rejeita campos protegidos, corpo vazio e null em campo obrigatório', async () => {
+  it('PATCH do perfil rejeita campos protegidos, de cadastro, corpo vazio e null em campo obrigatório', async () => {
     const user = await createUser(app, 'aurora');
-    for (const [field, value] of Object.entries(protectedFields)) {
-      const res = await api(app, 'aurora').patch(`/v1/users/${user.id}`, { name: 'Nome Válido', [field]: value });
+    const { http } = await loginPlayer(app, 'aurora', user);
+    // Nome, CPF e foto o jogador não altera (o nome e o CPF, só o painel).
+    const notAllowed = { ...protectedFields, name: 'Outro Nome', document: cpfFrom('123456789'), avatar: null };
+    for (const [field, value] of Object.entries(notAllowed)) {
+      const res = await http.patch('/v1/me', { phone: '21999998888', [field]: value });
       expect(res.status, field).toBe(400);
     }
-    expect((await api(app, 'aurora').patch(`/v1/users/${user.id}`, {})).status).toBe(400);
-    for (const field of ['name', 'phone', 'document']) {
-      expect((await api(app, 'aurora').patch(`/v1/users/${user.id}`, { [field]: null })).status, field).toBe(400);
-    }
-    const unchanged = await api(app, 'aurora').get(`/v1/users/${user.id}`);
-    expect(unchanged.body).toEqual(user);
+    expect((await http.patch('/v1/me', {})).status).toBe(400);
+    expect((await http.patch('/v1/me', { phone: null })).status).toBe(400);
+    expect(await meOf(app, 'aurora', user)).toEqual(user);
   });
 
-  it('PATCH: campo ausente mantém valor; null limpa apenas email/avatar', async () => {
+  it('PATCH do perfil: campo ausente mantém valor; null limpa só o e-mail', async () => {
     const user = await createUser(app, 'aurora', {
       email: 'patch@exemplo.test',
       avatar: 'https://cdn.exemplo.test/a.png',
     });
+    const { http } = await loginPlayer(app, 'aurora', user);
 
-    const renamed = await api(app, 'aurora').patch(`/v1/users/${user.id}`, { name: 'Novo Nome Sintético' });
-    expect(renamed.status).toBe(200);
-    expect(renamed.body).toEqual({ ...user, name: 'Novo Nome Sintético' });
+    expect((await http.patch('/v1/me', { phone: '(21) 3333-4444' })).status).toBe(200);
+    expect(await meOf(app, 'aurora', user)).toEqual({ ...user, phone: '2133334444' });
 
-    const cleared = await api(app, 'aurora').patch(`/v1/users/${user.id}`, { avatar: null });
-    expect(cleared.status).toBe(200);
-    expect(cleared.body).toEqual({ ...user, name: 'Novo Nome Sintético', avatar: null });
-
-    const phone = await api(app, 'aurora').patch(`/v1/users/${user.id}`, { phone: '(21) 3333-4444', email: null });
-    expect(phone.body).toMatchObject({ phone: '2133334444', email: null, avatar: null, displayId: user.displayId });
-    expect(phone.body.wallet).toEqual(user.wallet);
+    expect((await http.patch('/v1/me', { email: null })).status).toBe(200);
+    const after = await meOf(app, 'aurora', user);
+    expect(after).toMatchObject({ phone: '2133334444', email: null, avatar: user.avatar, displayId: user.displayId });
+    expect(after.wallet).toEqual(user.wallet);
   });
 
   it('não expõe endpoints de exclusão, listagem ou alteração de carteira', async () => {
@@ -256,6 +255,9 @@ describe('7. campos protegidos e semântica do PATCH', () => {
     const client = api(app, 'aurora');
     const del = await client.raw().delete(`/v1/users/${user.id}`).set('Host', 'aurora.test');
     expect(del.status).toBe(404);
+    // Consulta e alteração por id com a credencial de serviço não existem (só /v1/me e o painel).
+    expect((await client.get(`/v1/users/${user.id}`)).status).toBe(404);
+    expect((await client.patch(`/v1/users/${user.id}`, { name: 'Nome Válido' })).status).toBe(404);
     expect((await client.get('/v1/users')).status).toBe(404);
     expect((await client.patch(`/v1/users/${user.id}/wallet`, { balanceJb: 1 })).status).toBe(404);
   });

@@ -24,6 +24,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  meOf,
 } from './helpers.js';
 import { TEST_TENANTS } from './env.js';
 
@@ -359,8 +360,7 @@ describe('perfis e permissões', () => {
     await session.http.patch(`/v1/admin/users/${user.id}`, { name: 'Nome Corrigido' });
     await session.http.patch(`/v1/admin/users/${user.id}/status`, { status: 'BLOCKED' });
 
-    const after = await api(app, 'aurora').get(`/v1/users/${user.id}`);
-    expect(after.body.name).toBe(user.name);
+    expect((await meOf(app, 'aurora', user)).name).toBe(user.name);
     expect(await auditRows(auroraId, user.id)).toEqual([]);
   });
 });
@@ -582,7 +582,7 @@ describe('edição de cadastro', () => {
     const session = await loginOperator(app, 'aurora');
     const foreign = await createUser(app, 'boreal');
     expect((await session.http.patch(`/v1/admin/users/${foreign.id}`, { name: 'Invasor Nome' })).status).toBe(404);
-    expect((await api(app, 'boreal').get(`/v1/users/${foreign.id}`)).body.name).toBe(foreign.name);
+    expect((await meOf(app, 'boreal', foreign)).name).toBe(foreign.name);
     expect(await auditRows(borealId, foreign.id)).toEqual([]);
   });
 });

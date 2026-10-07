@@ -23,6 +23,7 @@ import {
   runtimePool,
   startApp,
   tenantId,
+  settleAll,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -53,10 +54,9 @@ type Session = Awaited<ReturnType<typeof loginOperator>>;
 async function federalToday(on: boolean) {
   await asTenant(migratorPool, auroraId, async (c) => {
     await c.query(`DELETE FROM draw_exceptions WHERE date = brasilia_today()`);
-    await c.query(
-      `UPDATE draws SET weekdays = $1::smallint[] WHERE result_lottery = 'fd'`,
-      [on ? [0, 1, 2, 3, 4, 5, 6] : [0, 3]],
-    );
+    await c.query(`UPDATE draws SET weekdays = $1::smallint[] WHERE result_lottery = 'fd'`, [
+      on ? [0, 1, 2, 3, 4, 5, 6] : [0, 3],
+    ]);
     if (!on) {
       await c.query(
         `INSERT INTO draw_exceptions (tenant_id, date, draw_id, kind)
@@ -277,13 +277,16 @@ describe('Concessão do bônus na recarga', () => {
     await configure(manager, { daily: on(1000, 30000) });
     const { person } = await player();
     const { id } = await pay(person, 10000);
-    const entries = await asTenant(migratorPool, auroraId, async (c) =>
-      (
-        await c.query(
-          `SELECT kind, balance_jb_delta, bonus_jb_delta, note FROM wallet_entries WHERE user_id = $1 ORDER BY kind`,
-          [person.id],
-        )
-      ).rows,
+    const entries = await asTenant(
+      migratorPool,
+      auroraId,
+      async (c) =>
+        (
+          await c.query(
+            `SELECT kind, balance_jb_delta, bonus_jb_delta, note FROM wallet_entries WHERE user_id = $1 ORDER BY kind`,
+            [person.id],
+          )
+        ).rows,
     );
     expect(entries).toEqual([
       { kind: 'DEPOSIT', balance_jb_delta: '10000', bonus_jb_delta: '0', note: null },
@@ -325,12 +328,18 @@ describe('Uso do bônus nas apostas', () => {
     });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(await walletOf(person.id)).toEqual({ balance: 800, bonus: 0, prizes: 0 });
-    // 10% de promotor sobre os 200 pagos com Saldo (não sobre os 300 de bônus).
-    expect(await walletOf(promoter.id)).toMatchObject({ balance: 20 });
+    // Comissão pendente: 10% de promotor sobre os 200 pagos com Saldo (não sobre os 300 de bônus).
+    const pending = await asTenant(migratorPool, auroraId, (c) =>
+      c.query('SELECT wagered_cents::int AS wagered, promoter_cents::int AS cents FROM bet_commissions'),
+    );
+    expect(pending.rows).toEqual([{ wagered: 200, cents: 20 }]);
+    expect(await walletOf(promoter.id)).toMatchObject({ balance: 0 });
 
     const pule = res.body.tickets[0].puleNumber as number;
     expect((await http.post(`/v1/me/pules/${pule}/cancel`, {})).status).toBe(200);
     expect(await walletOf(person.id)).toEqual({ balance: 1000, bonus: 300, prizes: 0 });
+    // Cancelado antes da apuração: a comissão não chega a ser paga.
+    await settleAll(app, 'aurora');
     expect(await walletOf(promoter.id)).toMatchObject({ balance: 0 });
   });
 

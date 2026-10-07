@@ -9,6 +9,7 @@ import {
   type PuleList,
   type PuleSummary,
   REPORT_DAYS_BACK,
+  PULE_CANCEL_WINDOW_MINUTES,
 } from '@sysjb/contracts';
 import type { UserSession } from '../auth/session.types.js';
 import { AppError, Errors } from '../common/app-error.js';
@@ -218,10 +219,17 @@ export class ReportsService {
       ]);
       if (!user) throw Errors.sessionInvalid();
       if (ticket) {
+        // Prazo: o que vier antes, fim dos minutos de cancelamento ou da venda (o banco confere de novo).
+        const until = Math.min(
+          ticket.createdAt.getTime() + PULE_CANCEL_WINDOW_MINUTES * 60_000,
+          ticket.closesAt.getTime(),
+        );
+        const cancellable = !ticket.canceledAt && until > Date.now();
         return {
           game: 'lotteries',
           ticket: toPublicTicket(ticket, user.displayId),
-          cancellable: !ticket.canceledAt && ticket.closesAt.getTime() > Date.now(),
+          cancellable,
+          cancellableUntil: cancellable ? new Date(until).toISOString() : null,
           canceledAt: ticket.canceledAt?.toISOString() ?? null,
         };
       }
@@ -242,8 +250,9 @@ export class ReportsService {
   }
 
   /**
-   * Cancelar pule (só Loterias), pelo próprio jogador e antes do horário limite. O banco faz tudo numa transação
-   * (lottery_cancel): devolve a aposta às mesmas bolsas, marca a pule e estorna a comissão de quem indicou. Pule de
+   * Cancelar pule (só Loterias), pelo próprio jogador, nos primeiros minutos depois da aposta e antes do horário de
+   * venda. O banco faz tudo numa transação (lottery_cancel): devolve a aposta às mesmas bolsas, marca a pule e anula a
+   * comissão pendente de quem indicou. Pule de
    * outro jogador ou inexistente responde 404, como a consulta; repetir o pedido responde 409.
    */
   async cancelPule(tenant: ResolvedTenant, session: UserSession, puleNumber: number): Promise<PuleDetail> {
@@ -259,6 +268,13 @@ export class ReportsService {
       if (hasSqlState(error, 'SJ005')) throw new AppError(409, 'CONFLICT', 'Esta pule já foi cancelada.');
       if (hasSqlState(error, 'SJ002')) {
         throw new AppError(409, 'DRAW_CLOSED', 'O horário de venda desta extração já encerrou.');
+      }
+      if (hasSqlState(error, 'SJ021')) {
+        throw new AppError(
+          409,
+          'CONFLICT',
+          `O prazo para cancelar esta pule (${PULE_CANCEL_WINDOW_MINUTES} minutos depois da aposta) acabou.`,
+        );
       }
       throw error;
     }

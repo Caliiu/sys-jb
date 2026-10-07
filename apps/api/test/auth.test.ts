@@ -17,6 +17,7 @@ import {
   SYNTHETIC_PASSWORD,
   syntheticUser,
   tenantId,
+  loginPlayer,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -128,15 +129,21 @@ describe('cadastro: CPF, data de nascimento e senha', () => {
     expect(row?.password_hash).not.toContain(SYNTHETIC_PASSWORD);
     expect(row?.birth_date).toBe('1990-05-17');
 
-    for (const res of [await api(app, 'aurora').get(`/v1/users/${user.id}`)]) {
-      expect(res.text).not.toMatch(/password|argon2|birth/i);
-    }
+    const { http } = await loginPlayer(app, 'aurora', user);
+    const me = await http.get('/v1/me');
+    expect(me.status).toBe(200);
+    expect(me.text).not.toMatch(/password|argon2|birth/i);
+    // "Meu perfil" mostra o nascimento ao próprio jogador, mas nunca a senha.
+    const profile = await http.get('/v1/me/profile');
+    expect(profile.status).toBe(200);
+    expect(profile.text).not.toMatch(/password|argon2/i);
   });
 
-  it('senha e data de nascimento não podem ser alteradas pelo PATCH', async () => {
+  it('senha e data de nascimento não podem ser alteradas pelo PATCH do perfil', async () => {
     const user = await createUser(app, 'aurora');
+    const { http } = await loginPlayer(app, 'aurora', user);
     for (const body of [{ password: 'nova senha sintética' }, { birthDate: '1980-01-01' }, { passwordHash: 'x' }]) {
-      expect((await api(app, 'aurora').patch(`/v1/users/${user.id}`, body)).status).toBe(400);
+      expect((await http.patch('/v1/me', body)).status).toBe(400);
     }
   });
 });

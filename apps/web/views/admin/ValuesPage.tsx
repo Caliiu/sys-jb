@@ -22,7 +22,8 @@ export default function ValuesPage({ settings, canManage }: ValuesPageProps) {
       </h2>
       <p className="mt-1 text-[12.5px] text-admin-muted">
         Quem indica um jogador ganha este percentual sobre tudo o que o indicado apostar. Se quem indicou for promotor,
-        soma a comissão dele de promotor (ex.: 3% + 7% = 10%). Pago no Saldo no fechamento do mês.
+        soma a comissão dele de promotor (ex.: 3% + 7% = 10%). Pago no Saldo quando o pule é apurado (depois do
+        resultado).
       </p>
       <div className="mt-4">
         {canManage ? (

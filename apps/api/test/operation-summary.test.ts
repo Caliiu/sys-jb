@@ -24,6 +24,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  settleAll,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -195,7 +196,7 @@ describe('GET /v1/admin/operation-summary', () => {
     ]);
   });
 
-  it('comissão paga no período (na hora da aposta) entra no resultado; com promotor, só a dele', async () => {
+  it('comissão paga no período (na apuração do pule) entra no resultado; com promotor, só a dele', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
     const promoter = await createUser(app, 'aurora');
@@ -203,10 +204,19 @@ describe('GET /v1/admin/operation-summary', () => {
     const referred = await player({ inviteCode: promoter.inviteCode });
     await credit(session, referred.person.id, 'balance', 1_000);
     await buyFazendinha(referred);
+    // Pendente até a apuração: ainda sem comissão no período.
+    expect((await summary(session, today)).result.commissionCents).toBe(0);
 
-    // 10% (3% + 7%) de R$ 1,00, creditado na aposta.
+    // 10% (3% + 7%) de R$ 1,00, creditado na apuração.
+    await settleAll(app, 'aurora');
     const body = await summary(session, today);
-    expect(body.result).toEqual({ wageredCents: 100, prizesCents: 0, grossCents: 100, commissionCents: 10, netCents: 90 });
+    expect(body.result).toEqual({
+      wageredCents: 100,
+      prizesCents: 0,
+      grossCents: 100,
+      commissionCents: 10,
+      netCents: 90,
+    });
     expect((await summary(session, `${today}&promoterId=${promoter.id}`)).result.commissionCents).toBe(10);
     // Ontem não teve comissão.
     expect((await summary(session, `from=${day(-1)}&to=${day(-1)}`)).result.commissionCents).toBe(0);

@@ -3,7 +3,18 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { normalizeHost } from '../src/tenancy/host.js';
-import { api, createUser, KEYS, migratorPool, resetUsers, startApp, tenantId } from './helpers.js';
+import {
+  api,
+  createUser,
+  KEYS,
+  migratorPool,
+  resetUsers,
+  startApp,
+  tenantId,
+  meOf,
+  loginPlayer,
+  SYNTHETIC_PASSWORD,
+} from './helpers.js';
 
 let app: INestApplication;
 let server: App;
@@ -86,14 +97,16 @@ describe('resolução de banca por hostname', () => {
 describe('9. credencial de serviço por banca', () => {
   it('sem credencial ou com credencial inválida: 401', async () => {
     const user = await createUser(app, 'aurora');
-    const noKey = await request(server).get(`/v1/users/${user.id}`).set('Host', 'aurora.test');
+    const login = { document: user.document, password: SYNTHETIC_PASSWORD };
+    const noKey = await request(server).post('/v1/auth/login').set('Host', 'aurora.test').send(login);
     expect(noKey.status).toBe(401);
-    const wrongKey = await api(app, 'aurora', 'x'.repeat(48)).get(`/v1/users/${user.id}`);
+    const wrongKey = await api(app, 'aurora', 'x'.repeat(48)).post('/v1/auth/login', login);
     expect(wrongKey.status).toBe(401);
     const basic = await request(server)
-      .get(`/v1/users/${user.id}`)
+      .post('/v1/auth/login')
       .set('Host', 'aurora.test')
-      .set('Authorization', `Basic ${KEYS.aurora}`);
+      .set('Authorization', `Basic ${KEYS.aurora}`)
+      .send(login);
     expect(basic.status).toBe(401);
     expect(noKey.body).toEqual({
       statusCode: 401,
@@ -104,7 +117,8 @@ describe('9. credencial de serviço por banca', () => {
 
   it('credencial de uma banca não autoriza outra: 403', async () => {
     const user = await createUser(app, 'aurora');
-    const get = await api(app, 'boreal', KEYS.aurora).get(`/v1/users/${user.id}`);
+    const login = { document: user.document, password: SYNTHETIC_PASSWORD };
+    const get = await api(app, 'boreal', KEYS.aurora).post('/v1/auth/login', login);
     expect(get.status).toBe(403);
     const post = await api(app, 'boreal', KEYS.aurora).post('/v1/users', {
       name: 'X Y',
@@ -112,7 +126,7 @@ describe('9. credencial de serviço por banca', () => {
       document: '99999999999',
     });
     expect(post.status).toBe(403);
-    const reverse = await api(app, 'aurora', KEYS.boreal).get(`/v1/users/${user.id}`);
+    const reverse = await api(app, 'aurora', KEYS.boreal).post('/v1/auth/login', login);
     expect(reverse.status).toBe(403);
   });
 
@@ -123,35 +137,35 @@ describe('9. credencial de serviço por banca', () => {
   });
 });
 
-describe('4. GET e PATCH isolados por banca', () => {
-  it('usuário de outra banca é 404 no GET e no PATCH, e não é alterado', async () => {
+describe('4. dados do jogador isolados por banca', () => {
+  it('sessão de uma banca não vale em outra: 401 no GET e no PATCH do perfil, e nada é alterado', async () => {
     const aurora = await createUser(app, 'aurora', { email: 'isolado@exemplo.test' });
+    const { token } = await loginPlayer(app, 'aurora', aurora);
+    const foreign = api(app, 'boreal', KEYS.boreal, { 'X-Session-Token': token });
 
-    const get = await api(app, 'boreal').get(`/v1/users/${aurora.id}`);
-    expect(get.status).toBe(404);
-    expect(get.body).toEqual({ statusCode: 404, code: 'NOT_FOUND', message: 'Usuário não encontrado.' });
-
-    const patch = await api(app, 'boreal').patch(`/v1/users/${aurora.id}`, { name: 'Invasor' });
-    expect(patch.status).toBe(404);
-
-    const after = await api(app, 'aurora').get(`/v1/users/${aurora.id}`);
-    expect(after.body).toEqual(aurora);
+    expect((await foreign.get('/v1/me')).status).toBe(401);
+    expect((await foreign.patch('/v1/me', { phone: '21999998888' })).status).toBe(401);
+    expect(await meOf(app, 'aurora', aurora)).toEqual(aurora);
   });
 
   it('tenantId em query ou header não muda a banca', async () => {
     const aurora = await createUser(app, 'aurora');
     const auroraTenant = await tenantId('aurora');
+    const { token } = await loginPlayer(app, 'aurora', aurora);
     const res = await api(app, 'boreal')
       .raw()
-      .get(`/v1/users/${aurora.id}?tenantId=${auroraTenant}&tenant=aurora`)
+      .get(`/v1/me?tenantId=${auroraTenant}&tenant=aurora`)
       .set('Host', 'boreal.test')
       .set('Authorization', `Bearer ${KEYS.boreal}`)
+      .set('X-Session-Token', token)
       .set('X-Tenant-Id', auroraTenant);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
   });
 
-  it('UUID inexistente é 404; UUID malformado é 400', async () => {
-    expect((await api(app, 'aurora').get('/v1/users/7d3c1b0e-8f4a-4b6e-9c2d-1a2b3c4d5e6f')).status).toBe(404);
-    expect((await api(app, 'aurora').get('/v1/users/123')).status).toBe(400);
+  it('não há consulta nem alteração de jogador por id com a credencial de serviço (só /v1/me e o painel)', async () => {
+    const aurora = await createUser(app, 'aurora');
+    expect((await api(app, 'aurora').get(`/v1/users/${aurora.id}`)).status).toBe(404);
+    expect((await api(app, 'aurora').patch(`/v1/users/${aurora.id}`, { name: 'Invasor Nome' })).status).toBe(404);
+    expect(await meOf(app, 'aurora', aurora)).toEqual(aurora);
   });
 });

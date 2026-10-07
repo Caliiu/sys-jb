@@ -85,16 +85,22 @@ export interface PuleList {
 /** Máximo de pules na lista de um dia. */
 export const PULE_LIST_LIMIT = 200;
 
+/** O jogador cancela uma pule de Loterias só nestes minutos depois da aposta (e nunca depois do horário de venda). */
+export const PULE_CANCEL_WINDOW_MINUTES = 5;
+
 /**
  * GET /v1/me/pules/:puleNumber: recibo de uma pule do jogador (404 se não for dele ou não existir).
- * POST /v1/me/pules/:puleNumber/cancel: cancela a pule de Loterias até o horário limite e devolve o recibo atualizado.
+ * POST /v1/me/pules/:puleNumber/cancel: cancela a pule de Loterias (nos primeiros minutos, ver
+ * PULE_CANCEL_WINDOW_MINUTES, e antes do horário de venda) e devolve o recibo atualizado.
  */
 export type PuleDetail =
   | {
       game: 'lotteries';
       ticket: PublicLotteryTicket;
-      /** Ainda dentro do horário de venda e não cancelada: pode ser cancelada. */
+      /** Não cancelada, dentro dos minutos de cancelamento e do horário de venda: pode ser cancelada. */
       cancellable: boolean;
+      /** ISO 8601: até quando pode ser cancelada (o que vier antes: fim do prazo ou da venda); null se não pode. */
+      cancellableUntil: string | null;
       /** ISO 8601 do cancelamento; null = válida. */
       canceledAt: string | null;
     }

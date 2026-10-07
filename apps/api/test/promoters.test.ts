@@ -13,6 +13,8 @@ import {
   startApp,
   syntheticUser,
   tenantId,
+  meOf,
+  loginPlayer,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -132,7 +134,7 @@ describe('promover, alterar e remover', () => {
     expect((await promote(session, '11111111-1111-4111-8111-111111111111', 1000)).status).toBe(404);
     expect((await session.http.put('/v1/admin/promoters/nao-e-uuid', { commissionBps: 1000 })).status).toBe(400);
     expect((await session.http.delete(`/v1/admin/promoters/${foreign.id}`)).status).toBe(404);
-    expect((await api(app, 'boreal').get(`/v1/users/${foreign.id}`)).body).not.toHaveProperty('commissionBps');
+    expect(await meOf(app, 'boreal', foreign)).not.toHaveProperty('commissionBps');
   });
 
   it('a lista traz só promotores, com a contagem de jogadores, busca e paginação', async () => {
@@ -370,9 +372,9 @@ describe('cadastro pelo link de convite', () => {
     expect(codes.every((code) => /^[A-HJ-NP-Z2-9]{5}$/.test(code))).toBe(true);
     expect(new Set(codes).size).toBe(codes.length);
     // Fixo: consultar de novo devolve o mesmo código; a API não deixa trocar.
-    const again = await api(app, 'aurora').get(`/v1/users/${people[0]!.id}`);
-    expect(again.body.inviteCode).toBe(people[0]!.inviteCode);
-    expect((await api(app, 'aurora').patch(`/v1/users/${people[0]!.id}`, { inviteCode: 'ABCDE' })).status).toBe(400);
+    expect((await meOf(app, 'aurora', people[0]!)).inviteCode).toBe(people[0]!.inviteCode);
+    const { http } = await loginPlayer(app, 'aurora', people[0]!);
+    expect((await http.patch('/v1/me', { inviteCode: 'ABCDE' })).status).toBe(400);
     await expect(
       asTenant(runtimePool, auroraId, (c) =>
         c.query("UPDATE users SET invite_code = 'ABCDE' WHERE id = $1", [people[0]!.id]),
@@ -440,13 +442,14 @@ describe('cadastro pelo link de convite', () => {
     const promoter = await createUser(app, 'aurora');
     await promote(session, promoter.id, 1000);
     const player = await createUser(app, 'aurora');
+    const { http: playerHttp } = await loginPlayer(app, 'aurora', player);
 
     for (const body of [
       { referredByUserId: promoter.id },
       { promoterCommissionBps: 5000 },
       { inviteCode: String(promoter.displayId) },
     ]) {
-      expect((await api(app, 'aurora').patch(`/v1/users/${player.id}`, body)).status, JSON.stringify(body)).toBe(400);
+      expect((await playerHttp.patch('/v1/me', body)).status, JSON.stringify(body)).toBe(400);
     }
     for (const extra of [{ promoterCommissionBps: 5000 }, { referredByUserId: promoter.id }]) {
       expect((await api(app, 'aurora').post('/v1/users', syntheticUser(extra))).status).toBe(400);

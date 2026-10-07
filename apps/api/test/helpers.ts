@@ -1,12 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import type { OperatorLoginResponse, OperatorRole, PublicUser } from '@sysjb/contracts';
+import {
+  type LoginResponse,
+  type OperatorLoginResponse,
+  type OperatorRole,
+  type PublicUser,
+  drawDateOf,
+} from '@sysjb/contracts';
 import pg from 'pg';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { createApp } from '../src/app.factory.js';
 import { PasswordService } from '../src/auth/password.service.js';
 import { type AppConfig, digestKey, parseServiceKeys } from '../src/config/config.js';
+import { PrizeSettlementService } from '../src/prizes/prize-settlement.service.js';
 import { DEFAULT_RATE_LIMIT_RULES } from '../src/rate-limit/rate-limit.rules.js';
 import { TEST_APP_URL, TEST_MIGRATOR_URL, TEST_TENANTS } from './env.js';
 
@@ -176,6 +183,63 @@ export async function createUser(app: INestApplication, tenant: TenantSlug, extr
   const res = await api(app, tenant).post('/v1/users', syntheticUser(extra));
   if (res.status !== 201) throw new Error(`cadastro falhou: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body as PublicUser;
+}
+
+/** Login do jogador (CPF + senha sintética): o token e um cliente HTTP já com a sessão dele. */
+export async function loginPlayer(app: INestApplication, tenant: TenantSlug, user: { document: string }) {
+  const res = await api(app, tenant).post('/v1/auth/login', { document: user.document, password: SYNTHETIC_PASSWORD });
+  if (res.status >= 300) throw new Error(`login do jogador falhou: ${res.status} ${JSON.stringify(res.body)}`);
+  const { token } = res.body as LoginResponse;
+  return { token, http: api(app, tenant, KEYS[tenant], { 'X-Session-Token': token }) };
+}
+
+/** Dados do jogador como ele mesmo vê (login + GET /v1/me). */
+export async function meOf(app: INestApplication, tenant: TenantSlug, user: { document: string }) {
+  const { http } = await loginPlayer(app, tenant, user);
+  const res = await http.get('/v1/me');
+  if (res.status !== 200) throw new Error(`GET /v1/me falhou: ${res.status}`);
+  return res.body as PublicUser;
+}
+
+/**
+ * Apura todos os pules ainda abertos da banca (Loterias não cancelados e Fazendinha), como se as extrações tivessem
+ * corrido ontem e o resultado chegado: leva os pules para ontem, grava o resultado de cada extração ligada (menos a
+ * Federal, que tem 5 dígitos) e roda a apuração com a carência vencida. É aqui que a comissão de quem indicou é paga.
+ */
+export async function settleAll(
+  app: INestApplication,
+  tenant: TenantSlug,
+  prizes = ['0000', '1111', '2222', '3333', '4444'],
+) {
+  const id = await tenantId(tenant);
+  const yesterday = drawDateOf(new Date().toISOString(), -1);
+  await asTenant(migratorPool, id, async (c) => {
+    await c.query(
+      `UPDATE lottery_tickets t SET draw_date = $1::date,
+         closes_at = ($1::date + time '09:00') AT TIME ZONE 'America/Sao_Paulo'
+       WHERE t.canceled_at IS NULL
+         AND NOT EXISTS (SELECT 1 FROM pule_settlements s WHERE s.lottery_ticket_id = t.id)`,
+      [yesterday],
+    );
+    await c.query(
+      `UPDATE fazendinha_bets b SET draw_date = $1::date
+       WHERE NOT EXISTS (SELECT 1 FROM pule_settlements s WHERE s.fazendinha_bet_id = b.id)`,
+      [yesterday],
+    );
+    const links = await c.query<{ lottery: string; extraction: number }>(
+      `SELECT DISTINCT result_lottery AS lottery, result_extraction AS extraction FROM draws
+       WHERE result_lottery IS NOT NULL AND result_lottery <> 'fd'`,
+    );
+    for (const { lottery, extraction } of links.rows) {
+      await migratorPool.query(
+        `INSERT INTO lottery_results (draw_date, lottery, extraction, prizes, source)
+         VALUES ($1, $2, $3, $4, 'WEBHOOK') ON CONFLICT (draw_date, lottery, extraction) DO NOTHING`,
+        [yesterday, lottery, extraction, prizes],
+      );
+    }
+  });
+  // Carência dos testes: 30 min.
+  return app.get(PrizeSettlementService).sweep(new Date(Date.now() + 31 * 60_000));
 }
 
 export const OPERATOR_PASSWORD = 'operator horse battery staple';

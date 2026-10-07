@@ -12,6 +12,8 @@ import {
   startApp,
   syntheticUser,
   tenantId,
+  loginPlayer,
+  KEYS,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -199,14 +201,20 @@ describe('6. contexto de banca não vaza pelo pool', () => {
   });
 
   it('requisições HTTP concorrentes e alternadas retornam somente dados da própria banca', async () => {
+    const tokens = {
+      aurora: (await loginPlayer(app, 'aurora', auroraUser)).token,
+      boreal: (await loginPlayer(app, 'boreal', borealUser)).token,
+    };
     const responses = await Promise.all(
       Array.from({ length: 40 }, (_, i) => {
         const own = i % 2 === 0;
         const tenant = i % 4 < 2 ? 'aurora' : 'boreal';
         const user = tenant === 'aurora' ? auroraUser : borealUser;
-        const other = tenant === 'aurora' ? borealUser : auroraUser;
-        return api(app, tenant)
-          .get(`/v1/users/${own ? user.id : other.id}`)
+        const otherTenant = tenant === 'aurora' ? 'boreal' : 'aurora';
+        // Sessão da própria banca, ou a da outra banca usada neste endereço.
+        const token = own ? tokens[tenant] : tokens[otherTenant];
+        return api(app, tenant, KEYS[tenant], { 'X-Session-Token': token })
+          .get('/v1/me')
           .then((res) => ({ res, own, user }));
       }),
     );
@@ -215,7 +223,7 @@ describe('6. contexto de banca não vaza pelo pool', () => {
         expect(res.status).toBe(200);
         expect(res.body).toEqual(user);
       } else {
-        expect(res.status).toBe(404);
+        expect(res.status).toBe(401);
       }
     }
   });

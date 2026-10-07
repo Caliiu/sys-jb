@@ -23,6 +23,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  settleAll,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -404,7 +405,7 @@ describe('travas do banco e comissões', () => {
     expect(await count('SELECT count(*) AS n FROM lottery_tickets')).toBe(0);
   });
 
-  it('o valor apostado nas loterias paga, na hora, a comissão de quem indicou', async () => {
+  it('o valor apostado nas loterias gera a comissão de quem indicou, paga na apuração', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1000 });
     const referrer: PublicUser = await createUser(app, 'aurora');
@@ -413,7 +414,10 @@ describe('travas do banco e comissões', () => {
       201,
     );
 
-    // 10% de R$ 5,00 no Saldo de quem indicou.
+    // Pendente até o resultado: nada no Saldo de quem indicou.
+    expect((await session.http.get(`/v1/admin/users/${referrer.id}`)).body.wallet.balanceJb).toBe(0);
+    // Apurado: 10% de R$ 5,00 no Saldo de quem indicou.
+    await settleAll(app, 'aurora');
     expect((await session.http.get(`/v1/admin/users/${referrer.id}`)).body.wallet.balanceJb).toBe(50);
   });
 });

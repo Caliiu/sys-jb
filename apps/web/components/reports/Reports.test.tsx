@@ -7,6 +7,8 @@ import { renderWithProviders, router } from '@/test/render';
 
 vi.mock('next/navigation', () => ({ useRouter: () => router, usePathname: () => '/relatorios' }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ logout: vi.fn() }) }));
+const cancelPuleAction = vi.fn();
+vi.mock('@/app/pule-actions', () => ({ cancelPuleAction: (...args: unknown[]) => cancelPuleAction(...args) }));
 
 const { default: ReportScreen } = await import('./ReportScreen');
 const { default: PuleList } = await import('./PuleList');
@@ -125,9 +127,12 @@ describe('Consultar pule por data', () => {
   });
 });
 
-const lottery: PuleDetail = {
+const lottery: Extract<PuleDetail, { game: 'lotteries' }> = {
   game: 'lotteries',
   cancellable: true,
+  // Prazo bem à frente: o botão fica visível durante o teste.
+  cancellableUntil: '2099-01-01T00:00:00.000Z',
+  canceledAt: null,
   ticket: {
     puleNumber: 562361031,
     game: 'tradicional',
@@ -174,7 +179,7 @@ const fazendinha: PuleDetail = {
 };
 
 describe('recibo da pule', () => {
-  it('Loterias no horário de venda: recibo, Cancelar pule (em breve) e Menu', async () => {
+  it('Loterias no prazo: recibo, Cancelar pule (com confirmação e o tempo que resta) e Menu', async () => {
     withInvite(<PuleReceiptScreen detail={lottery} back={{ href: '/relatorios/pule', label: 'Voltar' }} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Consultar pule' })).toBeInTheDocument();
     const card = screen.getByRole('article', { name: 'Recibo LT PT RIO 14HS' });
@@ -185,8 +190,44 @@ describe('recibo da pule', () => {
     expect(card).toHaveTextContent('Possível prêmio: R$ 8.000,00');
     expect(screen.getByRole('link', { name: 'Menu' })).toHaveAttribute('href', '/relatorios');
 
+    expect(screen.getByText(/Você pode cancelar por mais/)).toBeInTheDocument();
+
+    cancelPuleAction.mockResolvedValue({
+      ok: true,
+      detail: { ...lottery, cancellable: false, cancellableUntil: null, canceledAt: '2026-09-28T12:03:00.000Z' },
+    });
     await userEvent.click(screen.getByRole('button', { name: 'Cancelar pule' }));
-    expect(screen.getByRole('status')).toHaveTextContent('Cancelar pule: disponível em breve.');
+    const sheet = screen.getByRole('dialog', { name: 'Cancelar pule #562361031?' });
+    expect(sheet).toHaveTextContent('A aposta de R$ 1,00 deixa de valer');
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Cancelar pule' }));
+
+    expect(cancelPuleAction).toHaveBeenCalledWith(562361031);
+    expect(await screen.findByText('Pule cancelada. O valor voltou para a sua carteira.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancelar pule' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /Cancelar pule/ })).toBeNull();
+  });
+
+  it('cancelamento recusado (prazo acabou): a mensagem aparece na confirmação', async () => {
+    cancelPuleAction.mockResolvedValue({
+      ok: false,
+      code: 'REFUSED',
+      message: 'O prazo para cancelar esta pule (5 minutos depois da aposta) acabou.',
+    });
+    withInvite(<PuleReceiptScreen detail={lottery} back={{ href: '/relatorios/pule', label: 'Voltar' }} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar pule' }));
+    const sheet = screen.getByRole('dialog', { name: 'Cancelar pule #562361031?' });
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Cancelar pule' }));
+    expect(await within(sheet).findByRole('alert')).toHaveTextContent('O prazo para cancelar esta pule');
+  });
+
+  it('prazo já vencido no relógio do aparelho: sem o botão', () => {
+    withInvite(
+      <PuleReceiptScreen
+        detail={{ ...lottery, cancellableUntil: '2020-01-01T00:00:00.000Z' }}
+        back={{ href: '/relatorios/pule', label: 'Voltar' }}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Cancelar pule' })).toBeNull();
   });
 
   it('Loterias fora do horário e Fazendinha: sem Cancelar pule; Fazendinha sem possível prêmio', () => {

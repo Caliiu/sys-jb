@@ -103,17 +103,6 @@ export const createUserSchema = z
     if (problem) ctx.addIssue({ code: 'custom', path: ['password'], message: problem });
   });
 
-/** PATCH: campo ausente mantém o valor; null só limpa email/avatar. Vazio é rejeitado. */
-export const updateUserSchema = z
-  .strictObject({
-    name: name.optional(),
-    phone: phone.optional(),
-    document: document.optional(),
-    email: email.nullable().optional(),
-    avatar: avatar.nullable().optional(),
-  })
-  .refine((patch) => Object.values(patch).some((v) => v !== undefined), 'Informe ao menos um campo para atualizar.');
-
 /**
  * PATCH do painel: só dados de cadastro (sem avatar). Campo ausente mantém o valor; null só limpa o email.
  */
@@ -152,7 +141,6 @@ export const sessionTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const userIdSchema = z.uuid({ error: 'id deve ser um UUID.' });
 
 export type CreateUserInput = z.output<typeof createUserSchema>;
-export type UpdateUserInput = z.output<typeof updateUserSchema>;
 export type AdminUpdateUserInput = z.output<typeof adminUpdateUserSchema>;
 export type UpdateProfileInput = z.output<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.output<typeof changePasswordSchema>;

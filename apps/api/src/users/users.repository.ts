@@ -2,7 +2,7 @@ import type { InviteRef } from '@sysjb/contracts';
 import { Injectable } from '@nestjs/common';
 import type { User, UserStatus, Wallet } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
-import type { CreateUserInput, UpdateUserInput } from './user.schemas.js';
+import type { AdminUpdateUserInput, CreateUserInput } from './user.schemas.js';
 
 /** Usuário sem o hash da senha: é o que circula fora do login. */
 export type SafeUser = Omit<User, 'passwordHash'>;
@@ -78,14 +78,16 @@ export class UsersRepository {
     return count === 1;
   }
 
-  /** Atualiza apenas os campos presentes no patch. Retorna false se o usuário não existe nesta banca. */
-  async update(tx: TenantTx, tenantId: string, id: string, patch: UpdateUserInput): Promise<boolean> {
-    const data: UpdateUserInput = {};
+  /**
+   * Atualiza apenas os campos presentes no patch (painel: dados de cadastro; perfil: e-mail e telefone). Retorna false
+   * se o usuário não existe nesta banca.
+   */
+  async update(tx: TenantTx, tenantId: string, id: string, patch: AdminUpdateUserInput): Promise<boolean> {
+    const data: AdminUpdateUserInput = {};
     if (patch.name !== undefined) data.name = patch.name;
     if (patch.email !== undefined) data.email = patch.email;
     if (patch.phone !== undefined) data.phone = patch.phone;
     if (patch.document !== undefined) data.document = patch.document;
-    if (patch.avatar !== undefined) data.avatar = patch.avatar;
     const { count } = await tx.user.updateMany({ where: { id, tenantId }, data });
     return count === 1;
   }

@@ -116,8 +116,6 @@ Todas as rotas `/v1/*` exigem `Authorization: Bearer <chave da banca>` e resolve
 | Método | Rota                                              | Comportamento                                                                                                                                                                                                                                                                      |
 | ------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | POST   | `/v1/users`                                       | Cria usuário e carteira zerada na mesma transação. `201` com o contrato público                                                                                                                                                                                                    |
-| GET    | `/v1/users/:id`                                   | Consulta só dentro da banca atual                                                                                                                                                                                                                                                  |
-| PATCH  | `/v1/users/:id`                                   | Atualiza apenas `name`, `email`, `phone`, `document`, `avatar`                                                                                                                                                                                                                     |
 | POST   | `/v1/auth/login`                                  | Login por CPF + senha. `200` com `{ token, expiresAt, user }`                                                                                                                                                                                                                      |
 | GET    | `/v1/me`                                          | Usuário da sessão (header `X-Session-Token`)                                                                                                                                                                                                                                       |
 | POST   | `/v1/auth/logout`                                 | Revoga a sessão do `X-Session-Token`. `204`, idempotente                                                                                                                                                                                                                           |
@@ -248,7 +246,7 @@ Adaptações ao que existe hoje no backend:
 | Botões sem destino (tiles, abas, menu, rodapé) | Avisam "disponível em breve" (toast), em vez de não fazer nada                                                                                                                        |
 | Próximo sorteio com contador fixo              | Contador real (`nextDraw`); sem sorteio cadastrado, o banner não aparece                                                                                                              |
 
-O título da aba, o ícone (logo ou a inicial na cor da banca) e a cor da barra do navegador no celular vêm da banca. As ferramentas de desenvolvimento (consulta/edição por UUID) ficam em `/dev`, só em desenvolvimento.
+O título da aba, o ícone (logo ou a inicial na cor da banca) e a cor da barra do navegador no celular vêm da banca.
 
 Correções em relação ao original:
 
@@ -269,7 +267,7 @@ Exigem sessão (sem ela, redirecionam para `/login`) e seguem o mesmo modelo do 
 | `/relatorios/saldo` e `/:data`     | Consultar saldo: escolha do dia (hoje e 7 anteriores) e o relatório, com "Compartilhar" (PDF)                                                                                                                             |
 | `/relatorios/movimento` e `/:data` | Movimento loterias: escolha do dia (hoje e 7 anteriores) e o total por extração, com "Compartilhar" (PDF)                                                                                                                 |
 | `/relatorios/pule`                 | Consultar pule: por código (`/codigo`, formulário GET) ou por data (`/data` → `/data/:data`, lista do dia)                                                                                                                |
-| `/relatorios/pule/:numero`         | Recibo da pule (o mesmo da compra) com "Compartilhar" (PDF), "Cancelar pule" (só Loterias no horário de venda; o cancelamento ainda não existe: avisa "em breve") e "Menu". `?lista=YYYY-MM-DD` volta para a lista do dia |
+| `/relatorios/pule/:numero`         | Recibo da pule (o mesmo da compra) com "Compartilhar" (PDF), "Cancelar pule" (só Loterias, nos 5 primeiros minutos depois da aposta e antes do horário de venda, com confirmação e o tempo que resta) e "Menu". `?lista=YYYY-MM-DD` volta para a lista do dia |
 | `/premiadas`                       | Lista de atalhos (`lib/section-menus.ts`)                                                                                                                                                                                 |
 | `/premiadas/consultar`             | Consultar premiadas: escolha do dia (hoje e os 7 anteriores, Brasília)                                                                                                                                                    |
 | `/premiadas/consultar/:data`       | Pules premiadas do jogador no dia do jogo (`YYYY-MM-DD`; fora do período volta à escolha do dia), por extração, com os palpites premiados, o total e "Compartilhar" (PDF)                                                 |
@@ -323,7 +321,6 @@ components/pwa/       InstallCapture (captura o aviso de instalação do navegad
 components/admin/     painel: menu, filtro, tabela, paginação, edição, bloqueio, confirmação
 components/tenant/   TenantProvider, TenantLogo (white label)
 components/ui/       Toast, QrCode, Notice
-components/dev/      ferramentas de /dev
 hooks/               useAuth, useWallet, useOverlay, useCountdown
 lib/                 cliente da API (server-only), sessão, máscaras, moeda, marca
 lib/admin/           sessão do operador, chamadas à API do painel, resultado das actions, formatação
@@ -800,10 +797,12 @@ Promotor ≠ Indicação. Todo jogador tem no máximo um "indicado por": o dono 
 
 - **Código de convite**: 5 caracteres de um alfabeto sem ambíguos (sem O/0/I/1), gerado pelo banco no cadastro, **único no sistema todo** (índice UNIQUE; em colisão o cadastro tenta de novo) e fixo (a API não altera). Aceito em maiúsculas ou minúsculas. Links antigos com o ID exibido (`?convite=100008`) continuam valendo. O painel mostra o código no detalhe do usuário e busca por ele.
 - **Indique e ganhe (X%)**: igual para a banca toda, definido pelo Gerente em **Personalização > Valores** no painel (`tenant_settings`, com auditoria). 0% desliga.
-- **Promotor (Y%)**: a comissão de cada promotor. Se quem indicou é promotor no fechamento, recebe **X% + Y%** (ex.: 3% + 7% = 10%).
-- **Base**: o valor apostado pelos indicados no mês (Brasília, pela data da aposta). Ganho arredondado para baixo no centavo.
-- **Fechamento mensal**: **sem tela no painel por enquanto** (a prévia e o "Fechar mês" saíram da Personalização > Valores); a API continua oferecendo a prévia e o fechamento (`/v1/admin/commissions/months/:mes` e `/close`, só meses encerrados, uma vez por mês). Enquanto não houver tela, nenhuma comissão é paga. A função `commission_close_month` grava o fechamento e cada pagamento e **credita o Saldo** na mesma transação (movimentação `COMMISSION`). Quem indicou e está **bloqueado** não recebe (fica como "não recebeu"). Mês fechado fica congelado: mudar percentuais depois não altera o que foi pago.
-- **Perfis**: Gerente altera o X% e fecha; Financeiro só consulta; Suporte não vê. O banco confere de novo que quem fecha é Gerente ativo.
+- **Promotor (Y%)**: a comissão de cada promotor. Se quem indicou é promotor, recebe **X% + Y%** (ex.: 3% + 7% = 10%). Percentuais gravados no momento da aposta.
+- **Base**: o valor de cada aposta de Loterias e Fazendinha dos indicados pago com Saldo e Prêmios (a parte paga com bônus de recarga não gera comissão). Cada parte arredondada para baixo no centavo.
+- **Quando é paga**: na **apuração do pule**, não na aposta. Na aposta, a comissão fica registrada como **pendente** (`bet_commissions`, sem crédito). Quando o resultado da extração chega e passa a carência de correção (`PRIZES_GRACE_MINUTES`), a apuração do pule (`pule_settlement_record`) paga a comissão no **Saldo** de quem indicou (movimentação `COMMISSION`), junto com os prêmios, uma vez só (`bet_commission_pay`). Assim nunca se paga comissão de aposta que depois é cancelada.
+- **Pule cancelado** (só Loterias, nos **5 primeiros minutos** depois da aposta e antes do horário de venda): a comissão pendente é anulada, sem estorno (nada foi pago). Comissões de antes desta regra, já pagas na aposta, são estornadas como antes (`COMMISSION_REVERSAL`).
+- **Bloqueado**: quem indicou e está bloqueado na aposta não gera comissão; se for bloqueado depois, na apuração ela é marcada como perdida (`forfeited_at`) e não é paga.
+- **Perfis**: Gerente altera o X%; Financeiro só consulta; Suporte não vê.
 - **Painel**: lista de usuários com as colunas "Indicado por" e "Promotor"; no detalhe, "Indicado por" e "Promotor do jogador" separados.
 
 ## Contrato monetário
@@ -858,16 +857,19 @@ Todas as rotas `/v1` passam por um limite de requisições na API (`RateLimitInt
 - **Produção**: o nginx precisa acrescentar o IP real (`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Com CDN + nginx, use `WEB_TRUSTED_PROXY_HOPS=2`.
 - Testes: `rate-limit.test.ts` (API: login e cadastro por IP, jogador e operador, ação recusada não executada, IP inválido ignorado, IP só como HMAC, health fora, configuração) e `client-ip.test.ts` (web: proxies, IP forjado ignorado, IPv6 e porta). Nas demais suítes da API o limite fica desligado.
 
-## Limitação de autorização (importante)
+## Autorização dos dados do jogador
 
-Os clientes já fazem login, mas `GET`/`PATCH /v1/users/:id` continuam protegidos **só pela credencial de serviço**: qualquer detentor da chave consulta e edita qualquer usuário da banca. Isso serve para integração e desenvolvimento local e **não substitui** autorização de administradores, que fica para uma etapa posterior.
+Não existe rota que leia ou altere um jogador **por id** só com a credencial de serviço da banca (as antigas
+`GET`/`PATCH /v1/users/:id` e a página de desenvolvimento `/dev` foram removidas antes da produção). Os dados do
+jogador só passam por:
 
-Por isso o web separa duas coisas:
+- **O próprio jogador logado** (`GET /v1/me`, `GET /v1/me/profile` e `PATCH /v1/me`): só e-mail e telefone;
+  nome, CPF e nascimento não mudam pelo app.
+- **O painel** (`/v1/admin/users/*`), com sessão e perfil de operador (o Suporte corrige cadastro; o Gerente bloqueia).
 
-- **Telas do cliente** (`/cadastro`, `/login` e o Dashboard em `/`): funcionam em qualquer ambiente, para qualquer hostname com credencial configurada em `WEB_SERVICE_KEYS`.
-- **Ferramentas de desenvolvimento** (consulta e edição por UUID em `/dev`): só com `NODE_ENV` diferente de `production` e em hostnames `*.localhost`, porque usam só a credencial de serviço, sem login de administrador.
-
-Nos dois casos o web chama a API somente do servidor (server actions e `server-only`): as chaves nunca vão ao navegador, e `pnpm --filter @sysjb/web test` verifica isso no bundle. Os scripts `dev` e `start` escutam só em `127.0.0.1`.
+Com a credencial de serviço sozinha só dá para cadastrar (`POST /v1/users`) e fazer login. O web chama a API somente do
+servidor (server actions e `server-only`): as chaves nunca vão ao navegador, e `pnpm --filter @sysjb/web test`
+verifica isso no bundle. Os scripts `dev` e `start` escutam só em `127.0.0.1`.
 
 ## Telas de cadastro e login
 
@@ -932,7 +934,6 @@ A API chama `maintenance_purge()` ao subir e a cada 24 h (`MaintenanceService`).
 
 ## Limitações restantes
 
-- `GET`/`PATCH /v1/users/:id` (integração) ainda dependem só da credencial de serviço (ver acima). O painel usa rotas próprias (`/v1/admin/*`), com sessão e perfil de operador.
 - Painel: só a página de usuários existe. O operador ainda não troca a própria senha (o Gerente gera uma nova em Operadores), nem tela para consultar a auditoria (os registros ficam em `audit_logs`).
 - A busca de usuários usa `ILIKE` sem índice de trigrama: adequada para milhares de usuários por banca; com centenas de milhares, criar índice `pg_trgm`.
 - Troca de senha só logado (sem exigir a senha atual, ver "Perfil"); sem recuperação de senha ("esqueci") e sem listar/encerrar sessões avulsas do cliente.

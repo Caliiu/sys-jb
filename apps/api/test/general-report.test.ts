@@ -24,6 +24,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  settleAll,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -204,8 +205,8 @@ describe('GET /v1/admin/reports/general', () => {
     await credit(session, loose.person.id, 'balance', 5_000);
     for (let group = 1; group <= 10; group += 1) await buyFazendinha(referred, group);
     await buyLottery(loose, 200);
-
-    // Comissão paga em cada aposta da indicada: R$ 10,00 × (3% + 7%) = R$ 1,00.
+    // Resultado e apuração: a comissão das apostas da indicada é paga hoje, R$ 10,00 × (3% + 7%) = R$ 1,00.
+    await settleAll(app, 'aurora');
 
     const all = await report(session, today);
     const paula = all.items.find((row) => row.player.id === promoter.id)!;

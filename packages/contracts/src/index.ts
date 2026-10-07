@@ -68,9 +68,6 @@ export interface ChangePasswordRequest {
   password: string;
 }
 
-export const USER_WRITABLE_FIELDS = ['name', 'email', 'phone', 'document', 'avatar'] as const;
-export type UserWritableField = (typeof USER_WRITABLE_FIELDS)[number];
-
 export interface CreateUserRequest {
   name: string;
   phone: string;
@@ -84,15 +81,6 @@ export interface CreateUserRequest {
   avatar?: string | null;
   /** Código do link de convite (`?convite=`) de quem indicou (jogador ou promotor): o código de 5 caracteres (ex.: CDYGE) ou, em links antigos, o ID exibido. Código inexistente ou de usuário bloqueado é ignorado (o cadastro segue). */
   inviteCode?: string;
-}
-
-/** PATCH: campo ausente mantém o valor; null só é aceito em email e avatar. Pelo menos um campo. */
-export interface UpdateUserRequest {
-  name?: string;
-  phone?: string;
-  document?: string;
-  email?: string | null;
-  avatar?: string | null;
 }
 
 export interface LoginRequest {

@@ -498,10 +498,10 @@ model CommissionPayout {
   @@map("commission_payouts")
 }
 
-// Comissão de uma aposta (pule de Loterias ou da Fazendinha), paga na hora a quem indicou o apostador:
-// % de indicação da banca + % de promotor (se for promotor), sobre o valor apostado, cada parte arredondada para
-// baixo no centavo. Percentuais gravados no momento da aposta. Criada só pela função bet_commission_credit; o
-// cancelamento do pule (lottery_cancel) grava o estorno. Somente leitura para a API.
+// Comissão de uma aposta (pule de Loterias ou da Fazendinha) a quem indicou o apostador: % de indicação da banca +
+// % de promotor (se for promotor), sobre o valor pago com Saldo e Prêmios, cada parte arredondada para baixo no
+// centavo. Percentuais gravados no momento da aposta. Registrada pendente na aposta (bet_commission_credit) e paga no
+// Saldo na apuração do pule (bet_commission_pay); pule cancelado antes anula. Somente leitura para a API.
 model BetCommission {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String    @map("tenant_id") @db.Uuid
@@ -521,6 +521,10 @@ model BetCommission {
   // Pule cancelado: quando e quanto voltou (pode ser menos que o crédito se quem recebeu já gastou o saldo).
   reversedAt      DateTime? @map("reversed_at") @db.Timestamptz(3)
   reversedCents   BigInt?   @map("reversed_cents")
+  // Pago a quem indicou na apuração do pule (null = pendente). Ver migration commission_on_settlement.
+  creditedAt      DateTime? @map("credited_at") @db.Timestamptz(3)
+  // Não pago: quem indicou estava bloqueado na apuração.
+  forfeitedAt     DateTime? @map("forfeited_at") @db.Timestamptz(3)
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   user          User           @relation("BetCommissionReferrer", fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)

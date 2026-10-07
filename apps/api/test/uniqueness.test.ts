@@ -1,7 +1,16 @@
 import type { INestApplication } from '@nestjs/common';
 import type { PublicUser } from '@sysjb/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { api, createUser, migratorPool, resetUsers, startApp, syntheticUser } from './helpers.js';
+import {
+  api,
+  createUser,
+  migratorPool,
+  resetUsers,
+  startApp,
+  syntheticUser,
+  loginPlayer,
+  loginOperator,
+} from './helpers.js';
 
 let app: INestApplication;
 
@@ -50,12 +59,18 @@ describe('3. unicidade por banca', () => {
     expect(a.body.displayId).not.toBe(b.body.displayId);
   });
 
-  it('PATCH que colide com outro usuário da banca retorna 409', async () => {
+  it('alteração que colide com outro usuário da banca retorna 409 (perfil e painel)', async () => {
     const a = await createUser(app, 'aurora');
     const b = await createUser(app, 'aurora');
-    const res = await api(app, 'aurora').patch(`/v1/users/${b.id}`, { document: a.document });
-    expect(res.status).toBe(409);
-    expect(res.body.details).toEqual([{ field: 'document', message: 'Já cadastrado.' }]);
+    const { http } = await loginPlayer(app, 'aurora', b);
+    const own = await http.patch('/v1/me', { phone: a.phone });
+    expect(own.status).toBe(409);
+    expect(own.body.details).toEqual([{ field: 'phone', message: 'Já cadastrado.' }]);
+
+    const manager = await loginOperator(app, 'aurora');
+    const panel = await manager.http.patch(`/v1/admin/users/${b.id}`, { document: a.document });
+    expect(panel.status).toBe(409);
+    expect(panel.body.details).toEqual([{ field: 'document', message: 'Já cadastrado.' }]);
   });
 
   it('cadastros concorrentes com o mesmo telefone: exatamente um vence, os demais recebem 409', async () => {

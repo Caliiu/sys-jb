@@ -14,6 +14,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  settleAll,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -70,7 +71,8 @@ const walletOf = async (session: Session, userId: string) =>
 const commissionsOf = (userId: string) =>
   asTenant(migratorPool, auroraId, (c) =>
     c.query(
-      `SELECT wagered_cents::int, referral_rate_bps, promoter_rate_bps, referral_cents::int, promoter_cents::int
+      `SELECT wagered_cents::int, referral_rate_bps, promoter_rate_bps, referral_cents::int, promoter_cents::int,
+              credited_at IS NOT NULL AS paid
        FROM bet_commissions WHERE user_id = $1 ORDER BY created_at, wagered_cents`,
       [userId],
     ),
@@ -130,7 +132,7 @@ describe('comissões', () => {
     }
   });
 
-  it('paga na hora da aposta: indicação X%, promotor X%+Y%; bloqueado e quem veio sem convite não geram', async () => {
+  it('paga na apuração do pule: indicação X%, promotor X%+Y%; bloqueado e quem veio sem convite não geram', async () => {
     const session = await loginOperator(app, 'aurora');
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
     const promoter = await createUser(app, 'aurora');
@@ -145,22 +147,46 @@ describe('comissões', () => {
     await session.http.patch(`/v1/admin/users/${blocked.id}/status`, { status: 'BLOCKED' });
 
     await bet(byPromoter, 1000);
-    // Pago na hora: o Saldo de quem indicou já tem a comissão (3% + 7% de R$ 10).
-    expect((await walletOf(session, promoter.id)).balanceJb).toBe(100);
+    // Na aposta, a comissão fica pendente: nada entra no Saldo de quem indicou ainda.
+    expect((await walletOf(session, promoter.id)).balanceJb).toBe(0);
     await bet(byPromoter, 2000);
     await bet(byRegular, 500);
     await bet(byBlocked, 200);
     await bet(alone, 700);
+    expect((await commissionsOf(promoter.id)).map((row) => row.paid)).toEqual([false, false]);
 
+    // O resultado chega e os pules são apurados: a comissão entra (3% + 7%).
+    await settleAll(app, 'aurora');
     expect((await walletOf(session, promoter.id)).balanceJb).toBe(300);
     expect((await walletOf(session, regular.id)).balanceJb).toBe(15);
     expect((await walletOf(session, blocked.id)).balanceJb).toBe(0);
     expect(await commissionsOf(promoter.id)).toEqual([
-      { wagered_cents: 1000, referral_rate_bps: 300, promoter_rate_bps: 700, referral_cents: 30, promoter_cents: 70 },
-      { wagered_cents: 2000, referral_rate_bps: 300, promoter_rate_bps: 700, referral_cents: 60, promoter_cents: 140 },
+      {
+        wagered_cents: 1000,
+        referral_rate_bps: 300,
+        promoter_rate_bps: 700,
+        referral_cents: 30,
+        promoter_cents: 70,
+        paid: true,
+      },
+      {
+        wagered_cents: 2000,
+        referral_rate_bps: 300,
+        promoter_rate_bps: 700,
+        referral_cents: 60,
+        promoter_cents: 140,
+        paid: true,
+      },
     ]);
     expect(await commissionsOf(regular.id)).toEqual([
-      { wagered_cents: 500, referral_rate_bps: 300, promoter_rate_bps: 0, referral_cents: 15, promoter_cents: 0 },
+      {
+        wagered_cents: 500,
+        referral_rate_bps: 300,
+        promoter_rate_bps: 0,
+        referral_cents: 15,
+        promoter_cents: 0,
+        paid: true,
+      },
     ]);
 
     const entries = await asTenant(migratorPool, auroraId, (c) =>
@@ -191,11 +217,48 @@ describe('comissões', () => {
     await bet(player, 300);
     // Mudar a % depois não altera o que já foi pago.
     await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 5000 });
+    await settleAll(app, 'aurora');
     // 3,33% de R$ 3 = 9,99 centavos -> 9; 12,5% de R$ 3 = 37,5 -> 37.
     expect(await commissionsOf(promoter.id)).toEqual([
-      { wagered_cents: 300, referral_rate_bps: 333, promoter_rate_bps: 1250, referral_cents: 9, promoter_cents: 37 },
+      {
+        wagered_cents: 300,
+        referral_rate_bps: 333,
+        promoter_rate_bps: 1250,
+        referral_cents: 9,
+        promoter_cents: 37,
+        paid: true,
+      },
     ]);
     expect((await walletOf(session, promoter.id)).balanceJb).toBe(46);
+  });
+
+  it('bloqueado entre a aposta e a apuração não recebe; apurar de novo não paga duas vezes', async () => {
+    const session = await loginOperator(app, 'aurora');
+    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 1000 });
+    const kept = await createUser(app, 'aurora');
+    const lost = await createUser(app, 'aurora');
+    await bet(await bettor(kept), 1000);
+    await bet(await bettor(lost), 1000);
+    await session.http.patch(`/v1/admin/users/${lost.id}/status`, { status: 'BLOCKED' });
+
+    await settleAll(app, 'aurora');
+    await settleAll(app, 'aurora');
+    expect((await walletOf(session, kept.id)).balanceJb).toBe(100);
+    expect((await walletOf(session, lost.id)).balanceJb).toBe(0);
+    const rows = await asTenant(migratorPool, auroraId, (c) =>
+      c.query(
+        `SELECT user_id, credited_at IS NOT NULL AS paid, forfeited_at IS NOT NULL AS lost FROM bet_commissions
+         ORDER BY created_at`,
+      ),
+    );
+    expect(rows.rows).toEqual([
+      { user_id: kept.id, paid: true, lost: false },
+      { user_id: lost.id, paid: false, lost: true },
+    ]);
+    const entries = await asTenant(migratorPool, auroraId, (c) =>
+      c.query(`SELECT count(*)::int AS n FROM wallet_entries WHERE kind = 'COMMISSION'`),
+    );
+    expect(entries.rows[0]).toEqual({ n: 1 });
   });
 
   it('Financeiro só consulta; Suporte não vê; a API não grava comissões nem chama o crédito', async () => {
