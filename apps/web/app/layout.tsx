@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import InstallCapture from '@/components/pwa/InstallCapture';
 import PushSync from '@/components/pwa/PushSync';
 import { ToastProvider } from '@/components/ui/Toast';
+import { brandStyle } from '@/lib/brand-style';
 import { tenantIcon } from '@/lib/favicon';
 import { pwaIconUrl } from '@/lib/pwa-icon';
 import { resolveRequest } from '@/lib/request-context';
@@ -44,7 +45,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     <html lang="pt-BR" className={`${archivoBlack.variable} ${inter.variable}`}>
-      <body className="min-h-screen bg-[#EDEDED] text-slate-900">
+      {/* Cores da banca já no body: o esqueleto de carregamento (app/loading.tsx) aparece na cor certa. */}
+      <body className="min-h-screen bg-[#EDEDED] text-slate-900" style={ctx.ok ? brandStyle(ctx.tenant) : undefined}>
         <InstallCapture />
         {ctx.ok && ctx.me && <PushSync publicKey={webPushPublicKey()} />}
         <ToastProvider>{children}</ToastProvider>

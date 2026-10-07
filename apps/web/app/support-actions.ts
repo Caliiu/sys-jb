@@ -1,10 +1,11 @@
 'use server';
 
-import { type PublicTenant, type SupportContact, supportMessage } from '@sysjb/contracts';
+import { type SupportContact, supportMessage } from '@sysjb/contracts';
 import { headers } from 'next/headers';
 import { apiRequest } from '@/lib/api-client';
 import { hostnameOnly, isAdminHost, serviceKeyFor } from '@/lib/server-env';
 import { readSessionToken } from '@/lib/session';
+import { loadTenant } from '@/lib/tenant-cache';
 
 /**
  * WhatsApp do atendimento para o botão "Suporte"/"Atendimento", com a mensagem inicial. Logado: a API escolhe
@@ -23,6 +24,6 @@ export async function supportContactAction(): Promise<SupportContact> {
     // Sessão expirada: segue como visitante (número da banca). Outras falhas: sem número.
     if (res.error.code !== 'SESSION_INVALID') return { phone: null, message: visitor };
   }
-  const tenant = await apiRequest<PublicTenant>(hostname, 'GET', '/v1/tenant');
+  const tenant = await loadTenant(hostname);
   return { phone: tenant.ok ? tenant.data.supportPhone : null, message: visitor };
 }

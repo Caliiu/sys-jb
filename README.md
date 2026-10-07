@@ -306,6 +306,11 @@ Os itens das listas ainda não têm página e avisam "disponível em breve". "Av
 
 ### Organização do web
 
+**Renderização.** Todas as páginas são renderizadas no servidor a cada acesso (dependem do domínio da banca, do login e do nonce da CSP); dinheiro e dados do jogador nunca ficam em cache. Duas otimizações:
+
+- **Tela de carregamento** (`app/loading.tsx`, `app/cassino/loading.tsx`, `app/admin/loading.tsx` e `app/admin/(panel)/loading.tsx`): o esqueleto aparece na hora, na cor da banca (as variáveis de marca ficam no `<body>`), enquanto o servidor busca os dados; no painel, o menu continua na tela. Anunciado como "Carregando…" aos leitores de tela; sem pulsação para quem pediu menos movimento. Com o streaming, uma página sem login responde com status 200 e mostra a tela de "entre para continuar" (o conteúdo continua bloqueado; só o código HTTP muda, comportamento padrão do Next).
+- **Dados públicos da banca em cache** (`lib/tenant-cache.ts`): nome, cores, logo, barra de convite e WhatsApp ficam 30 s na memória do servidor do web, em vez de uma chamada à API (e ao banco) por página. Uma busca por vez por banca; falhas e banca inativa não entram no cache; salvar a identidade visual no painel limpa o cache na hora (em outro servidor do web, vale em até 30 s).
+
 ```text
 app/                 rotas (Next App Router) e server actions (app/admin: painel administrativo)
 views/               telas completas (LoginPage, RegisterPage, DashboardPage, SectionMenuPage, RechargePage)

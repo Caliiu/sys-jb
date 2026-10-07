@@ -48,6 +48,7 @@ import { adminApi } from '@/lib/admin/admin-api';
 import { clearOperatorToken, readOperatorToken, writeOperatorToken } from '@/lib/admin/admin-session';
 import { type AdminActionResult, type AdminFailure, toAdminFailure } from '@/lib/admin/admin-result';
 import { hostnameOnly, isAdminHost, serviceKeyFor } from '@/lib/server-env';
+import { invalidateTenantCache } from '@/lib/tenant-cache';
 
 /**
  * Ações do painel. Server action é endpoint público: toda ação confere o formato da entrada e,
@@ -486,7 +487,10 @@ export async function saveBrandingAction(form: unknown): Promise<AdminActionResu
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.saveBranding(caller, { ...body.data, ...(logo !== undefined ? { logo } : {}) });
-  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+  if (!res.ok) return toAdminFailure(res.status, res.error);
+  // O app da banca mostra a identidade nova já na próxima página (os dados da banca ficam alguns segundos em cache).
+  invalidateTenantCache();
+  return { ok: true, data: res.data };
 }
 
 // Cards do início: só o formato; a API confere que o layout está completo (todos os blocos e cards) e a permissão.

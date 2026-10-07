@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { apiRequest } from './api-client';
 import { hostnameOnly, isAdminHost, serviceKeyFor } from './server-env';
 import { readSessionToken } from './session';
+import { loadTenant } from './tenant-cache';
 
 export type TenantContext =
   { ok: true; hostname: string; tenant: PublicTenant } | { ok: false; hostname: string | null; message: string };
@@ -25,7 +26,8 @@ export const resolveTenant = cache(async (): Promise<TenantContext> => {
     return { ok: false, hostname, message: 'Nenhuma banca configurada para este endereço.' };
   }
 
-  const tenant = await apiRequest<PublicTenant>(hostname, 'GET', '/v1/tenant');
+  // Dados públicos da banca: guardados alguns segundos (lib/tenant-cache), não pedidos à API em toda página.
+  const tenant = await loadTenant(hostname);
   if (!tenant.ok) return { ok: false, hostname, message: tenant.error.message };
 
   return { ok: true, hostname, tenant: tenant.data };
