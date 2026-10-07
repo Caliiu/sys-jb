@@ -15,6 +15,13 @@ const { default: RegisterPage } = await import('./RegisterPage');
 beforeEach(() => vi.clearAllMocks());
 
 describe('LoginPage', () => {
+  it('mostra o cabeçalho de boas-vindas', () => {
+    renderWithProviders(<LoginPage />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Faça seu login');
+    expect(screen.getByText('Bem-vindo(a)')).toBeInTheDocument();
+    expect(screen.getByText(/Acesse sua conta/)).toBeInTheDocument();
+  });
+
   it('valida no navegador antes de chamar a API', async () => {
     renderWithProviders(<LoginPage />);
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));

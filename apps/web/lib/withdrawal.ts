@@ -39,11 +39,18 @@ export interface WithdrawalSummary {
   casino: number;
   /** O que pode ser sacado: os dois prêmios (recarga e bônus nunca). */
   available: number;
+  /** Saldo de recarga (depósitos), só para apostar: nunca entra no disponível para resgate. Informativo. */
+  recharge: number;
 }
 
 /** Resumo do saldo da tela de saque: só prêmios podem ser resgatados (das loterias e do cassino). */
 export function withdrawalSummary(wallet: PublicWallet): WithdrawalSummary {
-  return { lotteries: wallet.prizesJb, casino: wallet.prizesGames, available: wallet.withdrawable };
+  return {
+    lotteries: wallet.prizesJb,
+    casino: wallet.prizesGames,
+    available: wallet.withdrawable,
+    recharge: wallet.balanceJb + wallet.balanceGames,
+  };
 }
 
 /** Campo de valor do saque (máscara de moeda). null = passou do teto de digitação. */

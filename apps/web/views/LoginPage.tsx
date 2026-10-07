@@ -52,7 +52,15 @@ export default function LoginPage({ pushPublicKey = null }: { pushPublicKey?: st
 
   return (
     <AuthLayout>
-      <h1 className="sr-only">Entrar</h1>
+      <header className="mb-6">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/70">Bem-vindo(a)</p>
+        <h1 className="mt-1.5 font-display text-[26px] leading-tight text-white">
+          Faça seu <span className="text-brand-gold">login</span>
+        </h1>
+        <p className="mt-2 text-[13.5px] leading-snug text-white/80">
+          Acesse sua conta e aproveite todos os nossos recursos.
+        </p>
+      </header>
       <form onSubmit={handleSubmit} noValidate>
         <div className="flex flex-col gap-3">
           <AuthInput

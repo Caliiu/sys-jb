@@ -7,10 +7,12 @@ import { renderWithProviders, router, user } from '@/test/render';
 const auth = { register: vi.fn(), login: vi.fn(), logout: vi.fn() };
 const meAction = vi.fn();
 const openInvite = vi.fn();
+const install = { status: 'manual' as string, install: vi.fn() };
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
 vi.mock('@/app/auth-actions', () => ({ meAction: (...args: unknown[]) => meAction(...args) }));
+vi.mock('@/hooks/useInstall', () => ({ useInstall: () => install }));
 
 const { default: Footer } = await import('./Footer');
 const { default: SideMenu } = await import('./SideMenu');
@@ -20,6 +22,7 @@ const { default: UtilityTiles } = await import('./UtilityTiles');
 
 beforeEach(() => {
   vi.clearAllMocks();
+  install.status = 'manual';
 });
 
 describe('SideMenu', () => {
@@ -134,6 +137,21 @@ describe('Footer', () => {
       await userEvent.click(screen.getByRole('button', { name: label }));
       expect(screen.getByRole('status')).toHaveTextContent(`${label}: disponível em breve.`);
     }
+  });
+
+  it('app instalado: esconde "Instalar app" e deixa só o Suporte', () => {
+    install.status = 'installed';
+    renderWithProviders(<Footer version="1.2.3" />);
+    expect(screen.queryByRole('button', { name: 'Instalar app' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Suporte' })).toBeInTheDocument();
+  });
+
+  it('com instalação por um toque, "Instalar app" chama o pedido do navegador', async () => {
+    install.status = 'promptable';
+    install.install.mockResolvedValue('accepted');
+    renderWithProviders(<Footer version="1.2.3" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Instalar app' }));
+    expect(install.install).toHaveBeenCalled();
   });
 });
 

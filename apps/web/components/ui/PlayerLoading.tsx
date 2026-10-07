@@ -1,3 +1,5 @@
+import { Loader2 } from 'lucide-react';
+
 interface PlayerLoadingProps {
   /** dark: telas de fundo escuro (cassino). */
   tone?: 'light' | 'dark';
@@ -6,7 +8,8 @@ interface PlayerLoadingProps {
 /**
  * Esqueleto de carregamento do app do jogador: aparece na hora em que uma página é pedida, enquanto o servidor busca
  * os dados (sem ele, a tela anterior ficava parada até a próxima chegar). Só formas neutras na cor da banca, nada de
- * dados. Leitores de tela ouvem "Carregando…"; quem pediu menos movimento no sistema não vê a pulsação.
+ * dados, com um círculo girando na cor da banca ao centro. Leitores de tela ouvem "Carregando…"; quem pediu menos
+ * movimento no sistema não vê a pulsação nem o giro.
  */
 export default function PlayerLoading({ tone = 'light' }: PlayerLoadingProps) {
   const dark = tone === 'dark';
@@ -16,9 +19,12 @@ export default function PlayerLoading({ tone = 'light' }: PlayerLoadingProps) {
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className={`app-shell font-body ${dark ? 'bg-[#14151c]' : 'bg-[#F4F6F6]'}`}
+      className={`app-shell relative font-body ${dark ? 'bg-[#14151c]' : 'bg-[#F4F6F6]'}`}
     >
       <span className="sr-only">Carregando…</span>
+      <span aria-hidden className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+        <Loader2 className="h-11 w-11 text-brand-primary motion-safe:animate-spin" />
+      </span>
       <div aria-hidden className="bg-brand-primary px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-4">
         <div className="h-5 w-40 rounded-md bg-white/30 motion-safe:animate-pulse" />
         <div className="mt-3 h-9 w-full rounded-xl bg-white/20 motion-safe:animate-pulse" />

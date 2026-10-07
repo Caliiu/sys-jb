@@ -174,6 +174,10 @@ describe('Novo saque: valor do resgate', () => {
     expect(within(summary).getByText('Prêmios das loterias').nextElementSibling).toHaveTextContent('R$ 250,00');
     expect(within(summary).getByText('+ Ganhos do cassino').nextElementSibling).toHaveTextContent('R$ 50,00');
     expect(within(summary).getByText('Disponível para resgate').nextElementSibling).toHaveTextContent('R$ 300,00');
+    // Recarga aparece como informação (não sacável), fora da soma do resgate.
+    expect(within(summary).getByText('Saldo de recarga (para apostar)').nextElementSibling).toHaveTextContent(
+      'R$ 60,00',
+    );
   });
 
   it('mostra os limites da banca', async () => {

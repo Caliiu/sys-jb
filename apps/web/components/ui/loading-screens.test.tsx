@@ -13,6 +13,11 @@ describe('telas de carregamento', () => {
     expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThan(0);
     expect(container.querySelector('.animate-pulse')).toBeNull();
     expect(container.querySelector('[class*="motion-safe:animate-pulse"]')).not.toBeNull();
+    // Círculo girando na cor da banca, só com movimento permitido (motion-safe), decorativo.
+    const spinner = container.querySelector('[class*="motion-safe:animate-spin"]');
+    expect(spinner).not.toBeNull();
+    expect(spinner).toHaveClass('text-brand-primary');
+    expect(container.querySelector('.animate-spin:not([class*="motion-safe"])')).toBeNull();
   });
 
   it('cassino: fundo escuro', () => {

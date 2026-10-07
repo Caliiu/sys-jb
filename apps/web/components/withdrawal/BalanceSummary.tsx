@@ -39,6 +39,12 @@ export default function BalanceSummary({ summary, onExplain }: BalanceSummaryPro
           {formatBrl(summary.available)}
         </span>
       </div>
+
+      {/* Recarga é só para apostar e nunca entra no resgate: fica abaixo do total e em tom suave, para não confundir. */}
+      <div className="mt-2.5 flex items-center justify-between text-[12px] text-gray-500">
+        <span>Saldo de recarga (para apostar)</span>
+        <span className="font-medium tabular-nums">{formatBrl(summary.recharge)}</span>
+      </div>
     </section>
   );
 }

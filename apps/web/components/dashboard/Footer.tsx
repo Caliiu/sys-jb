@@ -2,7 +2,10 @@
 
 import { Download } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
+import { useInstall } from '@/hooks/useInstall';
 import { ROUTES } from '@/lib/routes';
+import InstallHelpSheet from '../settings/InstallHelpSheet';
 import PixIcon from '../icons/PixIcon';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import TenantLogo from '../tenant/TenantLogo';
@@ -36,6 +39,15 @@ interface FooterProps {
 export default function Footer({ version }: FooterProps) {
   const toast = useToast();
   const openSupport = useOpenSupport();
+  const { status, install } = useInstall();
+  const [helpOpen, setHelpOpen] = useState(false);
+  // Já instalado (ou antes de hidratar, para não piscar): mostra só o Suporte.
+  const canInstall = status === 'promptable' || status === 'manual';
+
+  async function handleInstall() {
+    if (status === 'promptable' && (await install()) !== 'unavailable') return;
+    setHelpOpen(true);
+  }
 
   return (
     <footer className="px-4 pt-6 pb-28 text-center">
@@ -56,14 +68,16 @@ export default function Footer({ version }: FooterProps) {
       </nav>
 
       <div className="flex items-center justify-center gap-5 mt-5">
-        <button
-          type="button"
-          onClick={() => toast.comingSoon('Aplicativo')}
-          className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700"
-        >
-          <Download className="w-4 h-4" aria-hidden />
-          Instalar app
-        </button>
+        {canInstall && (
+          <button
+            type="button"
+            onClick={handleInstall}
+            className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-700"
+          >
+            <Download className="w-4 h-4" aria-hidden />
+            Instalar app
+          </button>
+        )}
         <button
           type="button"
           onClick={openSupport}
@@ -73,6 +87,7 @@ export default function Footer({ version }: FooterProps) {
           Suporte
         </button>
       </div>
+      <InstallHelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <div className="flex items-center justify-center gap-3 mt-5 pt-4 border-t border-gray-200">
         <span
