@@ -21,7 +21,7 @@ import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { DEFAULT_PAGE_SIZE } from '@/lib/admin/page-size';
 import { type TicketsQuery, ticketsHref } from '@/lib/admin/tickets-query';
 import { formatBrl } from '@/lib/currency';
-import { formatCalendarDate, formatShortDateTime } from '@/lib/datetime';
+import { formatCalendarDate, formatDateTime, formatShortDateTime } from '@/lib/datetime';
 
 /** O que a pesquisa trouxe: a lista do dia (paginada) ou os pules de um número. */
 export type TicketsResult =
@@ -62,7 +62,7 @@ function CanceledBadge({ ticket }: { ticket: AdminTicketListItem }) {
   if (!ticket.canceledAt) return null;
   return (
     <span
-      title={`Cancelada em ${formatShortDateTime(ticket.canceledAt)}`}
+      title={`Cancelada em ${formatDateTime(ticket.canceledAt)}`}
       className="mt-1 inline-flex items-center rounded-md border border-admin-danger/25 bg-admin-danger/10 px-2 py-0.5 text-[12px] font-medium text-admin-danger"
     >
       Cancelada

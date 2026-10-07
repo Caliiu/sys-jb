@@ -75,6 +75,7 @@ const detail = (over: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
     totalAvailableGames: 1000,
   },
   promoterCommissionBps: null,
+  casinoCommissionBps: 0,
   referredBy: null,
   ...over,
 });
