@@ -38,9 +38,13 @@ type Outcome = 'paid' | 'review' | 'rejected' | null;
  * Acompanha o depósito até um desfecho: pergunta à API em intervalos (e ao voltar para a aba). Para quando é pago,
  * vai para análise ou é recusado, quando a sessão acaba ou depois de 30 min.
  */
-function useDepositOutcome(depositId: string, onPaid: (wallet: PublicWallet) => void): Outcome {
+function useDepositOutcome(
+  depositId: string,
+  onPaid: (wallet: PublicWallet) => void,
+): { outcome: Outcome; bonusCents: number } {
   const router = useRouter();
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const [bonusCents, setBonusCents] = useState(0);
   const onPaidRef = useRef(onPaid);
   useEffect(() => {
     onPaidRef.current = onPaid;
@@ -59,6 +63,7 @@ function useDepositOutcome(depositId: string, onPaid: (wallet: PublicWallet) => 
         if (stopped) return;
         if (result.ok && result.status === 'PAID' && result.wallet) {
           stop();
+          setBonusCents(result.bonusCents);
           setOutcome('paid');
           onPaidRef.current(result.wallet);
         } else if (result.ok && (result.status === 'REVIEW' || result.status === 'REJECTED')) {
@@ -87,14 +92,14 @@ function useDepositOutcome(depositId: string, onPaid: (wallet: PublicWallet) => 
     return stop;
   }, [depositId, router]);
 
-  return outcome;
+  return { outcome, bonusCents };
 }
 
 /** Etapa 2 da recarga: chave Pix (copia e cola), QR Code e tempo para pagar; depois, a confirmação. */
 export default function PaymentDetails({ holderName, holderDocument, charge, onRestart, onPaid }: PaymentDetailsProps) {
   const seconds = useSecondsUntil(charge.expiresAt);
   const expired = seconds === 0;
-  const outcome = useDepositOutcome(charge.depositId, onPaid);
+  const { outcome, bonusCents } = useDepositOutcome(charge.depositId, onPaid);
 
   if (outcome === 'review' || outcome === 'rejected') {
     return (
@@ -127,6 +132,12 @@ export default function PaymentDetails({ holderName, holderDocument, charge, onR
         </h2>
         <p role="status" className="text-[14px] text-slate-600">
           {formatBrl(charge.amountCents)} creditado na sua carteira.
+          {bonusCents > 0 && (
+            <>
+              {' '}
+              <strong className="text-emerald-700">+ {formatBrl(bonusCents)} de bônus!</strong>
+            </>
+          )}
         </p>
         <Link
           href={ROUTES.home}

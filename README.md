@@ -558,6 +558,27 @@ Recarga via Pix pelo **gateway ativo da banca**, escolhido pelo Gerente no paine
 - Configuração: `PAYMENTS_SECRET_KEY` (obrigatória para ligar; trocar = o Gerente salva as credenciais de novo), `PAYMENTS_WEBHOOK_IPS` (obrigatória em produção) e `MISTICPAY_API_URL` (opcional). Ver `.env.example`.
 - Testes: `apps/api/test/payments.test.ts` (MisticPay falsa: cifra, perfis, conferência do perfil no banco, criação, conferência, valor divergente, titular igual/diferente/não informado, liberar/recusar, aviso assinado/forjado/de outra transação, rodada entre bancas, limites, isolamento, privilégios) e, no web, `views/recharge-page.test.tsx`, `lib/payments-webhook.test.ts`, `views/admin/wallet-movements-page.test.tsx`.
 
+## Bônus de recarga (Loterias)
+
+Configurações > Personalização > **Bônus** (`/personalizacao/bonus`, aba própria ao lado de Valores; consulta com `commissions.read`; alterar só o Gerente, auditado como `deposit.bonus.settings`). Três regras, cada uma com **% e limite do bônus** e um interruptor **Ativa/Inativa** (pausar mantém a % e o limite gravados; ativa exige % e limite maiores que zero), e uma **recarga mínima** para ganhar. Tela no padrão da referência: aviso de bônus não cumulativos, tabela de regras com contagem de ativas, "Como funciona", e Salvar/Descartar alterações:
+
+- **Primeira recarga**: a primeira recarga de Loterias da conta.
+- **Primeira recarga do dia**: a primeira recarga de Loterias do dia (Brasília, pela hora do pagamento).
+- **Dia da Federal**: como a do dia, mas só em dia com sorteio da Federal na banca (o sorteio ligado ao resultado `fd`, pelo cadastro de sorteios: feriado e sorteio extra contam).
+
+Regras de concessão:
+- Cada recarga ganha **só um bônus, o de maior valor** (empate: primeira recarga > Federal > diária). Valor = % da recarga, para baixo no centavo, limitado ao máximo.
+- Só recarga de **Loterias**, paga, de jogador ativo. A de cassino não ganha nem conta como "primeira". Recarga em análise (outro titular) só ganha quando o Gerente libera.
+- Concedido pelo banco (`deposit_bonus_grant`) na **mesma transação** que credita a recarga (`pix_deposit_credit`), uma vez só por recarga (`deposit_bonuses`, somente inclusão), com a movimentação `DEPOSIT_BONUS` ("Bônus de recarga" no extrato).
+
+Uso do bônus:
+- Gasto **primeiro** nas apostas de Loterias e Fazendinha (depois Saldo, depois Prêmios). Nunca no cassino.
+- **Não é sacável** e **não expira**. O prêmio de uma aposta feita com bônus vai para os Prêmios normalmente.
+- A comissão de indicação/promotor é calculada **só sobre a parte paga com Saldo e Prêmios**.
+- Pule cancelado devolve para as mesmas bolsas, bônus incluído.
+
+Tela do jogador: a Recarga Pix mostra a melhor oferta que vale agora e, com o valor digitado, quanto aquela recarga ganha (o mesmo cálculo do banco, pela mesma função `deposit_bonus_rules`); a confirmação do pagamento mostra o bônus ganho. `GET /v1/payments/deposit-bonus`; `GET|PUT /v1/admin/deposit-bonus-settings`. Teste: `deposit-bonus.test.ts`.
+
 ## Saques
 
 Saque via Pix pelo gateway ativo da banca (hoje a MisticPay, `POST /api/transactions/withdraw`, escopo **WITHDRAW_CREATE** na chave de acesso).
@@ -636,6 +657,14 @@ Relatórios > Loterias > Vendas por extração (`/relatorios/loterias/vendas-por
 ## Geral cassino (painel)
 
 Relatórios > Cassino > Geral cassino (`/relatorios/cassino/geral`; `operation.read`): os dados só aparecem depois de pesquisar. Filtros: período (atalhos; até 366 dias e até hoje), promotor (os indicados), apostador e tipo (Apostador ou Promotor); Seção e Rota aguardam os cadastros. Uma linha por usuário com turnover (apostado), payout (prêmios) e líquido (turnover − payout), do ponto de vista da banca, e o total. **O sistema ainda não tem cassino**: a API devolve o relatório vazio com `available: false` (a tela avisa que os valores aparecem zerados), mas já confere os filtros como os outros relatórios (promotor inexistente ou de outra banca = `404`). `GET /v1/admin/reports/casino/general?from=&to=` (+ `promoterId`, `userId`, `type`).
+
+## Fechamento cassino (painel)
+
+Relatórios > Cassino > Fechamento cassino (`/relatorios/cassino/fechamento`; consulta com `operation.read`, pagamento com `commissions.manage`, só o Gerente). Comissão de cassino **mensal, só para promotores**: a % de cassino de cada promotor (Apostadores > promotor) sobre o **GGR** (turnover − payout) das rodadas dos indicados dele no mês (Brasília, pela hora da rodada), arredondada para baixo no centavo. GGR negativo paga 0; promotor bloqueado não recebe. O valor pago vai para o **saldo de saque** do promotor (prêmios das loterias): pode ser sacado na hora ou apostado.
+
+- **Tela**: dois cards (último mês encerrado e mês em andamento, parcial) com turnover, payout, GGR, comissão e o que foi pago / falta pagar; "Visualizar" abre o detalhamento por promotor (`?mes=AAAA-MM`): % de cassino, indicados, valores, situação (A pagar, Pago, Bloqueado, Sem comissão, Em andamento) e o total. O Gerente paga um promotor ("Pagar") ou todos os pendentes ("Pagar Todos"), com confirmação.
+- **Pagamento**: `casino_commission_pay` (só Gerente ativo, só mês encerrado — `SJ004` —, nada a pagar = `SJ020`). Os valores são calculados pelo banco (`casino_commission_month`, o mesmo cálculo da tela), nunca enviados pelo painel. Uma vez por promotor e mês (trava do mês + `UNIQUE`): cliques repetidos ou duas abas não pagam duas vezes. Crédito nos **prêmios das loterias** (`prizes_jb`, parte do sacável) com a movimentação `CASINO_COMMISSION` ("Comissão cassino" no extrato), na mesma transação; cada pagamento entra na auditoria (`casino.commission.pay`). O mês pago guarda turnover, payout, GGR, % e valor (`casino_commission_payouts`, somente inclusão): mudar a % depois não altera o que foi pago.
+- `GET /v1/admin/reports/casino/closing` (+ `month=AAAA-MM`); `POST /v1/admin/reports/casino/closing/pay` `{ month, promoterId? }`. Teste: `casino-closing.test.ts`.
 
 ## Extrato do apostador (painel)
 

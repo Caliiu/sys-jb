@@ -1,6 +1,6 @@
 'use client';
 
-import type { PublicWallet } from '@sysjb/contracts';
+import type { PublicDepositBonusOffers, PublicWallet } from '@sysjb/contracts';
 import { useEffect, useState } from 'react';
 import type { PixCharge } from '@/lib/recharge';
 import { ROUTES } from '@/lib/routes';
@@ -16,6 +16,8 @@ interface RechargeScreenProps {
   holderDocument: string;
   /** ID do jogador, no topo junto do nome (como no dashboard). */
   displayId: number;
+  /** Bônus de recarga que vale agora (null = sem aviso). */
+  bonus?: PublicDepositBonusOffers | null;
 }
 
 /**
@@ -28,6 +30,7 @@ export default function RechargeScreen({
   holderName,
   holderDocument,
   displayId,
+  bonus = null,
 }: RechargeScreenProps) {
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [charge, setCharge] = useState<PixCharge | null>(null);
@@ -54,7 +57,12 @@ export default function RechargeScreen({
       />
       <main>
         <div hidden={charge !== null}>
-          <RechargeForm onCharge={setCharge} balanceCents={balanceCents} balanceVisible={balanceVisible} />
+          <RechargeForm
+            onCharge={setCharge}
+            balanceCents={balanceCents}
+            balanceVisible={balanceVisible}
+            bonus={bonus}
+          />
         </div>
         {charge && (
           <PaymentDetails

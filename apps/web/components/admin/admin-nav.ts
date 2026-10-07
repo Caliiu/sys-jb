@@ -131,7 +131,6 @@ export const ADMIN_NAV: NavEntry[] = [
             label: 'Fechamento cassino',
             icon: WalletCards,
             permission: 'operation.read',
-            soon: true,
           },
         ],
       },
@@ -202,7 +201,7 @@ export const ADMIN_NAV: NavEntry[] = [
         href: ADMIN_ROUTES.branding,
         label: 'Personalização',
         icon: Paintbrush,
-        // Abas Identidade visual e Cards do início (branding.read) e Valores (commissions.read).
+        // Abas Identidade visual e Cards do início (branding.read), Valores e Bônus (commissions.read).
         permission: ['branding.read', 'commissions.read'],
       },
       { href: ADMIN_ROUTES.payments, label: 'Pagamentos', icon: Landmark, permission: 'payments.read' },

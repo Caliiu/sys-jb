@@ -136,15 +136,16 @@ describe('POST /v1/fazendinha/bets', () => {
     expect(ledger.rows).toEqual([{ kind: 'FAZENDINHA_BET', balance_jb_delta: '-200', prizes_jb_delta: '0' }]);
   });
 
-  it('debita primeiro o saldo e depois os prêmios; bônus não entra', async () => {
-    const { http } = await player('aurora', { balanceJb: 100, prizesJb: 1000, bonusJb: 5000 });
+  it('debita primeiro o bônus, depois o saldo e por último os prêmios', async () => {
+    const { http } = await player('aurora', { balanceJb: 100, prizesJb: 1000, bonusJb: 50 });
     const res = await http.post('/v1/fazendinha/bets', bet({ stakeCents: 300, numbers: [1] }));
     expect(res.status).toBe(201);
-    expect(res.body.wallet).toMatchObject({ balanceJb: 0, prizesJb: 800, bonusJb: 5000 });
+    expect(res.body.wallet).toMatchObject({ bonusJb: 0, balanceJb: 0, prizesJb: 850 });
   });
 
   it('saldo insuficiente: 409 e nada é gravado', async () => {
-    const { http } = await player('aurora', { balanceJb: 100, bonusJb: 10_000 });
+    // 100 de saldo + 50 de bônus não cobrem os 200 do pule.
+    const { http } = await player('aurora', { balanceJb: 100, bonusJb: 50 });
     const res = await http.post('/v1/fazendinha/bets', bet());
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('INSUFFICIENT_FUNDS');
@@ -455,11 +456,11 @@ describe('travas do banco (role de runtime)', () => {
 
 describe('carteira conciliada com as movimentações', () => {
   it('saldo sempre igual à soma das movimentações, depois de crédito e compras', async () => {
-    const { person, http } = await player('aurora', { balanceJb: 300, prizesJb: 1000, bonusJb: 500 });
+    const { person, http } = await player('aurora', { balanceJb: 300, prizesJb: 1000, bonusJb: 100 });
     await http.post('/v1/fazendinha/bets', bet({ stakeCents: 500, numbers: [1] }));
     const me = await http.get('/v1/me');
-    expect(me.body.wallet).toMatchObject({ balanceJb: 0, prizesJb: 800, bonusJb: 500 });
-    expect(await ledgerOf(person.id)).toEqual({ balanceJb: 0, prizesJb: 800, bonusJb: 500 });
+    expect(me.body.wallet).toMatchObject({ balanceJb: 0, prizesJb: 900, bonusJb: 0 });
+    expect(await ledgerOf(person.id)).toEqual({ balanceJb: 0, prizesJb: 900, bonusJb: 0 });
   });
 
   it('mudar saldo sem registrar movimentação é recusado, até para a dona das tabelas', async () => {

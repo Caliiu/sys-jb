@@ -17,6 +17,8 @@ import type {
   AdminPaymentSettings,
   AdminDepositListItem,
   AdminWithdrawalListItem,
+  CasinoClosingPayResult,
+  DepositBonusSettings,
   PaymentGatewayTestResult,
   WithdrawalSettings,
 } from '@sysjb/contracts';
@@ -29,6 +31,7 @@ import {
   MURAL_DISPLAY_MODES,
   MURAL_LIMITS,
   BRANDING_LIMITS,
+  DEPOSIT_BONUS_LIMITS,
   HOME_BLOCK_IDS,
   MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
@@ -634,6 +637,57 @@ export async function saveWithdrawalSettingsAction(input: unknown): Promise<Admi
   if (isFailure(caller)) return caller;
 
   const res = await adminApi.saveWithdrawalSettings(caller, parsed.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+const casinoClosingPaySchema = z.strictObject({
+  month: z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/),
+  promoterId: z.uuid().optional(),
+});
+
+/**
+ * Fechamento cassino: paga a comissão do mês encerrado a um promotor ou a todos os pendentes. Os valores são do banco
+ * (nada de valor vem daqui); a API confere o perfil (só o Gerente), o mês e audita.
+ */
+export async function payCasinoClosingAction(
+  month: unknown,
+  promoterId?: unknown,
+): Promise<AdminActionResult<CasinoClosingPayResult>> {
+  const parsed = casinoClosingPaySchema.safeParse(
+    promoterId === undefined ? { month } : { month, promoterId },
+  );
+  if (!parsed.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.payCasinoClosing(caller, parsed.data);
+  return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
+}
+
+const bonusRuleSchema = z.strictObject({
+  enabled: z.boolean(),
+  bps: z.number().int().min(0).max(DEPOSIT_BONUS_LIMITS.maxBps),
+  maxCents: z.number().int().min(0).max(DEPOSIT_BONUS_LIMITS.maxCapCents),
+});
+const depositBonusSettingsSchema = z.strictObject({
+  minDepositCents: z
+    .number()
+    .int()
+    .min(DEPOSIT_BONUS_LIMITS.minDepositMinCents)
+    .max(DEPOSIT_BONUS_LIMITS.minDepositMaxCents),
+  firstDeposit: bonusRuleSchema,
+  daily: bonusRuleSchema,
+  federal: bonusRuleSchema,
+});
+
+/** Personalização > Bônus (a API confere o perfil, os limites e audita). */
+export async function saveDepositBonusSettingsAction(input: unknown): Promise<AdminActionResult<DepositBonusSettings>> {
+  const parsed = depositBonusSettingsSchema.safeParse(input);
+  if (!parsed.success) return invalidInput;
+  const caller = await operatorCaller();
+  if (isFailure(caller)) return caller;
+
+  const res = await adminApi.saveDepositBonusSettings(caller, parsed.data);
   return res.ok ? { ok: true, data: res.data } : toAdminFailure(res.status, res.error);
 }
 

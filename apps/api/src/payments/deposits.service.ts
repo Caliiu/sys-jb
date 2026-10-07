@@ -211,11 +211,21 @@ export class DepositsService implements OnApplicationBootstrap, OnModuleDestroy 
 
     return this.db.withTenant(tenant.id, async (tx) => {
       const current = await this.row(tx, tenant.id, depositId);
-      const wallet =
-        current.status === 'PAID'
-          ? await tx.wallet.findFirst({ where: { tenantId: tenant.id, userId: session.userId } })
-          : null;
-      return { deposit: toPublicDeposit(current), wallet: wallet ? toPublicWallet(wallet) : null };
+      const paid = current.status === 'PAID';
+      const [wallet, bonus] = paid
+        ? await Promise.all([
+            tx.wallet.findFirst({ where: { tenantId: tenant.id, userId: session.userId } }),
+            tx.depositBonus.findFirst({
+              where: { tenantId: tenant.id, pixDepositId: depositId },
+              select: { amountCents: true },
+            }),
+          ])
+        : [null, null];
+      return {
+        deposit: toPublicDeposit(current),
+        wallet: wallet ? toPublicWallet(wallet) : null,
+        bonusCents: bonus ? Number(bonus.amountCents) : 0,
+      };
     });
   }
 

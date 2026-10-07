@@ -35,6 +35,8 @@ const ENTRY_LABELS: Record<string, string> = {
   DEPOSIT: 'Recarga Pix',
   WITHDRAWAL: 'Saque',
   WITHDRAWAL_REFUND: 'Saque devolvido',
+  CASINO_COMMISSION: 'Comissão cassino',
+  DEPOSIT_BONUS: 'Bônus de recarga',
 };
 
 const DAY_MS = 86_400_000;

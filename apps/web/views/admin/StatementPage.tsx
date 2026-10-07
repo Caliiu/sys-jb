@@ -39,6 +39,8 @@ export const KIND_LABELS: Record<StatementKind, string> = {
   DEPOSIT: 'Recarga Pix',
   WITHDRAWAL: 'Saque',
   WITHDRAWAL_REFUND: 'Saque devolvido',
+  CASINO_COMMISSION: 'Comissão cassino',
+  DEPOSIT_BONUS: 'Bônus de recarga',
 };
 
 const BUCKETS: ReadonlyArray<{ key: 'balanceCents' | 'bonusCents' | 'prizesCents' | 'gamesCents'; label: string }> = [

@@ -4,9 +4,11 @@ import type {
   AdminDepositList,
   AdminDepositListItem,
   AdminPaymentSettings,
+  DepositBonusSettings,
   PaymentGatewayId,
   PaymentGatewayTestResult,
   PublicDeposit,
+  PublicDepositBonusOffers,
   PublicDepositStatus,
 } from '@sysjb/contracts';
 import { ConsoleGuard } from '../admin/console.guard.js';
@@ -18,6 +20,7 @@ import { AppError } from '../common/app-error.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant, TenantGuard } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
+import { DepositBonusService } from './deposit-bonus.service.js';
 import { DepositsService } from './deposits.service.js';
 import { WithdrawalsService } from './withdrawals.service.js';
 import { PaymentGatewaysService } from './payment-gateways.service.js';
@@ -26,6 +29,7 @@ import {
   type ListDepositsQuery,
   type SavePaymentGatewayInput,
   createDepositSchema,
+  depositBonusSettingsSchema,
   depositIdSchema,
   paymentWebhookQuerySchema,
   listDepositsQuerySchema,
@@ -60,6 +64,47 @@ export class DepositsController {
     @Param('id', new ZodValidationPipe(depositIdSchema)) id: string,
   ): Promise<PublicDepositStatus> {
     return this.deposits.status(tenant, session, id);
+  }
+}
+
+/** Bônus de recarga que vale agora para o jogador logado (a tela de recarga mostra antes de gerar o Pix). */
+@Controller('v1/payments/deposit-bonus')
+@UseGuards(TenantGuard, SessionGuard)
+export class DepositBonusController {
+  constructor(@Inject(DepositBonusService) private readonly bonus: DepositBonusService) {}
+
+  @Get()
+  @Header('Cache-Control', 'no-store')
+  offers(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @CurrentSession() session: UserSession,
+  ): Promise<PublicDepositBonusOffers> {
+    return this.bonus.offers(tenant, session);
+  }
+}
+
+/** Configurações > Personalização > Bônus: consulta com `commissions.read`; alterar só o Gerente. */
+@Controller('v1/admin/deposit-bonus-settings')
+@UseGuards(ConsoleGuard, OperatorGuard)
+export class DepositBonusSettingsController {
+  constructor(@Inject(DepositBonusService) private readonly bonus: DepositBonusService) {}
+
+  @Get()
+  @RequirePermission('commissions.read')
+  @Header('Cache-Control', 'no-store')
+  get(@CurrentTenant() tenant: ResolvedTenant): Promise<DepositBonusSettings> {
+    return this.bonus.settings(tenant);
+  }
+
+  @Put()
+  @RequirePermission('commissions.manage')
+  @Header('Cache-Control', 'no-store')
+  save(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @CurrentOperator() operator: AuthenticatedOperator,
+    @Body(new ZodValidationPipe(depositBonusSettingsSchema)) body: DepositBonusSettings,
+  ): Promise<DepositBonusSettings> {
+    return this.bonus.saveSettings(tenant, operator, body);
   }
 }
 

@@ -18,7 +18,11 @@ import type {
   SavePaymentGatewayRequest,
   AdminDrawsResponse,
   AdminBranding,
+  AdminCasinoClosing,
+  DepositBonusSettings,
   AdminCasinoGeneralReport,
+  CasinoClosingPayRequest,
+  CasinoClosingPayResult,
   HomeLayout,
   AdminMural,
   AdminPromoterListItem,
@@ -131,6 +135,15 @@ export const adminApi = {
     if (query.type) params.set('type', query.type);
     return call<AdminCasinoGeneralReport>(session, 'GET', `/v1/admin/reports/casino/general?${params}`);
   },
+  /** Fechamento cassino: os cards do mês anterior e do atual e, com `month` (YYYY-MM), o detalhamento do mês. */
+  casinoClosing: (session: Caller, month: string | null) =>
+    call<AdminCasinoClosing>(
+      session,
+      'GET',
+      `/v1/admin/reports/casino/closing${month ? `?${new URLSearchParams({ month })}` : ''}`,
+    ),
+  payCasinoClosing: (session: Caller, body: CasinoClosingPayRequest) =>
+    call<CasinoClosingPayResult>(session, 'POST', '/v1/admin/reports/casino/closing/pay', body),
   /** CRM: Apostadores inativos ou Nunca depositantes, com os filtros da tela. */
   crmList<L extends CrmQuery['list']>(session: Caller, query: CrmQuery & { list: L }) {
     const params = new URLSearchParams(
@@ -296,6 +309,10 @@ export const adminApi = {
     }),
   resolveWithdrawal: (session: Caller, id: string, paid: boolean) =>
     call<AdminWithdrawalListItem>(session, 'POST', `/v1/admin/withdrawals/${id}/resolve`, { paid }),
+  getDepositBonusSettings: (session: Caller) =>
+    call<DepositBonusSettings>(session, 'GET', '/v1/admin/deposit-bonus-settings'),
+  saveDepositBonusSettings: (session: Caller, body: DepositBonusSettings) =>
+    call<DepositBonusSettings>(session, 'PUT', '/v1/admin/deposit-bonus-settings', body),
   getWithdrawalSettings: (session: Caller) => call<WithdrawalSettings>(session, 'GET', '/v1/admin/withdrawal-settings'),
   saveWithdrawalSettings: (session: Caller, body: WithdrawalSettings) =>
     call<WithdrawalSettings>(session, 'PUT', '/v1/admin/withdrawal-settings', body),

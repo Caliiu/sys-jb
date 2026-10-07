@@ -7,6 +7,7 @@ export const PERSONALIZATION_TABS = [
   { key: 'branding', href: ADMIN_ROUTES.branding, label: 'Identidade visual', permission: 'branding.read' },
   { key: 'home', href: ADMIN_ROUTES.homeLayout, label: 'Cards do início', permission: 'branding.read' },
   { key: 'values', href: ADMIN_ROUTES.values, label: 'Valores', permission: 'commissions.read' },
+  { key: 'bonus', href: ADMIN_ROUTES.bonus, label: 'Bônus', permission: 'commissions.read' },
 ] as const satisfies ReadonlyArray<{ key: string; href: string; label: string; permission: Permission }>;
 
 export type PersonalizationTab = (typeof PERSONALIZATION_TABS)[number]['key'];
@@ -17,7 +18,7 @@ export const firstPersonalizationTab = (permissions: readonly Permission[]) =>
 
 /**
  * Abas de Configurações > Personalização (cada aba é uma rota: link compartilhável, voltar funciona). Só aparecem as
- * abas que o perfil pode abrir (o Financeiro, por exemplo, só vê Valores).
+ * abas que o perfil pode abrir (o Financeiro, por exemplo, só vê Valores e Bônus).
  */
 export default function PersonalizationTabs({
   active,

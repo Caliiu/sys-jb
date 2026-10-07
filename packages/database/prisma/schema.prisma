@@ -78,6 +78,8 @@ model Tenant {
   paymentGateways      PaymentGateway[]
   pixDeposits          PixDeposit[]
   pixWithdrawals       PixWithdrawal[]
+  casinoCommissions    CasinoCommissionPayout[]
+  depositBonuses       DepositBonus[]
 
   @@map("tenants")
 }
@@ -108,11 +110,11 @@ model User {
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   wallet             Wallet?
   sessions           Session[]
-  referredBy         User?               @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
-  referrals          User[]              @relation("Referrals")
+  referredBy         User?                    @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
+  referrals          User[]                   @relation("Referrals")
   fazendinhaBets     FazendinhaBet[]
   lotteryTickets     LotteryTicket[]
   walletEntries      WalletEntry[]
@@ -124,8 +126,10 @@ model User {
   casinoTransactions CasinoTransaction[]
   pixDeposits        PixDeposit[]
   pixWithdrawals     PixWithdrawal[]
-  betCommissions     BetCommission[]     @relation("BetCommissionReferrer")
-  commissionedBets   BetCommission[]     @relation("BetCommissionBettor")
+  casinoCommissions  CasinoCommissionPayout[]
+  depositBonuses     DepositBonus[]
+  betCommissions     BetCommission[]          @relation("BetCommissionReferrer")
+  commissionedBets   BetCommission[]          @relation("BetCommissionBettor")
 
   @@unique([tenantId, id])
   @@unique([tenantId, phone])
@@ -203,15 +207,16 @@ model Operator {
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   sessions            OperatorSession[]
   auditLogs           AuditLog[]
   walletEntries       WalletEntry[]
   commissionClosings  CommissionClosing[]
   paymentGateways     PaymentGateway[]
-  reviewedDeposits    PixDeposit[]        @relation("PixDepositReviewer")
-  reviewedWithdrawals PixWithdrawal[]     @relation("PixWithdrawalReviewer")
-  resolvedWithdrawals PixWithdrawal[]     @relation("PixWithdrawalResolver")
+  reviewedDeposits    PixDeposit[]             @relation("PixDepositReviewer")
+  reviewedWithdrawals PixWithdrawal[]          @relation("PixWithdrawalReviewer")
+  resolvedWithdrawals PixWithdrawal[]          @relation("PixWithdrawalResolver")
+  casinoCommissions   CasinoCommissionPayout[]
 
   @@unique([tenantId, id])
   @@map("operators")
@@ -339,51 +344,57 @@ model FazendinhaBetNumber {
 // motivo), OPERATOR_CREDIT (crédito pelo painel, função wallet_operator_credit, com operador e motivo),
 // OPENING_BALANCE (saldos anteriores ao registro, criados pelas migrations).
 model WalletEntry {
-  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId            String   @map("tenant_id") @db.Uuid
-  userId              String   @map("user_id") @db.Uuid
-  kind                String
-  balanceJbDelta      BigInt   @map("balance_jb_delta")
-  prizesJbDelta       BigInt   @map("prizes_jb_delta")
-  bonusJbDelta        BigInt   @default(0) @map("bonus_jb_delta")
-  balanceGamesDelta   BigInt   @default(0) @map("balance_games_delta")
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  userId                   String   @map("user_id") @db.Uuid
+  kind                     String
+  balanceJbDelta           BigInt   @map("balance_jb_delta")
+  prizesJbDelta            BigInt   @map("prizes_jb_delta")
+  bonusJbDelta             BigInt   @default(0) @map("bonus_jb_delta")
+  balanceGamesDelta        BigInt   @default(0) @map("balance_games_delta")
   // Prêmios de games (cassino): aposta tira daqui depois do saldo; prêmio entra aqui.
-  prizesGamesDelta    BigInt   @default(0) @map("prizes_games_delta")
+  prizesGamesDelta         BigInt   @default(0) @map("prizes_games_delta")
   // Motivo (obrigatório no ajuste manual e no crédito pelo painel).
-  note                String?
+  note                     String?
   // Operador que creditou pelo painel (OPERATOR_CREDIT).
-  operatorId          String?  @map("operator_id") @db.Uuid
+  operatorId               String?  @map("operator_id") @db.Uuid
   // Chave do crédito pelo painel: repetir a mesma chave não credita de novo.
-  idempotencyKey      String?  @map("idempotency_key") @db.Uuid
+  idempotencyKey           String?  @map("idempotency_key") @db.Uuid
   // Pagamento de comissão do fechamento mensal (COMMISSION).
-  commissionPayoutId  String?  @map("commission_payout_id") @db.Uuid
+  commissionPayoutId       String?  @map("commission_payout_id") @db.Uuid
   // Pule de loteria: débito (LOTTERY_BET) e devolução no cancelamento (LOTTERY_REFUND), um de cada por pule.
-  lotteryTicketId     String?  @map("lottery_ticket_id") @db.Uuid
+  lotteryTicketId          String?  @map("lottery_ticket_id") @db.Uuid
   // Um débito por pule (UNIQUE): a função não debita duas vezes o mesmo pule.
-  fazendinhaBetId     String?  @map("fazendinha_bet_id") @db.Uuid
+  fazendinhaBetId          String?  @map("fazendinha_bet_id") @db.Uuid
   // Comissão de uma aposta: crédito na hora (COMMISSION) e estorno no cancelamento (COMMISSION_REVERSAL).
-  betCommissionId     String?  @map("bet_commission_id") @db.Uuid
+  betCommissionId          String?  @map("bet_commission_id") @db.Uuid
   // Prêmio de um pule (PRIZE): um crédito por pule premiada, na bolsa de prêmios.
-  pulePrizeId         String?  @map("pule_prize_id") @db.Uuid
+  pulePrizeId              String?  @map("pule_prize_id") @db.Uuid
   // Rodada do cassino (CASINO): uma movimentação por transação do provedor.
-  casinoTransactionId String?  @map("casino_transaction_id") @db.Uuid
+  casinoTransactionId      String?  @map("casino_transaction_id") @db.Uuid
   // Depósito Pix confirmado (DEPOSIT): um crédito por depósito.
-  pixDepositId        String?  @map("pix_deposit_id") @db.Uuid
+  pixDepositId             String?  @map("pix_deposit_id") @db.Uuid
   // Saque (WITHDRAWAL: reserva na solicitação; WITHDRAWAL_REFUND: devolução se não for pago).
-  pixWithdrawalId     String?  @map("pix_withdrawal_id") @db.Uuid
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  pixWithdrawalId          String?  @map("pix_withdrawal_id") @db.Uuid
+  // Comissão de cassino do fechamento mensal (CASINO_COMMISSION): um crédito por pagamento.
+  casinoCommissionPayoutId String?  @map("casino_commission_payout_id") @db.Uuid
+  // Bônus de recarga (DEPOSIT_BONUS): um crédito por bônus, na bolsa de bônus.
+  depositBonusId           String?  @map("deposit_bonus_id") @db.Uuid
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user              User               @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  fazendinhaBet     FazendinhaBet?     @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
-  operator          Operator?          @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
-  commissionPayout  CommissionPayout?  @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
-  lotteryTicket     LotteryTicket?     @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
-  betCommission     BetCommission?     @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
-  pulePrize         PulePrize?         @relation(fields: [tenantId, pulePrizeId], references: [tenantId, id], onDelete: Restrict)
-  casinoTransaction CasinoTransaction? @relation(fields: [tenantId, casinoTransactionId], references: [tenantId, id], onDelete: Restrict)
-  pixDeposit        PixDeposit?        @relation(fields: [tenantId, pixDepositId], references: [tenantId, id], onDelete: Restrict)
-  pixWithdrawal     PixWithdrawal?     @relation(fields: [tenantId, pixWithdrawalId], references: [tenantId, id], onDelete: Restrict)
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                   User                    @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  fazendinhaBet          FazendinhaBet?          @relation(fields: [tenantId, fazendinhaBetId], references: [tenantId, id], onDelete: Restrict)
+  operator               Operator?               @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+  commissionPayout       CommissionPayout?       @relation(fields: [tenantId, commissionPayoutId], references: [tenantId, id], onDelete: Restrict)
+  lotteryTicket          LotteryTicket?          @relation(fields: [tenantId, lotteryTicketId], references: [tenantId, id], onDelete: Restrict)
+  betCommission          BetCommission?          @relation(fields: [tenantId, betCommissionId], references: [tenantId, id], onDelete: Restrict)
+  pulePrize              PulePrize?              @relation(fields: [tenantId, pulePrizeId], references: [tenantId, id], onDelete: Restrict)
+  casinoTransaction      CasinoTransaction?      @relation(fields: [tenantId, casinoTransactionId], references: [tenantId, id], onDelete: Restrict)
+  pixDeposit             PixDeposit?             @relation(fields: [tenantId, pixDepositId], references: [tenantId, id], onDelete: Restrict)
+  pixWithdrawal          PixWithdrawal?          @relation(fields: [tenantId, pixWithdrawalId], references: [tenantId, id], onDelete: Restrict)
+  casinoCommissionPayout CasinoCommissionPayout? @relation(fields: [tenantId, casinoCommissionPayoutId], references: [tenantId, id], onDelete: Restrict)
+  depositBonus           DepositBonus?           @relation(fields: [tenantId, depositBonusId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, fazendinhaBetId])
   @@unique([tenantId, idempotencyKey])
@@ -394,6 +405,8 @@ model WalletEntry {
   @@unique([tenantId, casinoTransactionId])
   @@unique([tenantId, pixWithdrawalId, kind])
   @@unique([tenantId, pixDepositId])
+  @@unique([tenantId, casinoCommissionPayoutId])
+  @@unique([tenantId, depositBonusId])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@map("wallet_entries")
 }
@@ -413,6 +426,19 @@ model TenantSettings {
   withdrawalMaxCents       Int      @default(dbgenerated("500000")) @map("withdrawal_max_cents")
   withdrawalDailyCount     Int      @default(dbgenerated("3")) @map("withdrawal_daily_count")
   withdrawalAutoLimitCents Int      @default(dbgenerated("20000")) @map("withdrawal_auto_limit_cents")
+  // Bônus de recarga de Loterias (Configurações > Personalização > Bônus): % (centésimos) e teto (centavos)
+  // de cada regra, e a recarga mínima para ganhar. Gravados só por deposit_bonus_settings_save (Gerente).
+  depositBonusMinCents     Int      @default(dbgenerated("1000")) @map("deposit_bonus_min_cents")
+  bonusFirstBps            Int      @default(dbgenerated("0")) @map("bonus_first_bps")
+  bonusFirstMaxCents       Int      @default(dbgenerated("30000")) @map("bonus_first_max_cents")
+  bonusDailyBps            Int      @default(dbgenerated("0")) @map("bonus_daily_bps")
+  bonusDailyMaxCents       Int      @default(dbgenerated("30000")) @map("bonus_daily_max_cents")
+  bonusFederalBps          Int      @default(dbgenerated("0")) @map("bonus_federal_bps")
+  bonusFederalMaxCents     Int      @default(dbgenerated("30000")) @map("bonus_federal_max_cents")
+  // Regra ativa (o interruptor do painel): pausada mantém a % e o teto gravados. Ativa exige % e teto > 0.
+  bonusFirstEnabled        Boolean  @default(dbgenerated("false")) @map("bonus_first_enabled")
+  bonusDailyEnabled        Boolean  @default(dbgenerated("false")) @map("bonus_daily_enabled")
+  bonusFederalEnabled      Boolean  @default(dbgenerated("false")) @map("bonus_federal_enabled")
   updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -1038,10 +1064,11 @@ model PixDeposit {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  reviewer    Operator?    @relation("PixDepositReviewer", fields: [tenantId, reviewedBy], references: [tenantId, id], onDelete: Restrict)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User          @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  reviewer    Operator?     @relation("PixDepositReviewer", fields: [tenantId, reviewedBy], references: [tenantId, id], onDelete: Restrict)
   walletEntry WalletEntry?
+  bonus       DepositBonus?
 
   @@unique([tenantId, id])
   @@index([tenantId, createdAt(sort: Desc)])
@@ -1100,4 +1127,60 @@ model PixWithdrawal {
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("pix_withdrawals")
+}
+
+// Pagamento do fechamento cassino de um mês a um promotor: a % de cassino dele sobre o GGR (turnover − payout) dos
+// indicados no mês (Brasília), creditada no saldo de saque (prêmios das loterias). Um por promotor e mês; valores e % gravados no pagamento. Gravado só
+// pela função casino_commission_pay (Gerente, mês encerrado). Somente inclusão.
+model CasinoCommissionPayout {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  // Primeiro dia do mês pago (Brasília).
+  month         DateTime @db.Date
+  // Promotor que recebeu.
+  userId        String   @map("user_id") @db.Uuid
+  operatorId    String   @map("operator_id") @db.Uuid
+  turnoverCents BigInt   @map("turnover_cents")
+  payoutCents   BigInt   @map("payout_cents")
+  ggrCents      BigInt   @map("ggr_cents")
+  rateBps       Int      @map("rate_bps")
+  amountCents   BigInt   @map("amount_cents")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  operator    Operator     @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, month, userId])
+  @@map("casino_commission_payouts")
+}
+
+// Bônus de recarga de Loterias concedido: um por recarga, só o de maior valor entre as regras que valem (primeira
+// recarga da conta, primeira do dia, primeira do dia em dia de Federal). % e teto gravados na concessão. Creditado na
+// bolsa de bônus (só aposta em Loterias e Fazendinha; nunca sacável) na mesma transação da recarga, pela função
+// deposit_bonus_grant. Somente inclusão.
+model DepositBonus {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  pixDepositId String   @map("pix_deposit_id") @db.Uuid
+  // FIRST_DEPOSIT, DAILY ou FEDERAL.
+  rule         String
+  depositCents BigInt   @map("deposit_cents")
+  rateBps      Int      @map("rate_bps")
+  maxCents     Int      @map("max_cents")
+  amountCents  BigInt   @map("amount_cents")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User         @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  pixDeposit  PixDeposit   @relation(fields: [tenantId, pixDepositId], references: [tenantId, id], onDelete: Restrict)
+  walletEntry WalletEntry?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, pixDepositId])
+  @@index([tenantId, createdAt])
+  @@map("deposit_bonuses")
 }

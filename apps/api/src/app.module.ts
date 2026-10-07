@@ -30,6 +30,7 @@ import { CasinoWebhookGuard } from './casino/casino-webhook.guard.js';
 import { CasinoWebhookService } from './casino/casino-webhook.service.js';
 import { CasinoService } from './casino/casino.service.js';
 import { MaintenanceService } from './maintenance/maintenance.service.js';
+import { DepositBonusService } from './payments/deposit-bonus.service.js';
 import { DepositsService } from './payments/deposits.service.js';
 import {
   WithdrawalSettingsController,
@@ -43,6 +44,8 @@ import {
   createGatewayAdapters,
 } from './payments/payment-gateways.service.js';
 import {
+  DepositBonusController,
+  DepositBonusSettingsController,
   DepositsAdminController,
   DepositsController,
   PaymentsAdminController,
@@ -153,6 +156,8 @@ export class AppModule {
         CasinoController,
         CasinoWebhookController,
         DepositsController,
+        DepositBonusController,
+        DepositBonusSettingsController,
         PaymentsWebhookController,
         PaymentsAdminController,
         DepositsAdminController,
@@ -216,6 +221,7 @@ export class AppModule {
         { provide: PAYMENT_GATEWAY_ADAPTERS, useValue: createGatewayAdapters(config.payments) },
         PaymentGatewaysService,
         DepositsService,
+        DepositBonusService,
         WithdrawalsService,
         CasinoWebhookGuard,
         MaintenanceService,

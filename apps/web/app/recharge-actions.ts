@@ -17,7 +17,7 @@ export type ChargeResult =
     };
 
 export type DepositStatusResult =
-  | { ok: true; status: PublicDeposit['status']; wallet: PublicWallet | null }
+  | { ok: true; status: PublicDeposit['status']; wallet: PublicWallet | null; bonusCents: number }
   | { ok: false; code: 'SESSION_INVALID' | 'UNAVAILABLE' };
 
 const sessionEnded = { ok: false, code: 'SESSION_INVALID', message: 'Sessão encerrada. Entre novamente.' } as const;
@@ -86,6 +86,8 @@ export async function depositStatusAction(depositId: unknown): Promise<DepositSt
     undefined,
     { sessionToken: session.sessionToken },
   );
-  if (res.ok) return { ok: true, status: res.data.deposit.status, wallet: res.data.wallet };
+  if (res.ok) {
+    return { ok: true, status: res.data.deposit.status, wallet: res.data.wallet, bonusCents: res.data.bonusCents };
+  }
   return { ok: false, code: res.error.code === 'SESSION_INVALID' ? 'SESSION_INVALID' : 'UNAVAILABLE' };
 }

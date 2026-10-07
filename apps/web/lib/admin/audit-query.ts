@@ -99,6 +99,8 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'withdrawal.reject': 'danger',
   'withdrawal.resolve': 'neutral',
   'withdrawal.settings': 'neutral',
+  'casino.commission.pay': 'success',
+  'deposit.bonus.settings': 'neutral',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
@@ -136,6 +138,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'withdrawal.reject': 'Saque recusado',
   'withdrawal.resolve': 'Saque concluído à mão',
   'withdrawal.settings': 'Limites de saque alterados',
+  'casino.commission.pay': 'Comissão de cassino paga',
+  'deposit.bonus.settings': 'Bônus de recarga alterado',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -148,6 +152,10 @@ const FIELD_LABELS: Record<string, string> = {
   bonusJb: 'Bônus',
   balanceGames: 'Disponível em Games',
   role: 'Perfil',
+  minDepositCents: 'Recarga mínima',
+  firstDeposit: 'Bônus da primeira recarga',
+  daily: 'Bônus da primeira do dia',
+  federal: 'Bônus do dia da Federal',
 };
 
 const commission = (bps: number | null | undefined) => (typeof bps === 'number' ? formatCommission(bps) : '—');

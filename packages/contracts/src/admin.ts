@@ -584,18 +584,40 @@ export interface CasinoClosingTotals {
   payoutCents: number;
   /** Turnover − payout (pode ser negativo). */
   ggrCents: number;
-  /** % de cassino do promotor sobre o GGR; GGR negativo paga 0. */
+  /**
+   * % de cassino do promotor sobre o GGR, arredondada para baixo no centavo; GGR negativo paga 0. No total do mês,
+   * só o que vale pagar (sem promotores bloqueados que ainda não receberam).
+   */
   commissionCents: number;
 }
 
+/**
+ * Situação de um promotor no mês:
+ * - open: mês em andamento (parcial, ainda não pode ser pago);
+ * - pending: mês encerrado, comissão a pagar;
+ * - paid: já recebeu (valores e % gravados no pagamento);
+ * - blocked: promotor bloqueado, não recebe;
+ * - none: sem comissão no mês (sem movimento, GGR negativo ou % de cassino zero).
+ */
+export const CASINO_CLOSING_STATUSES = ['open', 'pending', 'paid', 'blocked', 'none'] as const;
+export type CasinoClosingStatus = (typeof CASINO_CLOSING_STATUSES)[number];
+
+/** Quanto do mês já foi pago e quanto falta. */
+export interface CasinoClosingProgress {
+  paidCents: number;
+  pendingCents: number;
+  /** Promotores com comissão a pagar (mês encerrado). */
+  pendingCount: number;
+}
+
 /** Card de um mês: o último mês encerrado (a fechar) ou o mês em andamento (parcial). */
-export interface CasinoClosingMonth {
+export interface CasinoClosingMonth extends CasinoClosingProgress {
   /** YYYY-MM. */
   month: string;
   /** O mês já terminou (Brasília): só ele pode ser pago. */
   ended: boolean;
   totals: CasinoClosingTotals;
-  /** Promotores com comissão no mês. */
+  /** Promotores com comissão no mês (fora os bloqueados que ainda não receberam). */
   promotersWithCommission: number;
 }
 
@@ -605,6 +627,9 @@ export interface CasinoClosingRow extends CasinoClosingTotals {
   casinoCommissionBps: number;
   /** Jogadores cadastrados pelo link do promotor. */
   referralsCount: number;
+  status: CasinoClosingStatus;
+  /** Quando recebeu (ISO 8601); null se ainda não recebeu. */
+  paidAt: string | null;
 }
 
 /** Meses dos cards do fechamento (YYYY-MM, Brasília): o último encerrado e o em andamento. */
@@ -615,17 +640,38 @@ export function casinoClosingMonths(nowIso: string): { previous: string; current
   return { previous: new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7), current };
 }
 
+/** Detalhamento de um mês, promotor a promotor (por nome). */
+export interface CasinoClosingDetail extends CasinoClosingProgress {
+  month: string;
+  ended: boolean;
+  rows: CasinoClosingRow[];
+  totals: CasinoClosingTotals;
+}
+
 /**
  * GET /v1/admin/reports/casino/closing (+ `month=YYYY-MM`): os cards do mês anterior e do atual e, com `month`, o
- * detalhamento por promotor daquele mês. Enquanto o sistema não tem cassino, os valores vêm zerados
- * (`available: false`) e não há o que pagar.
+ * detalhamento por promotor daquele mês.
  */
 export interface AdminCasinoClosing {
   /** [mês anterior, mês atual]. */
   months: [CasinoClosingMonth, CasinoClosingMonth];
   /** null = nenhum mês escolhido. */
-  detail: { month: string; ended: boolean; rows: CasinoClosingRow[]; totals: CasinoClosingTotals } | null;
-  available: boolean;
+  detail: CasinoClosingDetail | null;
+}
+
+/**
+ * POST /v1/admin/reports/casino/closing/pay: paga a comissão de cassino de um mês encerrado, no saldo de saque (prêmios das loterias), a um promotor
+ * (`promoterId`) ou a todos os pendentes. Só o Gerente; os valores são calculados pelo banco, nunca vêm do painel.
+ */
+export interface CasinoClosingPayRequest {
+  month: string;
+  promoterId?: string;
+}
+
+export interface CasinoClosingPayResult {
+  /** Promotores pagos agora. */
+  paidCount: number;
+  paidCents: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -647,6 +693,8 @@ export const STATEMENT_KINDS = [
   'DEPOSIT',
   'WITHDRAWAL',
   'WITHDRAWAL_REFUND',
+  'CASINO_COMMISSION',
+  'DEPOSIT_BONUS',
 ] as const;
 export type StatementKind = (typeof STATEMENT_KINDS)[number];
 
@@ -735,6 +783,8 @@ export const AUDIT_ACTIONS = [
   'withdrawal.reject',
   'withdrawal.resolve',
   'withdrawal.settings',
+  'casino.commission.pay',
+  'deposit.bonus.settings',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

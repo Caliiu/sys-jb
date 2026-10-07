@@ -108,6 +108,7 @@ describe('menu do painel (configuração)', () => {
       'Vendas por extração',
     ]);
     expect(breadcrumbOf('/personalizacao/valores')).toEqual(['Configurações', 'Personalização']);
+    expect(breadcrumbOf('/personalizacao/bonus')).toEqual(['Configurações', 'Personalização']);
     expect(breadcrumbOf('/auditoria')).toEqual(['Administração', 'Log de auditoria']);
     expect(breadcrumbOf('/personalizacao/cards-inicio')).toEqual(['Configurações', 'Personalização']);
     expect(breadcrumbOf('/login')).toEqual([]);
@@ -124,10 +125,11 @@ describe('menu do painel (configuração)', () => {
     expect(findNavItem('/saques')).toMatchObject({ item: { label: 'Saques' }, group: { group: 'Carteira' } });
     expect(findNavItem('/saques')!.item.soon).toBeUndefined();
     expect(findNavItem('/relatorios/cassino/fechamento')).toMatchObject({
-      item: { label: 'Fechamento cassino', soon: true },
+      item: { label: 'Fechamento cassino' },
       group: { group: 'Relatórios' },
       section: { section: 'Cassino' },
     });
+    expect(findNavItem('/relatorios/cassino/fechamento')!.item.soon).toBeUndefined();
     expect(findNavItem('/relatorios/cassino/geral')!.item.soon).toBeUndefined();
     expect(findNavItem('/auditoria')).toMatchObject({ item: { label: 'Log de auditoria' } });
     expect(findNavItem('/')).toMatchObject({ item: { label: 'Início' }, group: null, section: null });

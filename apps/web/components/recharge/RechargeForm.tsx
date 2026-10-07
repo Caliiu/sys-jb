@@ -1,5 +1,6 @@
 'use client';
 
+import type { PublicDepositBonusOffers } from '@sysjb/contracts';
 import { ArrowRight, CircleAlert } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -7,6 +8,7 @@ import { formatCents } from '@/lib/currency';
 import { createPixChargeAction } from '@/app/recharge-actions';
 import { addAmount, type PixCharge, type RechargeDestination, validateRecharge } from '@/lib/recharge';
 import AmountField from './AmountField';
+import DepositBonusBanner from './DepositBonusBanner';
 import DestinationPicker from './DestinationPicker';
 import QuickAmounts from './QuickAmounts';
 
@@ -15,10 +17,12 @@ interface RechargeFormProps {
   onCharge: (charge: PixCharge) => void;
   balanceCents: number;
   balanceVisible: boolean;
+  /** Bônus de recarga que vale agora (null = sem aviso). */
+  bonus?: PublicDepositBonusOffers | null;
 }
 
 /** Etapa 1 da recarga: valor e destino do crédito. */
-export default function RechargeForm({ onCharge, balanceCents, balanceVisible }: RechargeFormProps) {
+export default function RechargeForm({ onCharge, balanceCents, balanceVisible, bonus = null }: RechargeFormProps) {
   const router = useRouter();
   const [amountCents, setAmountCents] = useState(0);
   const [destination, setDestination] = useState<RechargeDestination | null>(null);
@@ -76,6 +80,8 @@ export default function RechargeForm({ onCharge, balanceCents, balanceVisible }:
       />
 
       <DestinationPicker value={destination} onChange={changeDestination} />
+
+      {bonus && <DepositBonusBanner bonus={bonus} amountCents={amountCents} destination={destination} />}
 
       <p className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
         <CircleAlert className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />O crédito só poderá ser usado na

@@ -307,6 +307,18 @@ export const casinoClosingQuerySchema = z
   });
 export type CasinoClosingQuery = z.output<typeof casinoClosingQuerySchema>;
 
+/** Pagamento do fechamento cassino: o mês (só encerrado; o banco confere de novo) e, opcional, um promotor. */
+export const casinoClosingPaySchema = z
+  .strictObject({
+    month: commissionMonthSchema,
+    promoterId: z.uuid({ error: 'promoterId deve ser um UUID.' }).optional(),
+  })
+  .refine((body) => body.month < casinoClosingMonths(new Date().toISOString()).current, {
+    path: ['month'],
+    message: 'O mês ainda não terminou.',
+  });
+export type CasinoClosingPayInput = z.output<typeof casinoClosingPaySchema>;
+
 /** Extrato do apostador: período (até hoje) e paginação. */
 export const playerStatementQuerySchema = z
   .strictObject({

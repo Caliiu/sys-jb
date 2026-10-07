@@ -88,6 +88,8 @@ export interface PublicDepositStatus {
   deposit: PublicDeposit;
   /** Carteira depois do crédito (só quando PAID). */
   wallet: PublicWallet | null;
+  /** Bônus de recarga que este depósito ganhou (centavos; 0 = nenhum). */
+  bonusCents: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -334,4 +336,83 @@ export interface ReviewWithdrawalRequest {
 /** Conclusão manual, depois de conferir no painel do gateway: pago ou não pago (devolve). */
 export interface ResolveWithdrawalRequest {
   paid: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Bônus de recarga de Loterias
+// ---------------------------------------------------------------------------
+
+/**
+ * Regras do bônus (cada recarga ganha no máximo um, o de maior valor; empate: nesta ordem):
+ * - FIRST_DEPOSIT: primeira recarga de Loterias da conta;
+ * - FEDERAL: primeira recarga de Loterias do dia em dia com sorteio da Federal na banca;
+ * - DAILY: primeira recarga de Loterias do dia (Brasília).
+ * O bônus vai para a bolsa de bônus: é gasto primeiro nas apostas de Loterias e Fazendinha, nunca é sacável e não
+ * expira. Só recarga de Loterias, a partir do mínimo da banca.
+ */
+export const DEPOSIT_BONUS_RULES = ['FIRST_DEPOSIT', 'FEDERAL', 'DAILY'] as const;
+export type DepositBonusRule = (typeof DEPOSIT_BONUS_RULES)[number];
+
+export const DEPOSIT_BONUS_RULE_LABELS: Record<DepositBonusRule, string> = {
+  FIRST_DEPOSIT: 'Primeira recarga',
+  FEDERAL: 'Recarga do dia da Federal',
+  DAILY: 'Primeira recarga do dia',
+};
+
+export const DEPOSIT_BONUS_LIMITS = {
+  /** 100%. */
+  maxBps: 10_000,
+  /** Teto de cada regra: R$ 100.000,00. */
+  maxCapCents: 10_000_000,
+  /** Recarga mínima para ganhar: de R$ 1,00 a R$ 100.000,00. */
+  minDepositMinCents: 100,
+  minDepositMaxCents: 10_000_000,
+} as const;
+
+/** Uma regra: ativa (o interruptor; pausada mantém % e teto), % (centésimos) e teto do bônus (centavos). Ativa exige
+ * % e teto maiores que zero. */
+export interface DepositBonusRuleSettings {
+  enabled: boolean;
+  bps: number;
+  maxCents: number;
+}
+
+/** Configurações > Personalização > Bônus. */
+export interface DepositBonusSettings {
+  /** Recarga mínima para ganhar bônus (centavos). */
+  minDepositCents: number;
+  firstDeposit: DepositBonusRuleSettings;
+  daily: DepositBonusRuleSettings;
+  federal: DepositBonusRuleSettings;
+}
+
+/** Regra (ativa) que vale agora para a próxima recarga de Loterias do jogador. */
+export interface DepositBonusOffer {
+  rule: DepositBonusRule;
+  bps: number;
+  maxCents: number;
+}
+
+/** GET /v1/payments/deposit-bonus: as regras que valem agora (na ordem de desempate) e a recarga mínima. */
+export interface PublicDepositBonusOffers {
+  offers: DepositBonusOffer[];
+  minDepositCents: number;
+}
+
+/**
+ * Bônus que uma recarga de Loterias de `amountCents` ganharia com as ofertas (o mesmo cálculo do banco): % do valor,
+ * para baixo no centavo, limitado ao teto; o maior; null se nenhum (ou abaixo do mínimo).
+ */
+export function depositBonusFor(
+  amountCents: number,
+  { offers, minDepositCents }: PublicDepositBonusOffers,
+): { rule: DepositBonusRule; amountCents: number } | null {
+  if (!Number.isSafeInteger(amountCents) || amountCents < minDepositCents) return null;
+  let best: { rule: DepositBonusRule; amountCents: number } | null = null;
+  for (const offer of offers) {
+    const value = Math.min(Math.floor((amountCents * offer.bps) / 10_000), offer.maxCents);
+    // Empate: fica o primeiro (as ofertas vêm na ordem de desempate).
+    if (value > 0 && (!best || value > best.amountCents)) best = { rule: offer.rule, amountCents: value };
+  }
+  return best;
 }

@@ -48,6 +48,8 @@ Os preços mudam com frequência; confira no site de cada uma. Como referência,
 
 ## O que montar no servidor
 
+Passo a passo completo, com os comandos: `DEPLOY.md`.
+
 - **Nginx ou Caddy na frente**: HTTPS, encaminhamento do IP real (`WEB_TRUSTED_PROXY_HOPS`) e o log sem `?token=` na rota do webhook do cassino (configuração pronta na seção Cassino do README).
 - **PostgreSQL** pelo `docker-compose.yml` do projeto, escutando só em `127.0.0.1`.
 - **Web e API** rodando como serviço (systemd ou PM2): web só em `127.0.0.1:3000`, API só em `127.0.0.1:4000`, nunca expostos direto.

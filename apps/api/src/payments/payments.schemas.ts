@@ -1,5 +1,6 @@
 import {
   DEPOSIT_DESTINATIONS,
+  DEPOSIT_BONUS_LIMITS,
   DEPOSIT_LIMITS,
   DEPOSIT_STATUSES,
   OPERATION_SUMMARY_MAX_DAYS,
@@ -68,3 +69,30 @@ export const paymentWebhookQuerySchema = z.union([
   z.object({ d: z.uuid(), t: webhookToken }),
   z.object({ s: z.uuid(), t: webhookToken }),
 ]);
+
+/** Bônus de recarga, uma regra: % até 100% e teto; ativa exige % e teto maiores que zero. O banco confere de novo. */
+const depositBonusRuleSchema = z
+  .strictObject({
+    enabled: z.boolean({ error: 'Informe se a regra está ativa.' }),
+    bps: z.number().int().min(0).max(DEPOSIT_BONUS_LIMITS.maxBps),
+    maxCents: z.number().int().min(0).max(DEPOSIT_BONUS_LIMITS.maxCapCents),
+  })
+  .superRefine((rule, ctx) => {
+    if (!rule.enabled) return;
+    if (rule.bps === 0) ctx.addIssue({ code: 'custom', path: ['bps'], message: 'Informe a % do bônus.' });
+    if (rule.maxCents === 0) {
+      ctx.addIssue({ code: 'custom', path: ['maxCents'], message: 'Informe o valor máximo do bônus.' });
+    }
+  });
+
+/** Configurações > Personalização > Bônus. */
+export const depositBonusSettingsSchema = z.strictObject({
+  minDepositCents: z
+    .number()
+    .int()
+    .min(DEPOSIT_BONUS_LIMITS.minDepositMinCents)
+    .max(DEPOSIT_BONUS_LIMITS.minDepositMaxCents),
+  firstDeposit: depositBonusRuleSchema,
+  daily: depositBonusRuleSchema,
+  federal: depositBonusRuleSchema,
+});
