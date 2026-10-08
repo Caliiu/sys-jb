@@ -56,7 +56,7 @@ Passo a passo completo, com os comandos: `DEPLOY.md`.
 - **`.env` de produção** gerado com `pnpm setup:env` (não copiar o de desenvolvimento), legível só pelo usuário que roda a aplicação (`chmod 600 .env`), fora de imagens Docker e de backups abertos.
 - **Backup diário do banco** (`pg_dump`) enviado para fora do servidor (bucket S3, Backblaze ou similar). O banco guarda dinheiro: isso é obrigatório.
 - **Firewall** liberando só as portas 22 (SSH com chave), 80 e 443.
-- **Cloudflare** (opcional): proteção contra ataques e cache. Nesse caso use `WEB_TRUSTED_PROXY_HOPS=2`. O webhook do PlayFivers vai chegar pelos IPs da Cloudflare, então ajuste `CASINO_WEBHOOK_IPS`.
+- **Cloudflare na frente** (padrão do `DEPLOY.md`): esconde o IP da VPS e segura ataques. O firewall aceita HTTPS só da Cloudflare e o Nginx recupera o IP real do visitante (`CF-Connecting-IP`), então `WEB_TRUSTED_PROXY_HOPS` continua `1` e `CASINO_WEBHOOK_IPS`/`PAYMENTS_WEBHOOK_IPS` continuam com os IPs dos provedores, nunca os da Cloudflare.
 
 ## Logs e espaço em disco
 
