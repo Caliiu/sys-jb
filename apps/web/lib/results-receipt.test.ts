@@ -5,17 +5,21 @@ import { formatResultNumber, resultPrizeParts } from './result-format';
 import { NO_RESULTS_TEXT, drawResults, resultsReceipt } from './results-receipt';
 
 describe('números do resultado', () => {
-  it('sem zeros à esquerda e com ponto de milhar (Federal com 5 dígitos)', () => {
+  it('com todos os dígitos (zero à esquerda incluso) e ponto de milhar (Federal com 5 dígitos)', () => {
     expect(formatResultNumber('7977')).toBe('7.977');
-    expect(formatResultNumber('0987')).toBe('987');
-    expect(formatResultNumber('0007')).toBe('7');
-    expect(formatResultNumber('0000')).toBe('0');
+    expect(formatResultNumber('0987')).toBe('0.987');
+    expect(formatResultNumber('0007')).toBe('0.007');
+    expect(formatResultNumber('0000')).toBe('0.000');
     expect(formatResultNumber('12345')).toBe('12.345');
+    expect(formatResultNumber('01234')).toBe('01.234');
+    // Centena do 7º prêmio.
+    expect(formatResultNumber('245')).toBe('245');
+    expect(formatResultNumber('045')).toBe('045');
   });
 
   it('grupo pelos dois últimos dígitos e o bicho dele (00 = grupo 25)', () => {
     expect(resultPrizeParts('7977')).toEqual({ number: '7.977 G.20', bicho: 'Peru' });
-    expect(resultPrizeParts('0987')).toEqual({ number: '987 G.22', bicho: 'Tigre' });
+    expect(resultPrizeParts('0987')).toEqual({ number: '0.987 G.22', bicho: 'Tigre' });
     expect(resultPrizeParts('1204')).toEqual({ number: '1.204 G.01', bicho: 'Avestruz' });
     expect(resultPrizeParts('4300')).toEqual({ number: '4.300 G.25', bicho: 'Vaca' });
   });
@@ -39,7 +43,7 @@ describe('comprovante de resultados', () => {
       right: 'Peru',
       rightBold: true,
     });
-    expect(draw![7]).toMatchObject({ left: [{ text: '7: ' }, { text: '987 G.22', bold: true }], right: 'Tigre' });
+    expect(draw![7]).toMatchObject({ left: [{ text: '7: ' }, { text: '0.987 G.22', bold: true }], right: 'Tigre' });
   });
 
   it('sem nenhuma extração com resultado, o aviso', () => {

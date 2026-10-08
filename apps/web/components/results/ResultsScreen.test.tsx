@@ -226,7 +226,7 @@ describe('Resultado loterias: resultado', () => {
     expect(screen.getByText('LT PT RIO 09HS')).toBeInTheDocument();
     expect(screen.getByText('7.977 G.20')).toBeInTheDocument();
     expect(screen.getByText('Peru').tagName).toBe('STRONG');
-    expect(screen.getByText('987 G.22')).toBeInTheDocument();
+    expect(screen.getByText('0.987 G.22')).toBeInTheDocument();
     expect(screen.getByText('Tigre')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Voltar para as loterias' }));

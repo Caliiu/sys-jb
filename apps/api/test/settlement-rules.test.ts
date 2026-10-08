@@ -49,6 +49,16 @@ describe('modalidades de um número', () => {
     expect(settleLotteryItem(item({ modality: 'milhar', guesses: ['1235'] }), SEVEN)).toBeNull();
   });
 
+  it('zero à esquerda faz parte da milhar: 0873 sorteado paga o palpite 0873, não o 873 da centena por engano', () => {
+    const prizes = ['0873', '3718', '8192', '0186', '1020', '3989', '245'];
+    expect(prizeOf(item({ modality: 'milhar', guesses: ['0873'] }), prizes)).toBe(800_000);
+    expect(prizeOf(item({ modality: 'milhar', guesses: ['8730'] }), prizes)).toBe(0);
+    expect(prizeOf(item({ modality: 'centena', guesses: ['873'] }), prizes)).toBe(80_000);
+    expect(prizeOf(item({ modality: 'centena_esquerda', guesses: ['087'] }), prizes)).toBe(80_000);
+    expect(prizeOf(item({ modality: 'dezena_esq', guesses: ['08'] }), prizes)).toBe(8_000);
+    expect(prizeOf(item({ modality: 'milhar', placement: 'p4', guesses: ['0186'] }), prizes)).toBe(800_000);
+  });
+
   it('esquerda e meio pelos dígitos da milhar', () => {
     expect(prizeOf(item({ modality: 'centena_esquerda', guesses: ['123'] }))).toBe(80_000);
     expect(prizeOf(item({ modality: 'centena_esquerda', guesses: ['234'] }))).toBe(0);
