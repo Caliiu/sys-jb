@@ -146,7 +146,9 @@ para servidor e não resolvem desafios de navegador.
 - *Speed > Optimization*: **Rocket Loader desligado**.
 - *Scrape Shield*: **Email Address Obfuscation desligado**.
 
-  Os dois alteram o HTML no caminho e quebram as telas do Next.js (erro de hidratação).
+  Os dois alteram os scripts no caminho, e a CSP do site bloqueia script alterado: a página aparece, mas nenhum
+  botão funciona (o login do painel só recarrega a tela). Vale **também para o domínio do painel**. Depois de
+  desligar, *Caching > Purge Everything* e teste numa aba anônima.
 - *Caching*: deixe o padrão. A Cloudflare guarda só arquivos estáticos (`/_next/static`, imagens). **Não** crie regra
   *Cache Everything*: as páginas mudam por banca e por login.
 
@@ -620,9 +622,14 @@ script do 11.1 de novo e confira `sudo nginx -T | grep real_ip_header`.
 **Loteria Integrada**
 
 1. Libere o IPv4 da VPS no painel do provedor.
-2. Cadastre o webhook de resultados: `https://admin.meusistema.com.br/integracoes/resultados`, com o token igual ao
-   `RESULTS_WEBHOOK_TOKEN` do `.env`.
-3. Teste a consulta: `cd /srv/sysjb && pnpm results:fetch` (consome a cota do contrato).
+2. Cadastre o webhook de resultados: *URL Receptor* `https://admin.meusistema.com.br/integracoes/resultados` e, no
+   campo *Bearer Token*, o **mesmo valor** do `RESULTS_WEBHOOK_TOKEN` do `.env` (24 a 32 caracteres; o token que o
+   painel deles sugere é curto demais para a API). Valor diferente = `401 Token ausente ou inválido` no log deles.
+   Esse campo é **também a chave da consulta**: `RESULTS_API_TOKEN` recebe o mesmo valor (senão a consulta dá
+   `401 Token invalido`). Trocou no painel deles, troque as duas no `.env` e reinicie a API.
+3. Teste a consulta (`RESULTS_API_TOKEN`), gastando uma consulta só:
+   `cd /srv/sysjb && pnpm results:fetch --lottery rj --extraction 11` (`--lottery all` consulta todas as siglas e
+   gasta mais da cota).
 
 > **Nunca coloque IPs da Cloudflare** em `CASINO_WEBHOOK_IPS` ou `PAYMENTS_WEBHOOK_IPS`. Isso liberaria qualquer pessoa
 > que passe pela Cloudflare. Se o log mostrar um IP da Cloudflare como origem do webhook, o problema está no 11.1.
@@ -753,10 +760,14 @@ vão para análise em 15 min (Carteira > Depósitos).
 | Erro **526** | Certificado da VPS não é o de origem desse domínio | Refazer o passo 11.2 e conferir os caminhos no Nginx |
 | Erro **502** | Web parado | `systemctl status sysjb-web`, `journalctl -u sysjb-web -n 50` |
 | "Muitos redirecionamentos" | SSL/TLS da Cloudflare em *Flexible* | Trocar para **Full (strict)** |
-| Tela quebrada, botões sem resposta | Rocket Loader ou Email Obfuscation ligados | Desligar (passo 2.5) |
+| Tela quebrada, botões sem resposta; login (banca ou painel) só recarrega a página; F12 > Console mostra "violates the Content Security Policy" | Rocket Loader ou Email Obfuscation ligados naquele domínio | Desligar (passo 2.5), *Purge Everything* e testar em aba anônima |
 | Página "Banca não encontrada" / 404 em tudo | Domínio diferente do cadastrado em `tenants.domain`, ou faltando em `WEB_SERVICE_KEYS` | Conferir o passo 8 e o `.env`; reiniciar os serviços |
 | Painel não abre no `admin.` | `WEB_ADMIN_HOSTNAME` errado ou web compilado antes de ajustar | Corrigir o `.env` e rodar `pnpm build` + restart |
+| Painel mostra "O painel administrativo não está disponível neste endereço" | Falta o par `admin.<domínio>=<ADMIN_SERVICE_KEY>` em `WEB_SERVICE_KEYS` (passo 5), ou `WEB_ADMIN_HOSTNAME` diferente do endereço | Corrigir o `.env` e reiniciar web e API (se mudou o `WEB_ADMIN_HOSTNAME`, `pnpm build` antes) |
+| Login do painel: "Serviço indisponível" | `ADMIN_SERVICE_KEY` diferente do valor em `WEB_SERVICE_KEYS`, ou API não reiniciada depois de mudar o `.env` | Igualar as chaves; `sudo systemctl restart sysjb-api sysjb-web` |
 | Cassino: "Não foi possível abrir o jogo" | IP da VPS não liberado no PlayFivers (403) | Liberar o IPv4 no painel do PlayFivers |
+| Cassino: lobby "Nenhum jogo disponível no momento" | Catálogo não sincronizou (a API sincroniza ao iniciar e a cada 12 h; ex.: IP liberado no PlayFivers depois do start) | `sudo systemctl restart sysjb-api` e `journalctl -u sysjb-api \| grep "catálogo do cassino"` |
+| Cassino: jogo abre mas diz "sem saldo" | Token da URL do webhook diferente do `CASINO_WEBHOOK_TOKEN`, ou API não reiniciada depois de trocar o token | Copiar o token do `.env` para a URL no PlayFivers; `sudo systemctl restart sysjb-api` |
 | Rodadas do cassino não chegam, nada no log do web | Cloudflare barrando o webhook | *Security > Events* na Cloudflare; conferir o passo 2.4 |
 | Rodadas do cassino não chegam, 403 no log do web | `CASINO_WEBHOOK_IPS` sem o IP certo, ou token errado na URL | Ver `journalctl -u sysjb-web` e ajustar |
 | Recarga paga não cai | Aviso do gateway barrado na Cloudflare ou por `PAYMENTS_WEBHOOK_IPS` | Ver o log do web e o *Security > Events*. As recargas afetadas vão para análise em 15 min: o Gerente libera em Carteira > Depósitos |

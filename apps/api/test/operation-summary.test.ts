@@ -117,6 +117,17 @@ const prize = (userId: string, prizeCents: number) =>
     ),
   );
 
+/** Rodada sintética do cassino (gravada direto pela credencial de migração), agora ou na hora dada. */
+const casinoRound = (userId: string, betCents: number, winCents: number, at = new Date().toISOString()) =>
+  asTenant(migratorPool, auroraId, (c) =>
+    c.query(
+      `INSERT INTO casino_transactions (tenant_id, user_id, txn_id, provider, game_code, txn_type, bet_cents,
+         win_cents, balance_after, created_at)
+       VALUES ($1, $2, $3, 'PGSOFT', 'fortune-tiger', 'debit_credit', $4, $5, 0, $6::timestamptz)`,
+      [auroraId, userId, randomUUID(), betCents, winCents, at],
+    ),
+  );
+
 describe('GET /v1/admin/operation-summary', () => {
   it('exige operador com operation.read: Gerente e Financeiro veem; Suporte não', async () => {
     expect((await consoleApi(app).get(`/v1/admin/operation-summary?${today}`)).status).toBe(401);
@@ -154,7 +165,7 @@ describe('GET /v1/admin/operation-summary', () => {
       result: { wageredCents: 0, prizesCents: 0, grossCents: 0, commissionCents: 0, netCents: 0 },
       lotteries: { turnoverCents: 0, payoutCents: 0, netCents: 0 },
       casino: { turnoverCents: 0, payoutCents: 0, netCents: 0 },
-      unavailable: ['casino'],
+      unavailable: [],
     });
   });
 
@@ -220,6 +231,28 @@ describe('GET /v1/admin/operation-summary', () => {
     expect((await summary(session, `${today}&promoterId=${promoter.id}`)).result.commissionCents).toBe(10);
     // Ontem não teve comissão.
     expect((await summary(session, `from=${day(-1)}&to=${day(-1)}`)).result.commissionCents).toBe(0);
+  });
+
+  it('cassino: apostado e pago nas rodadas do período; com promotor, só as dos indicados', async () => {
+    const session = await loginOperator(app, 'aurora');
+    const promoter = await createUser(app, 'aurora');
+    await session.http.put(`/v1/admin/promoters/${promoter.id}`, { commissionBps: 1000 });
+    const referred = await createUser(app, 'aurora', { inviteCode: promoter.inviteCode });
+    const loose = await createUser(app, 'aurora');
+    await casinoRound(referred.id, 500, 200);
+    await casinoRound(loose.id, 1_000, 3_000);
+    await casinoRound(loose.id, 400, 0, `${day(-1)}T12:00:00-03:00`);
+
+    const body = await summary(session, today);
+    expect(body.casino).toEqual({ turnoverCents: 1_500, payoutCents: 3_200, netCents: -1_700 });
+    // O resultado continua sendo o das Loterias e Fazendinha.
+    expect(body.result.wageredCents).toBe(0);
+    expect((await summary(session, `${today}&promoterId=${promoter.id}`)).casino).toEqual({
+      turnoverCents: 500,
+      payoutCents: 200,
+      netCents: 300,
+    });
+    expect((await summary(session, `from=${day(-1)}&to=${TODAY}`)).casino.turnoverCents).toBe(1_900);
   });
 
   it('com promotor: só os indicados dele; promotor inexistente ou jogador comum = 404', async () => {

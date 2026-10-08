@@ -21,6 +21,8 @@ interface SummaryRow {
   withdrawals: bigint | null;
   first_deposits: bigint;
   first_deposit_avg: string | null;
+  casino_turnover: bigint | null;
+  casino_payout: bigint | null;
 }
 
 const cents = (value: bigint | null) => Number(value ?? 0n);
@@ -43,7 +45,8 @@ const game = (turnoverCents: number, payoutCents: number): OperationGameTotals =
  * - creditado / bônus creditado: créditos pelo painel e ajustes manuais do período (só a parte positiva);
  * - saldo total: soma das carteiras agora.
  * Depósitos e saques pagos (pela data do pagamento), primeiro depósito dos cadastros do período e o que pode ser sacado.
- * O cassino ainda não entra aqui: vem zerado e listado em `unavailable`.
+ * Cassino: apostado e pago nas rodadas do período (casino_transactions, como no fechamento cassino). Fica no card
+ * próprio; o resultado (jogado, prêmios, comissão) continua sendo o das Loterias e Fazendinha.
  */
 @Injectable()
 export class OperationSummaryService {
@@ -139,7 +142,13 @@ export class OperationSummaryService {
              FROM "users" u
              WHERE u."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`u."created_at"`)}
                ${promoter ? Prisma.sql`AND u."referred_by_user_id" = ${promoter.id}::uuid` : Prisma.empty}
-           ) f)::text AS first_deposit_avg`;
+           ) f)::text AS first_deposit_avg,
+          (SELECT sum(t."bet_cents")::bigint FROM "casino_transactions" t
+            WHERE t."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`t."created_at"`)} ${player(Prisma.sql`t."user_id"`)}
+          ) AS casino_turnover,
+          (SELECT sum(t."win_cents")::bigint FROM "casino_transactions" t
+            WHERE t."tenant_id" = ${tenantId} AND ${inPeriod(Prisma.sql`t."created_at"`)} ${player(Prisma.sql`t."user_id"`)}
+          ) AS casino_payout`;
 
       const wageredCents = cents(row?.wagered ?? null);
       const prizesCents = cents(row?.prizes ?? null);
@@ -174,8 +183,8 @@ export class OperationSummaryService {
           netCents: wageredCents - prizesCents - commissionCents,
         },
         lotteries: game(wageredCents, prizesCents),
-        casino: game(0, 0),
-        unavailable: ['casino'],
+        casino: game(cents(row?.casino_turnover ?? null), cents(row?.casino_payout ?? null)),
+        unavailable: [],
       };
     });
   }

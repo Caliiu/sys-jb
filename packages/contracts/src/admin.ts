@@ -428,10 +428,7 @@ export interface AdminOperationSummary {
   };
   lotteries: OperationGameTotals;
   casino: OperationGameTotals;
-  /**
-   * Números que ainda não têm origem no sistema (vêm zerados): depósitos e saques (sem integração de pagamento),
-   * primeiro depósito (depende dos depósitos) e cassino (sem cassino).
-   */
+  /** Números que ainda não têm origem no sistema (vêm zerados). Hoje todos têm: vem vazio. */
   unavailable: Array<'deposits' | 'withdrawals' | 'casino'>;
 }
 
@@ -560,7 +557,7 @@ export interface AdminCasinoGeneralReport {
   to: string;
   rows: CasinoGeneralRow[];
   totals: OperationGameTotals;
-  /** false enquanto o sistema não tem cassino: o relatório vem vazio (como o cassino do resumo da operação). */
+  /** Sempre true desde que as rodadas do cassino são gravadas (false marcava o relatório vazio, antes do cassino). */
   available: boolean;
 }
 
@@ -568,7 +565,7 @@ export interface AdminCasinoGeneralQuery {
   /** Período (YYYY-MM-DD, Brasília), inclusivo; até OPERATION_SUMMARY_MAX_DAYS dias e até hoje. */
   from: string;
   to: string;
-  /** Só os indicados deste promotor. */
+  /** Só os indicados deste promotor (a base da comissão de cassino dele). */
   promoterId?: string;
   userId?: string;
   type?: GeneralReportType;

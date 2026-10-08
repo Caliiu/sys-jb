@@ -692,7 +692,7 @@ describe('configuração e travas do banco', () => {
     expect(summary.body).toMatchObject({
       cashflow: { depositsCents: 0, withdrawalsCents: 3000, netCents: -3000 },
       balances: { withdrawableCents: 9000 },
-      unavailable: ['casino'],
+      unavailable: [],
     });
   });
 
