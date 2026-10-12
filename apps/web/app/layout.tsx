@@ -8,7 +8,7 @@ import { brandStyle } from '@/lib/brand-style';
 import { tenantIcon } from '@/lib/favicon';
 import { pwaIconUrl } from '@/lib/pwa-icon';
 import { resolveRequest } from '@/lib/request-context';
-import { webPushPublicKey } from '@/lib/server-env';
+import { isAdminHost, webPushPublicKey } from '@/lib/server-env';
 import './globals.css';
 
 // Mesmas fontes do app original (Archivo Black + Inter 400–700), servidas pelo próprio Next.
@@ -42,11 +42,20 @@ export async function generateViewport(): Promise<Viewport> {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Notificações só no app da banca, com a conta aberta (o painel administrativo não tem banca no hostname).
   const ctx = await resolveRequest();
+  // Host do painel: base e cores do tema shadcn (o tema escuro põe .dark no <html> antes da hidratação).
+  const adminUi = !ctx.ok && isAdminHost(ctx.hostname);
 
   return (
-    <html lang="pt-BR" className={`${archivoBlack.variable} ${inter.variable}`}>
+    <html
+      lang="pt-BR"
+      className={`${archivoBlack.variable} ${inter.variable}${adminUi ? ' admin-ui' : ''}`}
+      suppressHydrationWarning={adminUi}
+    >
       {/* Cores da banca já no body: o esqueleto de carregamento (app/loading.tsx) aparece na cor certa. */}
-      <body className="min-h-screen bg-[#EDEDED] text-slate-900" style={ctx.ok ? brandStyle(ctx.tenant) : undefined}>
+      <body
+        className={`min-h-screen ${adminUi ? 'bg-background text-foreground' : 'bg-[#EDEDED] text-slate-900'}`}
+        style={ctx.ok ? brandStyle(ctx.tenant) : undefined}
+      >
         <InstallCapture />
         {ctx.ok && ctx.me && <PushSync publicKey={webPushPublicKey()} />}
         <ToastProvider>{children}</ToastProvider>

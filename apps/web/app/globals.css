@@ -1,4 +1,8 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Modo escuro do painel: classe .dark no <html> (admin/context/theme-provider). O app do jogador não usa `dark:`. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 /*
  * Tema do app original (trv-clone/frontend: tailwind.config.js e src/index.css).
@@ -28,23 +32,52 @@
   --color-brand-soft: var(--brand-secondary);
 
   /*
-   * Painel administrativo (visual claro, estilo shadcn/ui): fundo quase branco, caixas brancas com borda fina,
-   * texto zinco e destaque azul. accent e success/danger com contraste AA em texto pequeno.
+   * Painel administrativo (apps/web/admin): tema do shadcn-admin, com as variáveis claras e escuras abaixo.
    */
-  --color-admin-bg: #fafafa;
-  --color-admin-surface: #ffffff;
-  --color-admin-border: #e4e4e7;
-  --color-admin-text: #18181b;
-  --color-admin-muted: #71717a;
-  --color-admin-accent: #2563eb;
-  --color-admin-accent-dark: #1d4ed8;
-  --color-admin-danger: #dc2626;
-  --color-admin-success: #15803d;
-  /* Fundo de item com o mouse/selecionado (menu, botões contornados). */
-  --color-admin-hover: #f4f4f5;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /*
+   * Raios do shadcn-admin derivados de --radius. Fora do painel, --radius = 0.5rem dá exatamente os valores padrão do
+   * Tailwind (sm 4px, md 6px, lg 8px, xl 12px): o app do jogador não muda. No painel, 0.625rem (ver .admin-ui).
+   */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 
   --shadow-card: 0 4px 10px rgba(0, 0, 0, 0.15);
-  --shadow-admin: 0 1px 3px rgba(15, 23, 42, 0.08);
   --radius-xl2: 14px;
 
   /* Folha inferior: sobe deslizando de baixo e o fundo escurece junto (components/ui/BottomSheet). */
@@ -94,6 +127,150 @@ html {
   --brand-secondary: #f4f1ea;
   /* Altura da barra superior do dashboard; atualizada em runtime pelo TopBar. */
   --topbar-height: 94px;
+
+  /* Valor padrão do Tailwind; o painel usa o do shadcn-admin (.admin-ui). */
+  --radius: 0.5rem;
+
+  /* Tema do painel (shadcn-admin, claro). success: verde com contraste AA em texto pequeno. */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.527 0.154 150.069);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+/* Tema do painel, escuro. */
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.14 0.04 259.21);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.765 0.177 163.223);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+}
+
+.admin-ui {
+  --radius: 0.625rem;
+}
+
+/*
+ * Base do shadcn só no host do painel (classe admin-ui no <html>, posta pelo layout raiz): no app do jogador a cor
+ * padrão de borda continua a do Tailwind.
+ */
+@layer base {
+  .admin-ui * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .admin-ui {
+    overflow-x: hidden;
+  }
+  /* Menu embutido (inset): o fundo atrás do cartão de conteúdo é o do menu. */
+  .admin-ui body:has(div[data-variant='inset']) {
+    background-color: var(--sidebar);
+  }
+  /* Os menus do Radix travam a rolagem; com o cabeçalho fixo, a página não deve pular. */
+  .admin-ui body[data-scroll-locked] {
+    overflow: unset !important;
+  }
+  .admin-ui button:not(:disabled),
+  .admin-ui [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+  /* Celular: campos com 16px para o navegador não dar zoom ao focar. */
+  @media screen and (max-width: 767px) {
+    .admin-ui input,
+    .admin-ui select,
+    .admin-ui textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* Impressão dos relatórios do painel: sem o menu lateral e com o conteúdo de ponta a ponta. */
+@media print {
+  .admin-ui [data-slot='sidebar'] {
+    display: none !important;
+  }
+  .admin-ui [data-slot='sidebar-inset'] {
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Abrir/fechar dos subgrupos do menu do painel (Radix Collapsible). */
+.CollapsibleContent {
+  overflow: hidden;
+}
+.CollapsibleContent[data-state='open'] {
+  animation: collapsible-down 200ms ease-out;
+}
+.CollapsibleContent[data-state='closed'] {
+  animation: collapsible-up 200ms ease-out;
+}
+@keyframes collapsible-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
 }
 
 body {

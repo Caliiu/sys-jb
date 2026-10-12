@@ -27,7 +27,9 @@ import type {
   AdminMural,
   AdminPromoterListItem,
   AdminPromoterOption,
+  AdminTicketDetail,
   AdminTicketDrawOption,
+  AdminTicketGame,
   AdminGeneralReport,
   AdminOperationSummary,
   AdminPlayerStatement,
@@ -94,7 +96,15 @@ export const adminApi = {
   searchTicket: (session: Caller, puleNumber: number) =>
     call<AdminTicketListItem[]>(session, 'GET', `/v1/admin/tickets/${encodeURIComponent(String(puleNumber))}`),
 
-  /** Sorteios da banca para o filtro "Horário (Extração)". */
+  /** Detalhe do pule (apostas, apuração e resultado); 404 se não for da banca. */
+  getTicket: (session: Caller, game: AdminTicketGame, puleNumber: number) =>
+    call<AdminTicketDetail>(
+      session,
+      'GET',
+      `/v1/admin/tickets/${encodeURIComponent(game)}/${encodeURIComponent(String(puleNumber))}`,
+    ),
+
+  /** Apostas premiadas (pagas e aguardando apuração) no período, com os avisos e a contagem de pendentes. */
   listPrizes(session: Caller, query: PrizesQuery) {
     const params = new URLSearchParams({
       from: query.from,
@@ -107,6 +117,7 @@ export const adminApi = {
     if (query.drawId) params.set('drawId', query.drawId);
     if (query.minPrizeCents !== null) params.set('minPrizeCents', String(query.minPrizeCents));
     if (query.maxPrizeCents !== null) params.set('maxPrizeCents', String(query.maxPrizeCents));
+    if (query.status) params.set('status', query.status);
     return call<AdminPrizeList>(session, 'GET', `/v1/admin/prizes?${params}`);
   },
   playerStatement(session: Caller, query: StatementQuery) {

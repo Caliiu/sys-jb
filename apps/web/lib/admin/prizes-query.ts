@@ -1,7 +1,15 @@
-import { ADMIN_PRIZE_FILTER_MAX_CENTS, ADMIN_PRIZES_MAX_DAYS, drawDateOf } from '@sysjb/contracts';
+import {
+  ADMIN_PRIZE_FILTER_MAX_CENTS,
+  ADMIN_PRIZES_MAX_DAYS,
+  type AdminPrizeStatusFilter,
+  drawDateOf,
+} from '@sysjb/contracts';
 import { ADMIN_ROUTES } from './admin-routes';
 import { isValidPeriod } from './period';
 import { DEFAULT_PAGE_SIZE, parsePageSize } from './page-size';
+
+/** Situação na URL (`status=pagos|aguardando`) -> filtro da API. */
+export const PRIZE_STATUS_PARAMS: Record<string, AdminPrizeStatusFilter> = { pagos: 'paid', aguardando: 'pending' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -20,6 +28,8 @@ export interface PrizesQuery {
   /** Faixa do prêmio em centavos; null = sem limite. */
   minPrizeCents: number | null;
   maxPrizeCents: number | null;
+  /** Só as pagas ou só as aguardando apuração; null = todas. */
+  status: AdminPrizeStatusFilter | null;
 }
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -62,6 +72,11 @@ export function reaisText(cents: number | null): string {
 export const isPrizesPeriod = (nowIso: string, from: string, to: string) =>
   isValidPeriod(nowIso, from, to, ADMIN_PRIZES_MAX_DAYS);
 
+const statusOf = (value: string | string[] | undefined): AdminPrizeStatusFilter | null => {
+  const param = first(value) ?? '';
+  return Object.hasOwn(PRIZE_STATUS_PARAMS, param) ? PRIZE_STATUS_PARAMS[param]! : null;
+};
+
 /** Filtros da URL com tolerância: valor inválido vira o padrão, nunca erro (a URL é digitável). */
 export function parsePrizesQuery(raw: Record<string, string | string[] | undefined>, nowIso: string): PrizesQuery {
   const today = drawDateOf(nowIso, 0);
@@ -86,6 +101,7 @@ export function parsePrizesQuery(raw: Record<string, string | string[] | undefin
     drawId: uuidOf(raw.extracao),
     minPrizeCents,
     maxPrizeCents,
+    status: statusOf(raw.status),
   };
 }
 
@@ -97,6 +113,8 @@ export function prizesHref(query: Partial<PrizesQuery> & { from: string; to: str
   if (query.userId) params.set('apostador', query.userId);
   if (query.minPrizeCents != null) params.set('min', reaisText(query.minPrizeCents));
   if (query.maxPrizeCents != null) params.set('max', reaisText(query.maxPrizeCents));
+  const status = Object.keys(PRIZE_STATUS_PARAMS).find((param) => PRIZE_STATUS_PARAMS[param] === query.status);
+  if (status) params.set('status', status);
   if (query.pageSize && query.pageSize !== DEFAULT_PAGE_SIZE) params.set('pageSize', String(query.pageSize));
   if (query.page && query.page > 1) params.set('page', String(query.page));
   return `${ADMIN_ROUTES.prizes}?${params}`;

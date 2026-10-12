@@ -14,6 +14,25 @@ globalThis.ResizeObserver ??= class {
 // jsdom não implementa window.scrollTo (só loga "not implemented"). Testes de servidor rodam sem window.
 if (typeof window !== 'undefined') window.scrollTo = () => {};
 
+// jsdom não implementa matchMedia (menu do painel e tema): nenhuma consulta bate, ou seja, desktop e tema claro.
+if (typeof window !== 'undefined') {
+  window.matchMedia ??= (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+  // Radix (menus) e cmdk (busca) usam estes métodos, ausentes no jsdom.
+  Element.prototype.scrollIntoView ??= () => {};
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.releasePointerCapture ??= () => {};
+}
+
 // Server action do atendimento (usada pelo menu lateral, rodapé e login): no navegador de teste não há servidor.
 // Os testes que dependem do número redefinem o retorno (ex.: SupportBanner.test.tsx).
 vi.mock('@/app/support-actions', () => ({

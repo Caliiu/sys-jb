@@ -10,3 +10,6 @@ packages/database/prisma/migrations
 ANTIGOS
 RegisterPage.tsx
 CLAUDE_BASE_MULTIBANCAS.md
+
+# Painel admin antigo, guardado como referência para portar as telas
+backup/

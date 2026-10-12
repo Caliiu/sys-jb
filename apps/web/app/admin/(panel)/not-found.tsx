@@ -1,10 +1,10 @@
-import AdminMessage from '@/components/admin/AdminMessage';
+import { Main } from '@/admin/components/layout/main';
+import { NotFoundError } from '@/admin/features/errors/not-found-error';
 
-/** notFound() dentro do painel (ex.: apostador de outra banca ou inexistente): aviso dentro do próprio painel. */
-export default function NotFound() {
+export default function PanelNotFound() {
   return (
-    <AdminMessage title="Não encontrado" backToUsers>
-      O que você procurou não existe nesta banca.
-    </AdminMessage>
+    <Main>
+      <NotFoundError />
+    </Main>
   );
 }

@@ -1,57 +1,67 @@
 import { drawDateOf } from '@sysjb/contracts';
 import { redirect, unauthorized } from 'next/navigation';
-import AdminMessage from '@/components/admin/AdminMessage';
-import { AdminUnavailable } from '@/components/admin/AdminUnavailable';
+import { Main } from '@/admin/components/layout/main';
+import { Alert, AlertDescription, AlertTitle } from '@/admin/components/ui/alert';
+import { ForbiddenError } from '@/admin/features/errors/forbidden';
+import { Unavailable } from '@/admin/features/errors/unavailable';
+import { Prizes } from '@/admin/features/prizes';
 import { adminApi } from '@/lib/admin/admin-api';
 import { can, requireAdmin } from '@/lib/admin/admin-context';
 import { toAdminFailure } from '@/lib/admin/admin-result';
 import { parsePrizesQuery, prizesHref } from '@/lib/admin/prizes-query';
-import PrizesPage from '@/views/admin/PrizesPage';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Pules Premiadas' };
 
-/** Operação > Pules Premiadas: filtros sempre; a lista só depois de pesquisar. */
+/** Prêmios > Pules Premiadas: filtros na URL; sem período na URL, mostra o dia de hoje. */
 export default async function Page({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const gate = await requireAdmin();
-  if (!gate.ok) return <AdminUnavailable message={gate.message} />;
+  if (!gate.ok) return <Unavailable message={gate.message} />;
   const { session } = gate;
-  if (!can(session.operator, 'tickets.read')) {
-    return <AdminMessage title="Sem permissão">Seu perfil não pode consultar as pules premiadas.</AdminMessage>;
-  }
+  const forbidden = (
+    <Main>
+      <ForbiddenError />
+    </Main>
+  );
+  if (!can(session.operator, 'tickets.read')) return forbidden;
 
   const nowIso = new Date().toISOString();
   const query = parsePrizesQuery(await searchParams, nowIso);
-  const [promoters, draws, player, listed] = await Promise.all([
+  const [promoters, listed] = await Promise.all([
     adminApi.listPromoterOptions(session),
-    adminApi.ticketDrawOptions(session),
-    query.userId ? adminApi.getUser(session, query.userId) : null,
-    query.searched ? adminApi.listPrizes(session, query) : null,
+    adminApi.listPrizes(session, query),
   ]);
 
-  if (listed && !listed.ok) {
+  if (!listed.ok) {
     const failure = toAdminFailure(listed.status, listed.error);
     if (failure.code === 'SESSION_INVALID') unauthorized();
-    return <AdminMessage title="Não foi possível carregar as pules premiadas">{failure.message}</AdminMessage>;
+    if (failure.code === 'FORBIDDEN') return forbidden;
+    return (
+      <Main>
+        <Alert variant="destructive">
+          <AlertTitle>Não foi possível carregar as pules premiadas</AlertTitle>
+          <AlertDescription>{failure.message}</AlertDescription>
+        </Alert>
+      </Main>
+    );
   }
-  // Página além do fim (ex.: filtro mudou): leva à última página existente.
-  if (listed?.ok && query.page > listed.data.totalPages) {
+  // Página além do fim (ex.: o filtro mudou): leva à última página existente.
+  if (query.page > Math.max(1, listed.data.totalPages)) {
     redirect(prizesHref({ ...query, page: listed.data.totalPages }));
   }
 
   return (
-    <PrizesPage
+    <Prizes
       query={query}
+      nowIso={nowIso}
       today={drawDateOf(nowIso, 0)}
-      // Sem as opções (falha pontual), os filtros funcionam sem elas.
+      // Sem as opções (falha pontual), o filtro de promotor fica só com "todos".
       promoters={promoters.ok ? promoters.data : null}
-      draws={draws.ok ? draws.data : null}
-      player={player?.ok ? { id: player.data.id, displayId: player.data.displayId, name: player.data.name } : null}
-      result={listed?.ok ? listed.data : null}
+      result={listed.data}
     />
   );
 }

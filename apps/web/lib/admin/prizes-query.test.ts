@@ -80,6 +80,7 @@ describe('filtros da URL', () => {
         max: 'abc',
         page: '3',
         pageSize: '50',
+        status: 'aguardando',
       },
       NOW,
     );
@@ -94,7 +95,21 @@ describe('filtros da URL', () => {
       drawId: ID,
       minPrizeCents: 100_000,
       maxPrizeCents: null,
+      status: 'pending',
     });
+  });
+
+  it('situação: pagos, aguardando ou todas (valor desconhecido = todas)', () => {
+    const at = (status?: string) => parsePrizesQuery({ de: '2026-09-30', ate: '2026-09-30', status }, NOW).status;
+    expect(at('pagos')).toBe('paid');
+    expect(at('aguardando')).toBe('pending');
+    for (const value of [undefined, '', 'paid', 'PAGOS', 'toString']) expect(at(value), value).toBeNull();
+    expect(prizesHref({ from: '2026-09-30', to: '2026-09-30', status: 'paid' })).toBe(
+      '/premios?de=2026-09-30&ate=2026-09-30&status=pagos',
+    );
+    expect(prizesHref({ from: '2026-09-30', to: '2026-09-30', status: 'pending', page: 2 })).toBe(
+      '/premios?de=2026-09-30&ate=2026-09-30&status=aguardando&page=2',
+    );
   });
 
   it('faixa invertida é trocada em vez de não achar nada', () => {

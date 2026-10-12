@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import AdminLoading from '../admin/AdminLoading';
 import PlayerLoading from './PlayerLoading';
 
 describe('telas de carregamento', () => {
@@ -23,10 +22,5 @@ describe('telas de carregamento', () => {
   it('cassino: fundo escuro', () => {
     render(<PlayerLoading tone="dark" />);
     expect(screen.getByRole('status')).toHaveClass('bg-[#14151c]');
-  });
-
-  it('painel: só o conteúdo, anunciado aos leitores de tela', () => {
-    render(<AdminLoading />);
-    expect(screen.getByRole('status')).toHaveTextContent('Carregando…');
   });
 });

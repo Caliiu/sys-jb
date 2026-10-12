@@ -31,7 +31,7 @@ const NOW = new Date().toISOString();
 const day = (offset: number) => drawDateOf(NOW, offset);
 
 let nextPule = 1;
-/** Pule premiada como a apuração vai gravar (direto no banco: a apuração ainda não existe). */
+/** Pule premiada antiga, gravada sem os itens (direto no banco): uma linha para a pule inteira, sem modalidade. */
 async function prize(
   tenant: string,
   userId: string,
@@ -107,6 +107,7 @@ describe('GET /v1/admin/prizes', () => {
     ['prêmio quebrado', `${range(day(0))}&minPrizeCents=1.5`],
     ['UUID inválido', `${range(day(0))}&userId=abc`],
     ['parâmetro desconhecido', `${range(day(0))}&ordem=asc`],
+    ['situação inválida', `${range(day(0))}&status=PAID`],
   ])('recusa %s (400)', async (_label, query) => {
     const session = await loginOperator(app, 'aurora');
     expect((await session.http.get(`/v1/admin/prizes?${query}`)).status).toBe(400);
@@ -133,11 +134,18 @@ describe('GET /v1/admin/prizes', () => {
     expect(body.total).toBe(3);
     expect(body.totalPrizeCents).toBe(59_000);
     expect(body.items[0]).toEqual({
+      id: expect.any(String),
+      status: 'PAID',
       game: 'fazendinha',
       puleNumber: big,
       drawDate: day(-1),
       lottery: 'LT PT RIO 09HS',
       drawCode: 'PTRIO09',
+      modality: null,
+      modalityLabel: null,
+      guess: null,
+      placement: null,
+      placementLabel: null,
       stakeCents: 200,
       prizeCents: 50_000,
       settledAt: expect.any(String),
@@ -176,6 +184,9 @@ describe('GET /v1/admin/prizes', () => {
     expect(numbers(await list(session, `${today}&promoterId=${promoter.id}`))).toEqual([rio14, rio9]);
     // Jogador comum (não promotor) como promotor: nada.
     expect((await list(session, `${today}&promoterId=${loose.id}`)).total).toBe(0);
+    // Situação: todas são pagas.
+    expect((await list(session, `${today}&status=paid`)).total).toBe(3);
+    expect(await list(session, `${today}&status=pending`)).toMatchObject({ total: 0, totalPrizeCents: 0 });
     // Sorteio de outra banca ou inexistente: nada.
     expect((await list(session, `${today}&drawId=00000000-0000-4000-8000-000000000000`)).total).toBe(0);
   });

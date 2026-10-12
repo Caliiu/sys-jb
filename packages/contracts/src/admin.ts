@@ -255,6 +255,70 @@ export interface AdminTicketListItem {
   player: { id: string; displayId: number; name: string };
   /** ISO 8601 do cancelamento pelo jogador (só Loterias); null = válido. */
   canceledAt: string | null;
+  /**
+   * Tabela de cotação na venda (ex.: 800/1/8000), como gravada no pule de Loterias. Null na Fazendinha: o pule não
+   * guarda a tabela, só o prêmio de cada número (`possiblePrizeCents` dos itens do detalhe).
+   */
+  quoteTable: string | null;
+  /** Prêmio já pago pela apuração (0 = sem prêmio ou ainda não apurado). */
+  prizeCents: number;
+  status: AdminTicketStatus;
+}
+
+/**
+ * Situação do pule: CANCELED = cancelado pelo jogador (canceledAt); WON = apurado e premiado (prêmio pago, pule_prizes);
+ * LOST = apurado sem prêmio (pule_settlements com prêmio 0); PENDING = ainda não apurado (sorteio por correr, resultado
+ * por chegar ou na carência; o prêmio que o resultado já dá aparece no detalhe).
+ */
+export const ADMIN_TICKET_STATUSES = ['CANCELED', 'PENDING', 'WON', 'LOST'] as const;
+export type AdminTicketStatus = (typeof ADMIN_TICKET_STATUSES)[number];
+
+/** Aposta do pule. Na Fazendinha, um item por número comprado (todos na mesma modalidade, valor e cabeça). */
+export interface AdminTicketDetailItem {
+  /** Ordem no pule (1 em diante); na Fazendinha, a ordem crescente dos números. */
+  position: number;
+  /** Id da modalidade (Loterias: ex. milhar; Fazendinha: grupo, dezena ou centena). */
+  modality: string;
+  /** Como no app (ex.: MILHAR, GRUPO). */
+  modalityLabel: string;
+  /** Palpites como no comprovante (combos com hífen; Fazendinha com zeros à esquerda). */
+  guesses: string[];
+  /** Id da colocação (ex.: p1_5; Fazendinha: p1, só a cabeça vale). */
+  placement: string;
+  /** Ex.: 1/5 PRÊMIO. */
+  placementLabel: string;
+  /** Valor apostado no item (Fazendinha: o valor de cada número). */
+  stakeCents: number;
+  /** Cotação gravada no item (Loterias); null na Fazendinha. */
+  quoteCents: number | null;
+  /** Prêmio possível pela cotação da venda (Fazendinha: o prêmio do número). */
+  possiblePrizeCents: number;
+  /** WON: prêmio pago; PENDING: o que o resultado já dá e a apuração ainda vai pagar (0 = nada ou sem resultado). */
+  prizeCents: number;
+  /** Como o do pule, por item: WON/LOST só depois da apuração. */
+  status: AdminTicketStatus;
+}
+
+/** GET /v1/admin/tickets/:game/:number: o pule com as apostas, a apuração e o resultado. */
+export interface AdminTicketDetail extends AdminTicketListItem {
+  /** Hora da extração (0–23). */
+  drawHour: number;
+  /** Loterias: tradicional (1/7) ou tradicional_10 (1/10); null na Fazendinha. */
+  lotteryGame: string | null;
+  /** ISO 8601 da apuração; null = não apurado. */
+  settledAt: string | null;
+  /**
+   * Prêmio do pule: o pago (WON) ou o que o resultado já dá e a apuração ainda vai pagar (PENDING); 0 nos demais.
+   */
+  expectedPrizeCents: number;
+  /**
+   * Prêmio pela revisão mais recente do resultado, quando o provedor corrigiu depois do pagamento (o pago não muda);
+   * null = sem correção.
+   */
+  correctedPrizeCents: number | null;
+  /** Resultado do sorteio (o da apuração, ou o ligado ao sorteio se ainda não apurado); null = sem resultado. */
+  result: { prizes: string[]; revision: number; receivedAt: string } | null;
+  items: AdminTicketDetailItem[];
 }
 
 /** GET /v1/admin/tickets: bilhetes vendidos no dia (Brasília), mais recentes primeiro, e o total apostado. */
@@ -293,8 +357,22 @@ export const ADMIN_PRIZES_MAX_DAYS = 93;
 /** Maior prêmio aceito nos filtros (R$ 10 milhões, em centavos). */
 export const ADMIN_PRIZE_FILTER_MAX_CENTS = 1_000_000_000;
 
-/** Pule premiada na apuração (um registro por pule; a numeração é própria de cada jogo). */
+/**
+ * Situação de uma aposta premiada: PAID = apurada e creditada na bolsa de prêmios; PENDING = o resultado do sorteio já
+ * chegou e dá o prêmio, mas a apuração ainda não rodou (carência do resultado).
+ */
+export const ADMIN_PRIZE_STATUSES = ['PAID', 'PENDING'] as const;
+export type AdminPrizeStatus = (typeof ADMIN_PRIZE_STATUSES)[number];
+
+/**
+ * Aposta premiada: um registro por item premiado de um pule (o pule pode ter vários itens; só os que ganharam). A
+ * numeração do pule é própria de cada jogo. Na Fazendinha vale só o 1º prêmio e no máximo um número ganha: um registro
+ * por pule, com a modalidade do pule (GRUPO, DEZENA, CENTENA), o número premiado e a colocação "p1" (1 PRÊMIO).
+ */
 export interface AdminPrizeListItem {
+  /** Estável: id do item do pule (Loterias) ou do pule (Fazendinha); registro antigo sem itens: id da pule premiada. */
+  id: string;
+  status: AdminPrizeStatus;
   game: AdminTicketGame;
   puleNumber: number;
   /** Data do jogo (sorteio), YYYY-MM-DD. */
@@ -303,12 +381,23 @@ export interface AdminPrizeListItem {
   lottery: string;
   /** Código da extração na venda (ex.: PTRIO09). */
   drawCode: string;
-  /** Valor apostado no pule. */
+  /**
+   * Modalidade (código gravado na venda, ex.: "milhar", "grupo"; Fazendinha: "grupo", "dezena", "centena") e o rótulo
+   * do app (ex.: "MILHAR", "DUQUE GP"). null só em pule premiada antiga, gravada sem os itens.
+   */
+  modality: string | null;
+  modalityLabel: string | null;
+  /** Palpites premiados do item, como no comprovante (combos com hífen: "05-12"), separados por ", ". */
+  guess: string | null;
+  /** Colocação apostada (código, ex.: "p1", "p1_5", "p1_e_1_5") e rótulo do app (ex.: "1 PRÊMIO", "1/5 PRÊMIO"). */
+  placement: string | null;
+  placementLabel: string | null;
+  /** Valor apostado no item (Loterias: total do item; Fazendinha: o valor do número premiado). */
   stakeCents: number;
-  /** Prêmio pago ao pule. */
+  /** Prêmio do item: o pago (PAID) ou o que a apuração vai pagar pelo resultado atual (PENDING). */
   prizeCents: number;
-  /** ISO 8601 da apuração. */
-  settledAt: string;
+  /** ISO 8601 da apuração; null enquanto PENDING. */
+  settledAt: string | null;
   player: { id: string; displayId: number; name: string };
 }
 
@@ -337,9 +426,12 @@ export interface AdminPrizeReview {
 /** Máximo de avisos de resultado corrigido devolvidos numa consulta (os mais recentes). */
 export const ADMIN_PRIZE_REVIEWS_LIMIT = 200;
 
-/** GET /v1/admin/prizes: pules premiadas no período (data do jogo), maiores prêmios primeiro, e as somas do filtro. */
+/**
+ * GET /v1/admin/prizes: apostas premiadas no período (data do jogo), pagas e/ou aguardando apuração, maiores prêmios
+ * primeiro (depois a data mais recente), e as somas do filtro.
+ */
 export interface AdminPrizeList extends Page<AdminPrizeListItem> {
-  /** Soma dos prêmios de todo o filtro (não só da página). */
+  /** Soma dos prêmios de todo o filtro, inclusive a situação (não só da página). */
   totalPrizeCents: number;
   /** Resultados corrigidos depois do pagamento (mesmo filtro, exceto a faixa de prêmio), mais recentes primeiro. */
   reviews: AdminPrizeReview[];
@@ -364,10 +456,15 @@ export interface AdminPrizeListQuery {
   userId?: string;
   /** Só os pules deste sorteio (pelo nome e hora da venda). */
   drawId?: string;
-  /** Faixa do prêmio (centavos, inclusiva). */
+  /** Faixa do prêmio de cada aposta (centavos, inclusiva). */
   minPrizeCents?: number;
   maxPrizeCents?: number;
+  /** 'paid' = só as pagas; 'pending' = só as aguardando apuração; ausente = todas. */
+  status?: AdminPrizeStatusFilter;
 }
+
+export const ADMIN_PRIZE_STATUS_FILTERS = ['paid', 'pending'] as const;
+export type AdminPrizeStatusFilter = (typeof ADMIN_PRIZE_STATUS_FILTERS)[number];
 
 // ---------------------------------------------------------------------------
 // Resumo da Operação

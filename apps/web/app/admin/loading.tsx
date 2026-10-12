@@ -1,8 +1,6 @@
-/** Carregamento fora do painel logado (tela de login): só um aviso discreto, sem o esqueleto do app do jogador. */
+import { PageLoading } from '@/admin/components/page-loading';
+
+/** Carregamento do painel entre o layout do admin e o do painel logado (que tem o esqueleto em (panel)/loading.tsx). */
 export default function Loading() {
-  return (
-    <div role="status" aria-live="polite" aria-busy="true" className="grid min-h-screen place-items-center bg-admin-bg">
-      <span className="text-[13px] text-admin-muted motion-safe:animate-pulse">Carregando…</span>
-    </div>
-  );
+  return <PageLoading />;
 }

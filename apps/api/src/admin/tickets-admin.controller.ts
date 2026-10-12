@@ -1,9 +1,20 @@
 import { Controller, Get, Header, Inject, Param, Query, UseGuards } from '@nestjs/common';
-import type { AdminTicketDrawOption, AdminTicketList, AdminTicketListItem } from '@sysjb/contracts';
+import type {
+  AdminTicketDetail,
+  AdminTicketDrawOption,
+  AdminTicketGame,
+  AdminTicketList,
+  AdminTicketListItem,
+} from '@sysjb/contracts';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { CurrentTenant } from '../tenancy/tenant.guard.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
-import { type ListTicketsQuery, listTicketsQuerySchema, ticketNumberSchema } from './admin.schemas.js';
+import {
+  type ListTicketsQuery,
+  listTicketsQuerySchema,
+  ticketGameSchema,
+  ticketNumberSchema,
+} from './admin.schemas.js';
 import { ConsoleGuard } from './console.guard.js';
 import { OperatorGuard, RequirePermission } from './operator.guard.js';
 import { TicketsAdminService } from './tickets-admin.service.js';
@@ -41,5 +52,17 @@ export class TicketsAdminController {
     @Param('number', new ZodValidationPipe(ticketNumberSchema)) puleNumber: number,
   ): Promise<AdminTicketListItem[]> {
     return this.tickets.search(tenant, puleNumber);
+  }
+
+  /** Detalhe do pule (apostas, apuração e resultado); 404 se não for da banca. Dois segmentos: não colide com `:number`. */
+  @Get(':game/:number')
+  @RequirePermission('tickets.read')
+  @Header('Cache-Control', 'no-store')
+  detail(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @Param('game', new ZodValidationPipe(ticketGameSchema)) game: AdminTicketGame,
+    @Param('number', new ZodValidationPipe(ticketNumberSchema)) puleNumber: number,
+  ): Promise<AdminTicketDetail> {
+    return this.tickets.detail(tenant, game, puleNumber);
   }
 }

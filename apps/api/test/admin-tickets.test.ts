@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import {
+  type AdminTicketDetail,
   type AdminTicketDrawOption,
   type AdminTicketList,
   type AdminTicketListItem,
@@ -13,6 +14,7 @@ import {
   lotteryQuoteCents,
 } from '@sysjb/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { PrizeSettlementService } from '../src/prizes/prize-settlement.service.js';
 import {
   api,
   asTenant,
@@ -130,7 +132,11 @@ describe('GET /v1/admin/tickets', () => {
       totalCents: 100,
       player: { id: person.id, displayId: person.displayId, name: person.name },
       canceledAt: null,
+      quoteTable: defaultQuotes().tableLabel,
+      prizeCents: 0,
+      status: 'PENDING',
     });
+    expect(page.items[0]).toMatchObject({ game: 'fazendinha', quoteTable: null, prizeCents: 0, status: 'PENDING' });
     expect(page.totalCents).toBe(page.items.reduce((sum, i) => sum + i.totalCents, 0));
     expect(JSON.stringify(page)).not.toMatch(/document|phone|guesses|tenantId/);
   });
@@ -246,6 +252,196 @@ describe('GET /v1/admin/tickets/:number', () => {
     expect((await boreal.http.get(`/v1/admin/tickets/${number}`)).body).toEqual([]);
     for (const bad of ['0', '-1', 'abc', '1.5', '99999999999']) {
       expect((await boreal.http.get(`/v1/admin/tickets/${bad}`)).status, bad).toBe(400);
+    }
+  });
+});
+
+describe('situação, prêmio e detalhe (GET /v1/admin/tickets/:game/:number)', () => {
+  const RIO_09 = { name: 'LT PT RIO 09HS', hour: 9 };
+  const YESTERDAY = drawDateOf(NOW(), -1);
+  const item = (modality: string, placement: string, guesses: string[], amountCents = 100) => ({
+    modality,
+    placement,
+    guesses,
+    amountCents,
+    split: 'total' as const,
+    quoteCents: lotteryQuoteCents(findLotteryModality(modality)!, defaultQuotes()),
+  });
+  async function buy(http: Http, items: Array<ReturnType<typeof item>>): Promise<number> {
+    const res = await http.post('/v1/lotteries/tickets', {
+      idempotencyKey: randomUUID(),
+      drawDate: TOMORROW,
+      draws: [RIO_09],
+      items,
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return res.body.tickets[0].puleNumber as number;
+  }
+  async function buyGroups(http: Http, numbers: number[]): Promise<number> {
+    const res = await http.post('/v1/fazendinha/bets', {
+      idempotencyKey: randomUUID(),
+      drawDate: TOMORROW,
+      lottery: RIO_09.name,
+      hour: RIO_09.hour,
+      mode: 'grupo',
+      stakeCents: 100,
+      prizeCents: fazendinhaPrizeFrom(defaultQuotes(), 'grupo', 100),
+      numbers,
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    return res.body.bet.puleNumber as number;
+  }
+  /** Leva os pules para ontem (sorteio já corrido) e grava o resultado rj 09 com a cabeça 3452 (grupo 13). */
+  async function drawYesterday(lotteries: number[], fazendinha: number[]) {
+    await asTenant(migratorPool, auroraId, async (c) => {
+      await c.query(
+        `UPDATE lottery_tickets SET draw_date = $2::date,
+           closes_at = ($2::date + time '09:00') AT TIME ZONE 'America/Sao_Paulo'
+         WHERE pule_number = ANY($1::int[])`,
+        [lotteries, YESTERDAY],
+      );
+      await c.query('UPDATE fazendinha_bets SET draw_date = $2::date WHERE pule_number = ANY($1::int[])', [
+        fazendinha,
+        YESTERDAY,
+      ]);
+    });
+    await migratorPool.query(
+      `INSERT INTO lottery_results (draw_date, lottery, extraction, prizes, source)
+       VALUES ($1, 'rj', 9, $2, 'WEBHOOK')`,
+      [YESTERDAY, ['3452', '1111', '2222', '3333', '4444']],
+    );
+  }
+  const detail = async (session: Session, game: string, number: number) => {
+    const res = await session.http.get(`/v1/admin/tickets/${game}/${number}`);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    return res.body as AdminTicketDetail;
+  };
+
+  it('PENDING até a apuração (com o prêmio que o resultado já dá); depois WON/LOST; CANCELED pelo cancelamento', async () => {
+    const { person, http } = await player();
+    const winner = await buy(http, [item('milhar', 'p1', ['3452']), item('grupo', 'p1_5', ['01'], 500)]);
+    const loser = await buy(http, [item('milhar', 'p1', ['7777'])]);
+    const canceled = await buy(http, [item('milhar', 'p1', ['3452'])]);
+    const cancel = await http.post(`/v1/me/pules/${canceled}/cancel`, {});
+    expect(cancel.status, JSON.stringify(cancel.body)).toBeLessThan(300);
+    const bet = await buyGroups(http, [2, 13]);
+
+    const session = await loginOperator(app, 'aurora', { role: 'SUPPORT' });
+    // Antes do resultado: tudo pendente, sem resultado nem prêmio.
+    const before = await detail(session, 'lotteries', winner);
+    expect(before).toMatchObject({
+      game: 'lotteries',
+      puleNumber: winner,
+      status: 'PENDING',
+      prizeCents: 0,
+      expectedPrizeCents: 0,
+      settledAt: null,
+      result: null,
+      drawHour: 9,
+      lotteryGame: 'tradicional',
+      quoteTable: defaultQuotes().tableLabel,
+      player: { id: person.id },
+    });
+    expect(before.items).toEqual([
+      {
+        position: 1,
+        modality: 'milhar',
+        modalityLabel: findLotteryModality('milhar')!.label,
+        guesses: ['3452'],
+        placement: 'p1',
+        placementLabel: '1 PRÊMIO',
+        stakeCents: 100,
+        quoteCents: lotteryQuoteCents(findLotteryModality('milhar')!, defaultQuotes()),
+        possiblePrizeCents: 800_000,
+        prizeCents: 0,
+        status: 'PENDING',
+      },
+      expect.objectContaining({ position: 2, modality: 'grupo', placement: 'p1_5', placementLabel: '1/5 PRÊMIO' }),
+    ]);
+
+    // Resultado chegou, ainda na carência: o detalhe mostra o prêmio a pagar; a lista continua pendente.
+    await drawYesterday([winner, loser], [bet]);
+    const waiting = await detail(session, 'lotteries', winner);
+    expect(waiting).toMatchObject({ status: 'PENDING', prizeCents: 0, expectedPrizeCents: 800_000 });
+    expect(waiting.result).toEqual({
+      prizes: expect.arrayContaining(['3452']),
+      revision: 1,
+      receivedAt: expect.any(String),
+    });
+    expect(waiting.items.map((i) => [i.status, i.prizeCents])).toEqual([
+      ['PENDING', 800_000],
+      ['PENDING', 0],
+    ]);
+
+    await app.get(PrizeSettlementService).sweep(new Date(Date.now() + 31 * 60_000));
+    const page = await list(session, `date=${TODAY()}`);
+    const byNumber = Object.fromEntries(page.items.map((i) => [`${i.game}:${i.puleNumber}`, i]));
+    expect(byNumber[`lotteries:${winner}`]).toMatchObject({ status: 'WON', prizeCents: 800_000 });
+    expect(byNumber[`lotteries:${loser}`]).toMatchObject({ status: 'LOST', prizeCents: 0 });
+    expect(byNumber[`lotteries:${canceled}`]).toMatchObject({ status: 'CANCELED', prizeCents: 0 });
+    const groupPrize = fazendinhaPrizeFrom(defaultQuotes(), 'grupo', 100);
+    expect(byNumber[`fazendinha:${bet}`]).toMatchObject({ status: 'WON', prizeCents: groupPrize, quoteTable: null });
+    expect((await session.http.get(`/v1/admin/tickets/${winner}`)).body[0]).toMatchObject({ status: 'WON' });
+
+    const paid = await detail(session, 'lotteries', winner);
+    expect(paid).toMatchObject({
+      status: 'WON',
+      prizeCents: 800_000,
+      expectedPrizeCents: 800_000,
+      settledAt: expect.any(String),
+      correctedPrizeCents: null,
+    });
+    expect(paid.items.map((i) => [i.status, i.prizeCents])).toEqual([
+      ['WON', 800_000],
+      ['LOST', 0],
+    ]);
+    expect((await detail(session, 'lotteries', loser)).items.map((i) => i.status)).toEqual(['LOST']);
+    expect(await detail(session, 'lotteries', canceled)).toMatchObject({
+      status: 'CANCELED',
+      canceledAt: expect.any(String),
+      settledAt: null,
+      expectedPrizeCents: 0,
+      items: [expect.objectContaining({ status: 'CANCELED', prizeCents: 0 })],
+    });
+
+    const farm = await detail(session, 'fazendinha', bet);
+    expect(farm).toMatchObject({ game: 'fazendinha', status: 'WON', quoteTable: null, lotteryGame: null });
+    expect(farm.items).toEqual([
+      {
+        position: 1,
+        modality: 'grupo',
+        modalityLabel: 'GRUPO',
+        guesses: ['02'],
+        placement: 'p1',
+        placementLabel: '1 PRÊMIO',
+        stakeCents: 100,
+        quoteCents: null,
+        possiblePrizeCents: groupPrize,
+        prizeCents: 0,
+        status: 'LOST',
+      },
+      expect.objectContaining({ position: 2, guesses: ['13'], prizeCents: groupPrize, status: 'WON' }),
+    ]);
+  });
+
+  it('404 fora da banca ou no outro jogo; 400 com jogo ou número inválido; 401 sem sessão; todos os perfis', async () => {
+    const { http } = await player();
+    const number = await buyLottery(http);
+    for (const role of ['MANAGER', 'FINANCE', 'SUPPORT'] as OperatorRole[]) {
+      const session = await loginOperator(app, 'aurora', { role });
+      expect((await session.http.get(`/v1/admin/tickets/lotteries/${number}`)).status, role).toBe(200);
+    }
+    expect((await consoleApi(app).get(`/v1/admin/tickets/lotteries/${number}`)).status).toBe(401);
+
+    const aurora = await loginOperator(app, 'aurora');
+    const missing = await aurora.http.get(`/v1/admin/tickets/fazendinha/${number}`);
+    expect(missing.status).toBe(404);
+    expect(JSON.stringify(missing.body)).toContain('NOT_FOUND');
+    const boreal = await loginOperator(app, 'boreal');
+    expect((await boreal.http.get(`/v1/admin/tickets/lotteries/${number}`)).status).toBe(404);
+    for (const bad of ['casino/1', 'lotteries/0', 'lotteries/abc', 'LOTTERIES/1']) {
+      expect((await aurora.http.get(`/v1/admin/tickets/${bad}`)).status, bad).toBe(400);
     }
   });
 });

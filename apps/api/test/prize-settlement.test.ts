@@ -355,8 +355,12 @@ describe('o que o jogador e o painel veem', () => {
 
     const prizes = (await session.http.get(`/v1/admin/prizes?from=${YESTERDAY}&to=${YESTERDAY}`))
       .body as AdminPrizeList;
-    expect(prizes).toMatchObject({ total: 1, totalPrizeCents: 880_000, reviews: [], reviewsTotal: 0, pendingCount: 0 });
-    expect(prizes.items[0]).toMatchObject({ game: 'lotteries', puleNumber: pule, prizeCents: 880_000 });
+    // Uma linha por aposta premiada do pule.
+    expect(prizes).toMatchObject({ total: 2, totalPrizeCents: 880_000, reviews: [], reviewsTotal: 0, pendingCount: 0 });
+    expect(prizes.items.map((i) => [i.puleNumber, i.modality, i.prizeCents])).toEqual([
+      [pule, 'milhar', 800_000],
+      [pule, 'centena', 80_000],
+    ]);
   });
 
   it('avisa "Pule premiada" no app instalado de quem ganhou', async () => {
@@ -380,6 +384,96 @@ describe('o que o jogador e o painel veem', () => {
       url: `/premiadas/consultar/${YESTERDAY}`,
     });
     expect(sent[0]!.payload.body).toContain(`Pule #${pule}`);
+  });
+});
+
+describe('painel: apostas premiadas (Operação > Prêmios)', () => {
+  it('uma linha por aposta premiada: aguardando apuração com o prêmio calculado, depois paga; filtro por situação', async () => {
+    const p = await player();
+    // 3452 na cabeça; grupos do 1º ao 5º: 13, 03, 06, 09, 11. Itens 1, 2 e 4 ganham; o 3 não.
+    const pule = await buyLottery(p, [
+      lotteryItem('milhar', 'p1', ['3452']),
+      lotteryItem('grupo', 'p1_5', ['13', '01'], 500),
+      lotteryItem('dezena', 'p1', ['99']),
+      lotteryItem('duque_gp', 'p1_5', ['1303']),
+    ]);
+    const fz = await buyFazendinha(p, 'grupo', [13, 2]);
+    await moveTo('aurora', YESTERDAY, { lotteries: [pule], fazendinha: [fz] });
+    await result(YESTERDAY, FIVE('3452'));
+    const items = await query<{ id: string; position: number }>(
+      'aurora',
+      'SELECT id, position FROM lottery_ticket_items ORDER BY position',
+    );
+    const { id: betId } = await queryOne<{ id: string }>('aurora', 'SELECT id FROM fazendinha_bets');
+
+    const session = await loginOperator(app, 'aurora');
+    const get = async (extra = '') => {
+      const res = await session.http.get(`/v1/admin/prizes?from=${YESTERDAY}&to=${YESTERDAY}${extra}`);
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      return res.body as AdminPrizeList;
+    };
+
+    // Na carência: as apostas que vão ganhar aparecem como PENDING, com o prêmio pelo resultado atual.
+    const waiting = await get();
+    expect(waiting.pendingCount).toBe(2);
+    expect(waiting.total).toBe(4);
+    const shared = { puleNumber: pule, drawDate: YESTERDAY, lottery: RIO_09.name, player: { id: p.person.id } };
+    expect(waiting.items[0]).toMatchObject({
+      ...shared,
+      id: items[0]!.id,
+      status: 'PENDING',
+      game: 'lotteries',
+      modality: 'milhar',
+      modalityLabel: 'MILHAR',
+      guess: '3452',
+      placement: 'p1',
+      placementLabel: '1 PRÊMIO',
+      stakeCents: 100,
+      prizeCents: 800_000,
+      settledAt: null,
+    });
+    const byId = new Map(waiting.items.map((item) => [item.id, item]));
+    expect(byId.get(items[1]!.id)).toMatchObject({
+      modality: 'grupo',
+      guess: '13',
+      placement: 'p1_5',
+      placementLabel: '1/5 PRÊMIO',
+      stakeCents: 500,
+    });
+    expect(byId.get(items[3]!.id)).toMatchObject({ modality: 'duque_gp', modalityLabel: 'DUQUE GP', guess: '13-03' });
+    expect(byId.has(items[2]!.id)).toBe(false);
+    expect(byId.get(betId)).toMatchObject({
+      puleNumber: fz,
+      game: 'fazendinha',
+      modality: 'grupo',
+      modalityLabel: 'GRUPO',
+      guess: '13',
+      placement: 'p1',
+      stakeCents: 100,
+      prizeCents: 2_200,
+    });
+    // Maior prêmio primeiro; o total é o das linhas do filtro.
+    const prizes = waiting.items.map((item) => item.prizeCents);
+    expect(prizes).toEqual([...prizes].sort((a, b) => b - a));
+    expect(waiting.totalPrizeCents).toBe(prizes.reduce((sum, cents) => sum + cents, 0));
+    expect((await get('&status=paid')).total).toBe(0);
+    expect((await get('&status=pending')).total).toBe(4);
+    expect((await get('&status=pending&minPrizeCents=2200&maxPrizeCents=2200')).items.map((i) => i.id)).toEqual([
+      betId,
+    ]);
+
+    // Depois da apuração: as mesmas linhas (mesmo id e prêmio), pagas.
+    await sweep(31);
+    const paid = await get();
+    expect(paid.pendingCount).toBe(0);
+    expect(paid.totalPrizeCents).toBe(waiting.totalPrizeCents);
+    expect(paid.items.map((i) => [i.id, i.prizeCents, i.guess, i.placement, i.stakeCents])).toEqual(
+      waiting.items.map((i) => [i.id, i.prizeCents, i.guess, i.placement, i.stakeCents]),
+    );
+    expect(paid.items.every((i) => i.status === 'PAID' && typeof i.settledAt === 'string')).toBe(true);
+    expect((await get('&status=pending')).total).toBe(0);
+    const page = await get('&status=paid&pageSize=3&page=2');
+    expect([page.total, page.totalPages, page.items.length]).toEqual([4, 2, 1]);
   });
 });
 

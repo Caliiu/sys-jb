@@ -1,10 +1,12 @@
-import ComingSoonRoute, { comingSoonMetadata } from '@/components/admin/ComingSoonRoute';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
+import { Dashboard } from '@/admin/features/dashboard';
+import { Unavailable } from '@/admin/features/errors/unavailable';
+import { requireAdmin } from '@/lib/admin/admin-context';
 
 export const dynamic = 'force-dynamic';
-export const metadata = comingSoonMetadata(ADMIN_ROUTES.home);
+export const metadata = { title: 'Início' };
 
-/** Página ainda não construída: "Em breve" (com sessão e permissão conferidas). */
-export default function Page() {
-  return <ComingSoonRoute href={ADMIN_ROUTES.home} />;
+export default async function Page() {
+  const gate = await requireAdmin();
+  if (!gate.ok) return <Unavailable message={gate.message} />;
+  return <Dashboard />;
 }

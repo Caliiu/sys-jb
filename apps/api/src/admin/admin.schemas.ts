@@ -1,5 +1,6 @@
 import {
   ADMIN_PRIZE_FILTER_MAX_CENTS,
+  ADMIN_PRIZE_STATUS_FILTERS,
   ADMIN_PRIZES_MAX_DAYS,
   AUDIT_ACTIONS,
   AUDIT_PERIODS,
@@ -193,6 +194,7 @@ export const listPrizesQuerySchema = z
     drawId: z.uuid({ error: 'drawId deve ser um UUID.' }).optional(),
     minPrizeCents: prizeFilterCents.optional(),
     maxPrizeCents: prizeFilterCents.optional(),
+    status: z.enum(ADMIN_PRIZE_STATUS_FILTERS, { error: 'Situação inválida.' }).optional(),
   })
   .superRefine((query, ctx) => {
     const now = new Date().toISOString();
@@ -336,6 +338,9 @@ export const ticketNumberSchema = z.coerce
   .int('Número do bilhete inválido.')
   .min(1, 'Número do bilhete inválido.')
   .max(2_147_483_647, 'Número do bilhete inválido.');
+
+/** Jogo do bilhete no detalhe (cada um tem a sua numeração). */
+export const ticketGameSchema = z.enum(['lotteries', 'fazendinha'], { error: 'Jogo inválido.' });
 
 export type OperatorLoginInput = z.output<typeof operatorLoginSchema>;
 export type ListUsersQuery = z.output<typeof listUsersQuerySchema>;

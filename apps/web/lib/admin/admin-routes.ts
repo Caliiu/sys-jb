@@ -11,7 +11,11 @@ export const ADMIN_ROUTES = {
   /** CSV da lista de apostadores (rota, não página). */
   usersExport: '/usuarios/exportar',
   tickets: '/bilhetes',
+  /** PDF das pules registradas com os filtros da URL (rota, não página). */
+  ticketsPdf: '/bilhetes/pdf',
   prizes: '/premios',
+  /** PDF das pules premiadas com os filtros da URL (rota, não página). */
+  prizesPdf: '/premios/pdf',
   operationSummary: '/resumo-operacao',
   // Relatórios
   generalReport: '/relatorios/geral',

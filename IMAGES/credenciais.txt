@@ -1,0 +1,4 @@
+Endereço: http://admin.localhost:3000
+E-mail: admin@trevo.localhost
+Senha: nwBqaxK78q-E_SkM-tLmbgne
+Perfil: MANAGER (acesso completo)

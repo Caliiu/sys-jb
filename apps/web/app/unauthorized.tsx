@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
-import AdminErrorScreen from '@/components/admin/AdminErrorScreen';
+import { UnauthorizedError } from '@/admin/features/errors/unauthorized-error';
 import ErrorScreen from '@/components/errors/ErrorScreen';
 import Notice from '@/components/ui/Notice';
-import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { errorAudience } from '@/lib/error-pages';
 
 export const metadata: Metadata = { title: 'Acesso não autorizado' };
@@ -13,17 +12,7 @@ export const metadata: Metadata = { title: 'Acesso não autorizado' };
  */
 export default async function Unauthorized() {
   const audience = await errorAudience();
-  if (audience.kind === 'admin') {
-    return (
-      <AdminErrorScreen
-        code="401"
-        title="Acesso não autorizado"
-        primary={{ label: 'Entrar no painel', href: ADMIN_ROUTES.login }}
-      >
-        Sua sessão terminou ou você ainda não entrou. Entre com seu e-mail e senha de operador para continuar.
-      </AdminErrorScreen>
-    );
-  }
+  if (audience.kind === 'admin') return <UnauthorizedError />;
   if (audience.kind === 'tenant') {
     return (
       <ErrorScreen
