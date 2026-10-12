@@ -15,7 +15,10 @@ export interface PublicWallet {
   balanceGames: Cents;
   bonusGames: Cents;
   prizesGames: Cents;
-  /** Pode sacar: prêmios das loterias + prêmios do cassino (recarga e bônus nunca). Saques pendentes já saíram. */
+  /**
+   * Pode sacar: prêmios das loterias + prêmios do cassino (recarga e bônus nunca). Saques pendentes já saíram. Com os
+   * prêmios retidos pela banca (unidade), só os prêmios do cassino.
+   */
   withdrawable: Cents;
   /** Derivado na leitura: balanceJb + bonusJb + prizesJb. Não define elegibilidade para apostas ou saque. */
   totalAvailableJb: Cents;
@@ -131,6 +134,9 @@ export type ApiErrorCode =
   | 'DRAW_CLOSED'
   | 'QUOTE_CHANGED'
   | 'DRAW_HAS_BETS'
+  | 'QUOTE_TABLE_IN_USE'
+  | 'DAILY_LIMIT_EXCEEDED'
+  | 'PRIZES_RETAINED'
   | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_ERROR';
 

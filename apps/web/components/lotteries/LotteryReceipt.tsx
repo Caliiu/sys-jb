@@ -4,7 +4,7 @@ import { LOTTERY_GAME_LABELS, type PlaceLotteryTicketsResponse, type PublicWalle
 import { FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { formatBrl } from '@/lib/currency';
-import { splitLabel } from '@/lib/report-receipts';
+import { lotteryCardItem, lotteryShareLine } from '@/lib/report-receipts';
 import BalancePill from '../fazendinha/BalancePill';
 import SectionBar from '../section/SectionBar';
 import { useToast } from '../ui/Toast';
@@ -27,13 +27,9 @@ export default function LotteryReceipt({ receipt, wallet, exitLabel, onExit, chi
   async function share() {
     const text = receipt.tickets
       .map((t) =>
-        [
-          `${t.lottery} #${t.puleNumber}`,
-          ...t.items.map(
-            (i) => `${i.modalityLabel} ${i.placementLabel}: ${i.guesses.join(' ')} (${formatBrl(i.totalCents)})`,
-          ),
-          `TOTAL: ${formatBrl(t.totalCents)}`,
-        ].join('\n'),
+        [`${t.lottery} #${t.puleNumber}`, ...t.items.map(lotteryShareLine), `TOTAL: ${formatBrl(t.totalCents)}`].join(
+          '\n',
+        ),
       )
       .join('\n\n');
     try {
@@ -65,13 +61,7 @@ export default function LotteryReceipt({ receipt, wallet, exitLabel, onExit, chi
             gameLabel={LOTTERY_GAME_LABELS[t.game]}
             lottery={t.lottery}
             puleNumber={t.puleNumber}
-            items={t.items.map((i) => ({
-              title: `${i.modalityLabel} ${i.placementLabel}`,
-              guesses: i.guesses,
-              amountCents: i.amountCents,
-              splitLabel: splitLabel(i.split),
-              possiblePrizeCents: i.possiblePrizeCents,
-            }))}
+            items={t.items.map(lotteryCardItem)}
             totalCents={t.totalCents}
           />
         ))}

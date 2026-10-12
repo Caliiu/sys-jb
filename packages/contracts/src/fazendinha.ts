@@ -110,7 +110,7 @@ export interface PublicFazendinhaBet {
   stakeCents: Cents;
   /** Prêmio de cada número, pela cotação vigente na compra. */
   prizeCents: Cents;
-  /** Nome da tabela de cotação da banca na compra (ex.: 800/1/8000). */
+  /** Rótulo dos valores da tabela de cotação do comprador na compra (centena/1/milhar, ex.: 800/1/8000). */
   quoteTable: string;
   /** Em ordem crescente. */
   numbers: number[];

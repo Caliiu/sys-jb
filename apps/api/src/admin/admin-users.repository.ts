@@ -2,12 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { digitsOnly, INVITE_CODE_PATTERN } from '@sysjb/contracts';
 import type { Prisma, User, UserStatus, Wallet } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
-import { ADMIN_LIST_SELECT } from './admin-user.mapper.js';
+import { ADMIN_LIST_SELECT, type UnitSource } from './admin-user.mapper.js';
 import type { ListUsersQuery } from './admin.schemas.js';
 
-type ListRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> & {
-  referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
-};
+type ListRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> &
+  UnitSource & {
+    referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
+  };
 type DetailRow = Omit<User, 'passwordHash'> & {
   wallet: Wallet | null;
   sessions: Array<{ createdAt: Date }>;

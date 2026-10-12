@@ -67,6 +67,9 @@ export async function placeFazendinhaBetAction(input: unknown): Promise<PlaceBet
       return { ok: false, code, message: 'A cotação mudou. Confira o novo prêmio antes de apostar.' };
     case 'DRAW_CLOSED':
       return { ok: false, code, message: 'Extração encerrada. Escolha outra.' };
+    case 'DAILY_LIMIT_EXCEEDED':
+      // Mensagem da API, com o quanto ainda dá para apostar hoje.
+      return { ok: false, code, message: res.error.message };
     case 'SESSION_INVALID':
       return { ok: false, code, message: 'Sessão encerrada. Entre novamente.' };
     case 'TOO_MANY_ATTEMPTS':

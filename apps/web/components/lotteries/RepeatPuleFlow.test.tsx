@@ -38,6 +38,7 @@ const RECEIPT: PlaceLotteryTicketsResponse = {
           totalCents: 100,
           quoteCents: 800000,
           possiblePrizeCents: 800000,
+          isGift: false,
         },
       ],
       totalCents: 100,

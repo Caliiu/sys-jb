@@ -365,6 +365,17 @@ describe('perfis e permissões', () => {
   });
 });
 
+/** Configurações da unidade de um cadastro novo (banca sem tabela gravada: vale a padrão do código). */
+const UNIT_DEFAULTS = {
+  region: null,
+  unitCommissionBps: 0,
+  quoteTable: { id: null, name: '800/1/8000', label: '800/1/8000', isDefault: true, own: false },
+  giftMilharEnabled: false,
+  retainPrizes: false,
+  dailyLimitEnabled: false,
+  dailyLimitCents: null,
+};
+
 describe('lista de usuários', () => {
   it('só mostra usuários da banca do operador, com CPF e telefone completos (só dígitos)', async () => {
     const session = await loginOperator(app, 'aurora');
@@ -386,6 +397,7 @@ describe('lista de usuários', () => {
       createdAt: expect.any(String),
       referredBy: null,
       promoter: null,
+      ...UNIT_DEFAULTS,
     });
     expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|birthDate|tenantId/);
   });
@@ -502,6 +514,8 @@ describe('detalhe do usuário', () => {
       promoterCommissionBps: null,
       casinoCommissionBps: 0,
       referredBy: null,
+      ...UNIT_DEFAULTS,
+      todaySpentCents: 0,
     });
 
     await api(app, 'aurora').post('/v1/auth/login', { document: user.document, password: SYNTHETIC_PASSWORD });

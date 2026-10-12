@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AdminAuditEntry, AuditAction, Page } from '@sysjb/contracts';
+import type { AdminAuditEntry, AuditAction, AuditChange, Page } from '@sysjb/contracts';
 import type { Prisma } from '@sysjb/database';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
@@ -91,5 +91,18 @@ function toDetails(raw: Prisma.JsonValue): AuditDetails {
     ...(typeof raw.draw === 'string' ? { draw: raw.draw } : {}),
     ...(typeof raw.date === 'string' ? { date: raw.date } : {}),
     ...(typeof raw.mural === 'string' ? { mural: raw.mural } : {}),
+    ...(typeof raw.quoteTable === 'string' ? { quoteTable: raw.quoteTable } : {}),
+    ...(Array.isArray(raw.changes) ? { changes: toChanges(raw.changes) } : {}),
   };
+}
+
+/** Configurações da unidade: só campo (texto) e valores simples (texto, número, sim/não ou vazio). */
+function toChanges(raw: Prisma.JsonArray): AuditChange[] {
+  const simple = (v: unknown): AuditChange['from'] =>
+    typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : null;
+  return raw.flatMap((item) =>
+    item && typeof item === 'object' && !Array.isArray(item) && typeof item.field === 'string'
+      ? [{ field: item.field, from: simple(item.from), to: simple(item.to) }]
+      : [],
+  );
 }

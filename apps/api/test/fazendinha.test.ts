@@ -21,6 +21,8 @@ import {
   runtimePool,
   startApp,
   tenantId,
+  defaultQuoteTableId,
+  defaultQuoteTablePath,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -195,7 +197,7 @@ describe('POST /v1/fazendinha/bets', () => {
     const first = await http.post('/v1/fazendinha/bets', payload);
     expect(first.status).toBe(201);
     const session = await loginOperator(app, 'aurora');
-    await session.http.put('/v1/admin/quotes/fazendinha', {
+    await session.http.put(`${await defaultQuoteTablePath(auroraId)}/fazendinha`, {
       quotes: [{ mode: 'grupo', stakeCents: 100, prizeCents: 2000 }],
     });
     const retry = await http.post('/v1/fazendinha/bets', payload);
@@ -207,16 +209,18 @@ describe('POST /v1/fazendinha/bets', () => {
 
   it('cotação salva no meio da compra: a compra espera o salvamento e recusa com a cotação nova', async () => {
     const { http } = await player('aurora', { balanceJb: 1000 });
+    const tableId = await defaultQuoteTableId(auroraId);
     const manager = await runtimePool.connect();
     try {
       await manager.query('BEGIN');
       await manager.query("SELECT set_config('app.tenant_id', $1, true)", [auroraId]);
       await manager.query('SELECT pg_advisory_xact_lock(7201, hashtext($1))', [auroraId]);
       await manager.query(
-        `INSERT INTO fazendinha_quotes (tenant_id, mode, stake_cents, prize_cents, updated_at)
-         VALUES ($1, 'GRUPO', 100, 2000, now())
-         ON CONFLICT (tenant_id, mode, stake_cents) DO UPDATE SET prize_cents = EXCLUDED.prize_cents, updated_at = now()`,
-        [auroraId],
+        `INSERT INTO fazendinha_quotes (tenant_id, quote_table_id, mode, stake_cents, prize_cents, updated_at)
+         VALUES ($1, $2, 'GRUPO', 100, 2000, now())
+         ON CONFLICT (tenant_id, quote_table_id, mode, stake_cents)
+           DO UPDATE SET prize_cents = EXCLUDED.prize_cents, updated_at = now()`,
+        [auroraId, tableId],
       );
       // .then() dispara a requisição já (o supertest só envia quando alguém espera por ela).
       const buying = http.post('/v1/fazendinha/bets', bet()).then((res) => res);

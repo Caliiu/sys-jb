@@ -8,7 +8,11 @@ function toCents(value: bigint): Cents {
   return Number(value);
 }
 
-export function toPublicWallet(wallet: Wallet): PublicWallet {
+/**
+ * `retainPrizes`: a unidade está com os prêmios retidos pela banca (users.retain_prizes): os prêmios das loterias não
+ * entram no sacável (o banco confere de novo no pedido de saque).
+ */
+export function toPublicWallet(wallet: Wallet, retainPrizes = false): PublicWallet {
   const balanceJb = toCents(wallet.balanceJb);
   const bonusJb = toCents(wallet.bonusJb);
   const prizesJb = toCents(wallet.prizesJb);
@@ -22,8 +26,9 @@ export function toPublicWallet(wallet: Wallet): PublicWallet {
     balanceGames,
     bonusGames,
     prizesGames,
-    // Sacável: prêmios das loterias + prêmios do cassino (recarga e bônus nunca; saques pendentes já saíram).
-    withdrawable: toCents(wallet.prizesJb + wallet.prizesGames),
+    // Sacável: prêmios das loterias + prêmios do cassino (recarga e bônus nunca; saques pendentes já saíram). Prêmios
+    // retidos: só os do cassino.
+    withdrawable: toCents(retainPrizes ? wallet.prizesGames : wallet.prizesJb + wallet.prizesGames),
     // Totais derivados na leitura (CHECK no banco garante que a soma é um inteiro seguro).
     totalAvailableJb: toCents(wallet.balanceJb + wallet.bonusJb + wallet.prizesJb),
     totalAvailableGames: toCents(wallet.balanceGames + wallet.bonusGames + wallet.prizesGames),
@@ -38,7 +43,8 @@ export function promoterFields(): PublicPromoterFields {
 type PublicUserSource = Pick<
   User,
   'id' | 'name' | 'email' | 'phone' | 'document' | 'avatar' | 'displayId' | 'inviteCode'
->;
+> &
+  Partial<Pick<User, 'retainPrizes'>>;
 
 /**
  * Mapeamento explícito entidade -> contrato público. Nunca expõe tenantId, timestamps,
@@ -54,7 +60,7 @@ export function toPublicUser(user: PublicUserSource, wallet: Wallet): PublicUser
     avatar: user.avatar ?? null,
     displayId: user.displayId,
     inviteCode: user.inviteCode,
-    wallet: toPublicWallet(wallet),
+    wallet: toPublicWallet(wallet, user.retainPrizes ?? false),
     ...promoterFields(),
   };
 }

@@ -13,6 +13,7 @@ import {
   findLotteryModality,
   findLotteryPlacement,
   formatGuess,
+  GIFT_MILHAR_LABEL,
   type ItemPrize,
   minutesToTime,
   resultFullPrizes,
@@ -49,7 +50,7 @@ const TICKET_TABLES: ReadonlyArray<{
     game: 'fazendinha',
     table: Prisma.raw('"fazendinha_bets"'),
     canceledAt: Prisma.raw('NULL::timestamptz'),
-    quoteTable: Prisma.raw('NULL::text'),
+    quoteTable: Prisma.raw('t."quote_table"'),
   },
 ];
 
@@ -330,13 +331,15 @@ async function puleOf(
         return {
           position: item.position,
           modality: item.modality,
-          modalityLabel: modality?.label ?? item.modality.toUpperCase(),
+          modalityLabel: item.isGift ? GIFT_MILHAR_LABEL : (modality?.label ?? item.modality.toUpperCase()),
           guesses: item.guesses.map((guess) => (modality ? formatGuess(modality, guess) : guess)),
           placement: item.placement,
           placementLabel: findLotteryPlacement(item.placement)?.label ?? item.placement,
-          stakeCents: Number(item.totalCents),
+          // Milhar Brinde: o valor do brinde (base do prêmio; não cobrado, fora do total do pule).
+          stakeCents: Number(item.isGift ? item.amountCents : item.totalCents),
           quoteCents: item.quoteCents,
           possiblePrizeCents: Number(item.possiblePrizeCents),
+          isGift: item.isGift,
         };
       }),
       settle: (prizes) => () =>
@@ -376,6 +379,7 @@ async function puleOf(
       stakeCents: bet.stakeCents,
       quoteCents: null,
       possiblePrizeCents: bet.prizeCents,
+      isGift: false,
     })),
     settle: (prizes) => () => settleFazendinhaBet({ mode, numbers, prizeCents: bet.prizeCents }, prizes),
   };

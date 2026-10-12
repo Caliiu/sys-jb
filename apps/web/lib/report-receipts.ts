@@ -1,8 +1,10 @@
 import {
   type BalanceReport,
+  GIFT_MILHAR_LABEL,
   LOTTERY_GAME_LABELS,
   type LotteryMovementReport,
   type LotterySplit,
+  type PublicLotteryItem,
   type PuleDetail,
 } from '@sysjb/contracts';
 import { formatBrl, formatCents } from './currency';
@@ -62,6 +64,21 @@ export function movementSections(report: LotteryMovementReport): ReceiptSection[
 
 export const splitLabel = (split: LotterySplit) => (split === 'total' ? 'TODOS' : 'CADA');
 
+/** Item de Loterias no recibo (TicketCard e PDF). Milhar Brinde: "MILHAR BRINDE 1 PRÊMIO", valor do brinde / BRINDE. */
+export const lotteryCardItem = (item: PublicLotteryItem): PuleCard['items'][number] => ({
+  title: `${item.isGift ? GIFT_MILHAR_LABEL : item.modalityLabel} ${item.placementLabel}`,
+  guesses: item.guesses,
+  amountCents: item.amountCents,
+  splitLabel: item.isGift ? 'BRINDE' : splitLabel(item.split),
+  possiblePrizeCents: item.possiblePrizeCents,
+});
+
+/** Linha do item no texto de "Compartilhar": "MILHAR 1 PRÊMIO: 1234 (R$ 2,00)"; o brinde sai "(BRINDE)". */
+export const lotteryShareLine = (item: PublicLotteryItem) => {
+  const card = lotteryCardItem(item);
+  return `${card.title}: ${item.guesses.join(' ')} (${item.isGift ? 'BRINDE' : formatBrl(item.totalCents)})`;
+};
+
 /** Recibo da pule no formato do comprovante da compra (TicketCard). */
 export interface PuleCard {
   sellerId: number;
@@ -97,13 +114,7 @@ export function puleCard(detail: PuleDetail): PuleCard {
       gameLabel: LOTTERY_GAME_LABELS[ticket.game],
       lottery: ticket.lottery,
       puleNumber: ticket.puleNumber,
-      items: ticket.items.map((item) => ({
-        title: `${item.modalityLabel} ${item.placementLabel}`,
-        guesses: item.guesses,
-        amountCents: item.amountCents,
-        splitLabel: splitLabel(item.split),
-        possiblePrizeCents: item.possiblePrizeCents,
-      })),
+      items: ticket.items.map(lotteryCardItem),
       totalCents: ticket.totalCents,
       ...(detail.canceledAt ? { canceledAt: detail.canceledAt } : {}),
     };

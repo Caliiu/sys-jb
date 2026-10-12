@@ -1,8 +1,10 @@
 import {
   AUDIT_ACTIONS,
+  findLotteryPlacement,
   PAYMENT_GATEWAY_INFO,
   type AdminAuditEntry,
   type AuditAction,
+  type AuditChange,
   type AuditPeriod,
   type PaymentGatewayId,
 } from '@sysjb/contracts';
@@ -74,7 +76,10 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'wallet.credit': 'success',
   'commission.rate': 'neutral',
   'commission.close': 'success',
+  'quote.create': 'success',
   'quote.update': 'neutral',
+  'quote.default': 'neutral',
+  'quote.delete': 'danger',
   'draw.create': 'success',
   'draw.update': 'neutral',
   'draw.delete': 'danger',
@@ -101,6 +106,8 @@ export const AUDIT_ACTION_TONES: Record<AuditAction, AuditTone> = {
   'withdrawal.settings': 'neutral',
   'casino.commission.pay': 'success',
   'deposit.bonus.settings': 'neutral',
+  'user.unit': 'neutral',
+  'gift.milhar.settings': 'neutral',
 };
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
@@ -113,7 +120,10 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'wallet.credit': 'Carteira creditada',
   'commission.rate': 'Indique e ganhe alterado',
   'commission.close': 'Comissões do mês fechadas',
+  'quote.create': 'Tabela de cotação criada',
   'quote.update': 'Cotações alteradas',
+  'quote.default': 'Tabela padrão alterada',
+  'quote.delete': 'Tabela de cotação excluída',
   'draw.create': 'Sorteio cadastrado',
   'draw.update': 'Sorteio alterado',
   'draw.delete': 'Sorteio excluído',
@@ -140,6 +150,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'withdrawal.settings': 'Limites de saque alterados',
   'casino.commission.pay': 'Comissão de cassino paga',
   'deposit.bonus.settings': 'Bônus de recarga alterado',
+  'user.unit': 'Configurações da unidade alteradas',
+  'gift.milhar.settings': 'Milhar Brinde alterado',
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -160,10 +172,41 @@ const FIELD_LABELS: Record<string, string> = {
 
 const commission = (bps: number | null | undefined) => (typeof bps === 'number' ? formatCommission(bps) : '—');
 
+/** Configurações da unidade: nome do campo e como mostrar o valor antes/depois. */
+const UNIT_FIELDS: Record<string, { label: string; format: (value: AuditChange['from']) => string }> = {
+  region: { label: 'Região', format: (v) => (typeof v === 'string' ? v : '—') },
+  unitCommissionBps: { label: 'Comissão da unidade', format: (v) => commission(typeof v === 'number' ? v : null) },
+  quoteTableId: { label: 'Tabela de cotação', format: (v) => (typeof v === 'string' ? v : 'Padrão da banca') },
+  giftMilharEnabled: { label: 'Milhar brinde', format: (v) => (v === true ? 'Sim' : 'Não') },
+  retainPrizes: { label: 'Reter prêmios', format: (v) => (v === true ? 'Sim' : 'Não') },
+  dailyLimitEnabled: { label: 'Limite diário', format: (v) => (v === true ? 'Ligado' : 'Desligado') },
+  dailyLimitCents: { label: 'Valor do limite diário', format: (v) => (typeof v === 'number' ? formatBrl(v) : '—') },
+  // Milhar Brinde da banca (gift.milhar.settings).
+  enabled: { label: 'Milhar Brinde', format: (v) => (v === true ? 'Ligado' : 'Desligado') },
+  minPuleCents: { label: 'Pule mínimo do brinde', format: (v) => (typeof v === 'number' ? formatBrl(v) : '—') },
+  stakeCents: { label: 'Valor do brinde', format: (v) => (typeof v === 'number' ? formatBrl(v) : '—') },
+  placement: {
+    label: 'Colocação do brinde',
+    format: (v) => (typeof v === 'string' ? (findLotteryPlacement(v)?.label ?? v) : '—'),
+  },
+};
+
+/** "Região: — → SP; Milhar brinde: Não → Sim" (campo desconhecido: o nome dele, sem valores). */
+export function describeUnitChanges(changes: AuditChange[]): string {
+  if (changes.length === 0) return '—';
+  return changes
+    .map((change) => {
+      const field = UNIT_FIELDS[change.field];
+      return field ? `${field.label}: ${field.format(change.from)} → ${field.format(change.to)}` : change.field;
+    })
+    .join('; ');
+}
+
 /** Resumo legível do que mudou (só nomes de campos e comissão: a trilha não guarda valores pessoais). */
 export function describeAuditDetails(entry: AdminAuditEntry): string {
   const details = entry.details;
   if (!details) return '—';
+  if (details.changes) return describeUnitChanges(details.changes);
   if (details.month && typeof details.amount === 'number') {
     const [year, month] = details.month.split('-');
     return `Mês ${month}/${year}: ${formatBrl(details.amount)} pagos`;

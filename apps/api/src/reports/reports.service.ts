@@ -234,7 +234,8 @@ export class ReportsService {
         };
       }
       if (bet) {
-        const { tableLabel } = await this.quotes.load(tx, tenant.id);
+        // Pule antigo (sem o rótulo gravado): o da tabela que vale hoje para o jogador.
+        const tableLabel = bet.quoteTable ?? (await this.quotes.labelForUser(tx, tenant.id, session.userId));
         return {
           game: 'fazendinha',
           bet: toPublicBet(

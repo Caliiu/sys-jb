@@ -1,15 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AdminUserDetail, AdminUserListItem, Page, UserStatus } from '@sysjb/contracts';
+import type { AdminUserDetail, AdminUserListItem, AuditChange, Page, UserStatus } from '@sysjb/contracts';
 import { Prisma } from '@sysjb/database';
 import { AppError, Errors } from '../common/app-error.js';
 import { DatabaseService, type TenantTx } from '../database/database.service.js';
+import { quoteTableRefs } from '../quotes/quotes.service.js';
+import { todaySpentCents } from '../units/unit-limits.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
 import { mapUniqueViolation } from '../users/user-conflicts.js';
 import type { AdminUpdateUserInput } from '../users/user.schemas.js';
 import { UsersRepository } from '../users/users.repository.js';
 import { AdminUsersRepository } from './admin-users.repository.js';
-import { toAdminDetail, toAdminListItem } from './admin-user.mapper.js';
-import type { ListUsersQuery, WalletCreditInput } from './admin.schemas.js';
+import { toAdminDetail, toAdminListItem, UNIT_SELECT } from './admin-user.mapper.js';
+import type { ListUsersQuery, UpdateUnitSettingsInput, WalletCreditInput } from './admin.schemas.js';
 import { recordAudit } from './audit.js';
 import type { AuthenticatedOperator } from './operator.types.js';
 
@@ -33,9 +35,12 @@ export class AdminUsersService {
   ) {}
 
   async list(tenant: ResolvedTenant, query: ListUsersQuery): Promise<Page<AdminUserListItem>> {
-    const { rows, total } = await this.db.withTenant(tenant.id, (tx) => this.repo.list(tx, tenant.id, query));
+    const { rows, total, tables } = await this.db.withTenant(tenant.id, async (tx) => ({
+      ...(await this.repo.list(tx, tenant.id, query)),
+      tables: await quoteTableRefs(tx, tenant.id),
+    }));
     return {
-      items: rows.map(toAdminListItem),
+      items: rows.map((row) => toAdminListItem(row, tables)),
       page: query.page,
       pageSize: query.pageSize,
       total,
@@ -141,10 +146,77 @@ export class AdminUsersService {
     });
   }
 
+  /**
+   * Configurações da unidade (região, comissão, tabela de cotação, milhar brinde, reter prêmios e limite diário). Só os
+   * campos enviados; a linha do usuário fica travada até o fim (duas alterações simultâneas não se perdem e a auditoria
+   * registra o antes/depois de cada campo que mudou de fato). Nada mudou: sem gravação e sem auditoria.
+   */
+  updateSettings(
+    tenant: ResolvedTenant,
+    operator: AuthenticatedOperator,
+    id: string,
+    input: UpdateUnitSettingsInput,
+  ): Promise<AdminUserDetail> {
+    return this.db.withTenant(tenant.id, async (tx) => {
+      const [locked] = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "users" WHERE "tenant_id" = ${tenant.id}::uuid AND "id" = ${id}::uuid FOR UPDATE`;
+      if (!locked) throw Errors.userNotFound();
+      const current = await tx.user.findFirst({ where: { tenantId: tenant.id, id }, select: UNIT_SELECT });
+      if (!current) throw Errors.userNotFound();
+
+      const tables = await quoteTableRefs(tx, tenant.id);
+      if (input.quoteTableId && !tables.has(input.quoteTableId)) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'Payload inválido.', [
+          { field: 'quoteTableId', message: 'Tabela de cotação não encontrada.' },
+        ]);
+      }
+      const next = {
+        region: input.region === undefined ? current.region : input.region,
+        unitCommissionBps: input.unitCommissionBps ?? current.unitCommissionBps,
+        quoteTableId: input.quoteTableId === undefined ? current.quoteTableId : input.quoteTableId,
+        giftMilharEnabled: input.giftMilharEnabled ?? current.giftMilharEnabled,
+        retainPrizes: input.retainPrizes ?? current.retainPrizes,
+        dailyLimitEnabled: input.dailyLimitEnabled ?? current.dailyLimitEnabled,
+        dailyLimitCents: input.dailyLimitCents === undefined ? current.dailyLimitCents : input.dailyLimitCents,
+      };
+      if (next.dailyLimitEnabled && next.dailyLimitCents === null) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'Payload inválido.', [
+          { field: 'dailyLimitCents', message: 'Informe o limite diário para ligá-lo.' },
+        ]);
+      }
+
+      // Tabela na auditoria pelo nome (null = padrão da banca).
+      const tableName = (tableId: string | null) => (tableId ? (tables.get(tableId)?.name ?? null) : null);
+      const changes: AuditChange[] = (Object.keys(next) as Array<keyof typeof next>)
+        .filter((field) => next[field] !== current[field])
+        .map((field) =>
+          field === 'quoteTableId'
+            ? { field, from: tableName(current.quoteTableId), to: tableName(next.quoteTableId) }
+            : { field, from: current[field], to: next[field] },
+        );
+      if (changes.length > 0) {
+        await tx.user.update({ where: { id }, data: next });
+        await recordAudit(tx, {
+          tenantId: tenant.id,
+          operatorId: operator.id,
+          action: 'user.unit',
+          targetType: 'user',
+          targetId: id,
+          details: { fields: changes.map((change) => change.field), changes },
+        });
+      }
+      return this.detail(tx, tenant.id, id);
+    });
+  }
+
   private async detail(tx: TenantTx, tenantId: string, id: string): Promise<AdminUserDetail> {
     const found = await this.repo.findDetail(tx, tenantId, id);
     if (!found) throw Errors.userNotFound();
     if (!found.wallet) throw Errors.internal(); // invariante: todo usuário tem carteira
-    return toAdminDetail(found, found.wallet, found.sessions[0]?.createdAt ?? null);
+    const [tables, spent] = await Promise.all([quoteTableRefs(tx, tenantId), todaySpentCents(tx, id)]);
+    return toAdminDetail(found, found.wallet, found.sessions[0]?.createdAt ?? null, {
+      tables,
+      todaySpentCents: spent,
+    });
   }
 }

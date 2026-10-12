@@ -38,6 +38,12 @@ export default function AmountStep({
           {blocker}
         </p>
       )}
+      {summary.retained > 0 && (
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-[13px] font-medium text-amber-800">
+          Seus prêmios das loterias ({formatBrl(summary.retained)}) estão retidos pela banca e não podem ser sacados.
+          Eles continuam valendo para apostar.
+        </p>
+      )}
       <AmountCard
         cents={amountCents}
         availableCents={summary.available}

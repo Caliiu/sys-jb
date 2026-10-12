@@ -53,7 +53,7 @@ export class PrizesService {
           where: { ...owner, puleNumber: { in: numbersOf('lotteries') } },
           select: {
             puleNumber: true,
-            items: { select: { position: true, modality: true, placement: true, amountCents: true } },
+            items: { select: { position: true, modality: true, placement: true, amountCents: true, isGift: true } },
           },
         }),
         tx.fazendinhaBet.findMany({
@@ -78,7 +78,7 @@ export class PrizesService {
           }
           const item = ticketItems.get(prize.puleNumber)?.find((i) => i.position === stored.position);
           return {
-            label: item ? lotteryPrizeLabel(item.modality, item.placement) : `ITEM ${stored.position}`,
+            label: item ? lotteryPrizeLabel(item.modality, item.placement, item.isGift) : `ITEM ${stored.position}`,
             amountCents: Number(item?.amountCents ?? 0n),
             prizeCents: stored.prizeCents,
             guesses: stored.guesses,

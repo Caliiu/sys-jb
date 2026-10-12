@@ -151,6 +151,7 @@ const lottery: Extract<PuleDetail, { game: 'lotteries' }> = {
         totalCents: 100,
         quoteCents: 800_000,
         possiblePrizeCents: 800_000,
+        isGift: false,
       },
     ],
     totalCents: 100,

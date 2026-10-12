@@ -17,6 +17,7 @@ import { hasSqlState, isUniqueViolation } from '../common/prisma-errors.js';
 import { DatabaseService, type TenantTx } from '../database/database.service.js';
 import { DrawsService } from '../draws/draws.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
+import { DAILY_LIMIT_SQLSTATE, dailyLimitExceeded } from '../units/unit-limits.js';
 import { toPublicWallet } from '../users/user.mapper.js';
 import { QuotesService } from '../quotes/quotes.service.js';
 import type { PlaceBetInput } from './fazendinha.schemas.js';
@@ -81,8 +82,10 @@ export class FazendinhaService {
         if (!lottery) throw invalid('lottery', 'Extração inexistente ou sem sorteio nesse dia.');
         if (!isDrawOpenAt(now, dayOffset, lottery.closesAt)) throw drawClosed();
 
-        // Cotação da banca: só os valores com prêmio são oferecidos; o prêmio fica gravado no pule.
-        const prizeCents = fazendinhaPrizeFrom(await this.quotes.loadForSale(tx, tenant.id), mode.id, input.stakeCents);
+        // Tabela do comprador (a dele ou a padrão da banca): só os valores com prêmio são oferecidos; o prêmio e o
+        // rótulo dos valores da tabela (centena/1/milhar, igual ao de Loterias) ficam gravados no pule.
+        const quotes = await this.quotes.loadForSale(tx, tenant.id, session.userId);
+        const prizeCents = fazendinhaPrizeFrom(quotes, mode.id, input.stakeCents);
         if (prizeCents <= 0) throw invalid('stakeCents', 'Valor não disponível.');
         // Nunca vender por um prêmio diferente do que o jogador viu.
         if (prizeCents !== input.prizeCents) {
@@ -96,6 +99,7 @@ export class FazendinhaService {
             userId: session.userId,
             idempotencyKey: input.idempotencyKey,
             prizeCents,
+            quoteTable: quotes.tableLabel,
             // Histórico: prêmio ÷ valor (a cotação é livre, pode não ser inteira).
             multiplier: Math.floor(prizeCents / input.stakeCents),
             totalCents: BigInt(input.stakeCents) * BigInt(numbers.length),
@@ -112,6 +116,8 @@ export class FazendinhaService {
       if (hasSqlState(error, INSUFFICIENT_FUNDS_SQLSTATE)) {
         throw new AppError(409, 'INSUFFICIENT_FUNDS', 'Saldo insuficiente.');
       }
+      // Limite diário da unidade (o banco confere com a carteira travada).
+      if (hasSqlState(error, DAILY_LIMIT_SQLSTATE)) throw await dailyLimitExceeded(this.db, tenant.id, session.userId);
       // O banco confere o fechamento de novo (a extração pode fechar entre a validação e o INSERT).
       if (hasSqlState(error, DRAW_CLOSED_SQLSTATE)) throw drawClosed();
       if (isUniqueViolation(error)) {
@@ -186,11 +192,15 @@ export class FazendinhaService {
   private async response(tx: TenantTx, bet: FazendinhaBet, numbers: number[]): Promise<PlaceFazendinhaBetResponse> {
     const user = await tx.user.findFirst({
       where: { tenantId: bet.tenantId, id: bet.userId },
-      select: { displayId: true, wallet: true },
+      select: { displayId: true, retainPrizes: true, wallet: true },
     });
     if (!user?.wallet) throw Errors.internal();
-    const { tableLabel } = await this.quotes.load(tx, bet.tenantId);
-    return { bet: toPublicBet(bet, numbers, user.displayId, tableLabel), wallet: toPublicWallet(user.wallet) };
+    // Pule antigo (sem o rótulo gravado): o da tabela que vale hoje para o comprador.
+    const quoteTable = bet.quoteTable ?? (await this.quotes.labelForUser(tx, bet.tenantId, bet.userId));
+    return {
+      bet: toPublicBet(bet, numbers, user.displayId, quoteTable),
+      wallet: toPublicWallet(user.wallet, user.retainPrizes),
+    };
   }
 
   /** 409 com os números que outra pessoa comprou primeiro (details: "numbers" -> "4,17"). */

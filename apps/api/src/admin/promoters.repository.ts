@@ -3,7 +3,7 @@ import type { Prisma, User } from '@sysjb/database';
 import type { TenantTx } from '../database/database.service.js';
 import { searchFilter } from './admin-users.repository.js';
 import type { ListPromotersQuery, ReferralsQuery } from './admin.schemas.js';
-import { ADMIN_LIST_SELECT } from './admin-user.mapper.js';
+import { ADMIN_LIST_SELECT, type UnitSource } from './admin-user.mapper.js';
 
 export type PromoterRow = Pick<
   User,
@@ -13,9 +13,10 @@ export type PromoterRow = Pick<
   _count: { referrals: number };
 };
 
-export type ReferralRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> & {
-  referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
-};
+export type ReferralRow = Pick<User, 'id' | 'displayId' | 'name' | 'document' | 'phone' | 'status' | 'createdAt'> &
+  UnitSource & {
+    referredBy: Pick<User, 'id' | 'displayId' | 'name' | 'promoterCommissionBps'> | null;
+  };
 
 /** Teto de opções do filtro por promotor (proteção; a banca não deve chegar perto disso). */
 export const PROMOTER_OPTIONS_MAX = 1000;

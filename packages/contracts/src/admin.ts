@@ -34,6 +34,7 @@ export const PERMISSIONS = [
   'operators.manage',
   'payments.read',
   'payments.manage',
+  'units.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -44,7 +45,8 @@ export type Permission = (typeof PERMISSIONS)[number];
  *   carteiras; o banco confere o perfil de novo no crédito — ver migration operator_wallet_credit).
  * - SUPPORT (Suporte): consulta e corrige dados de cadastro; não bloqueia; não vê promotores.
  * - FINANCE (Financeiro): somente consulta (usuários, promotores, comissões, cotações e sorteios).
- * Cotações: `quotes.manage` edita a tabela de prêmios da banca (Tradicional e Fazendinha).
+ * Cotações: `quotes.manage` cria, edita, exclui e escolhe a padrão das tabelas de prêmios da banca (Tradicional e
+ * Fazendinha) e configura o Milhar Brinde da banca (prêmio pago pela cotação da milhar); `quotes.read` consulta.
  * Sorteios: `draws.manage` cadastra/altera sorteios e exceções de data (o banco recusa o que deixaria apostas
  * vendidas sem sorteio).
  * Identidade visual: `branding.manage` altera nome, logo, cores e o texto da barra de convite (só o Gerente).
@@ -59,6 +61,8 @@ export type Permission = (typeof PERMISSIONS)[number];
  * testa, escolhe o gateway ativo e libera ou recusa depósitos em análise (pagos por outro titular); nos saques, define
  * os limites, aprova ou recusa os que estão em análise e conclui à mão um envio sem resposta — só o Gerente; o banco
  * confere o perfil de novo (migrations payments, deposit_payer e withdrawals).
+ * Unidades: `units.manage` altera as configurações da unidade (região, comissão da unidade, tabela de cotação, milhar
+ * brinde, reter prêmios e limite diário) — só o Gerente; a consulta vem junto com `users.read`.
  */
 export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission[]>> = {
   MANAGER: [
@@ -84,6 +88,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<OperatorRole, readonly Permission
     'operators.manage',
     'payments.read',
     'payments.manage',
+    'units.manage',
   ],
   SUPPORT: ['users.read', 'users.update', 'tickets.read'],
   FINANCE: [
@@ -129,8 +134,57 @@ export interface OperatorMeResponse {
   tenant: PublicTenant;
 }
 
+/**
+ * Tabela de cotação que vale para a unidade: a própria (`own`) ou a padrão da banca. `label` = rótulo dos valores
+ * (centena/1/milhar), o que sai no pule. Banca sem tabela gravada: id null, nome e rótulo da padrão do código.
+ */
+export interface AdminUnitQuoteTable {
+  id: string | null;
+  name: string;
+  label: string;
+  isDefault: boolean;
+  own: boolean;
+}
+
+/** Configurações da unidade (jogador), vistas pelo painel na lista e no detalhe do usuário. */
+export interface AdminUnitSettings {
+  /** UF da unidade; null = não informada. */
+  region: BrazilianUf | null;
+  /**
+   * Comissão da unidade sobre as próprias apostas de Loterias e Fazendinha (centésimos de %, 0 a 10000; 0 = sem). Paga
+   * no Saldo na apuração do pule, só sobre a parte paga com Saldo e Prêmios, como a de indicação/promotor.
+   */
+  unitCommissionBps: number;
+  quoteTable: AdminUnitQuoteTable;
+  giftMilharEnabled: boolean;
+  /** Prêmios de Loterias e Fazendinha (bolsa de prêmios das loterias) não saem em saque enquanto ligado. */
+  retainPrizes: boolean;
+  /** Limite diário de apostas (Loterias + Fazendinha, dia de Brasília, sem cancelados). */
+  dailyLimitEnabled: boolean;
+  /** Centavos; pode ficar gravado com o limite desligado. Obrigatório para ligar. */
+  dailyLimitCents: number | null;
+}
+
+/** Maior limite diário da unidade: R$ 1.000.000,00 (centavos). */
+export const MAX_DAILY_LIMIT_CENTS = 100_000_000;
+
+/**
+ * PATCH /v1/admin/users/:id/settings (`units.manage`): só os campos enviados mudam (pelo menos um).
+ * `quoteTableId` null = volta para a tabela padrão da banca. `dailyLimitEnabled` true exige um limite (enviado agora ou
+ * já gravado).
+ */
+export interface UpdateUnitSettingsRequest {
+  region?: BrazilianUf | null;
+  unitCommissionBps?: number;
+  quoteTableId?: string | null;
+  giftMilharEnabled?: boolean;
+  retainPrizes?: boolean;
+  dailyLimitEnabled?: boolean;
+  dailyLimitCents?: number | null;
+}
+
 /** Linha da lista de usuários. CPF e telefone: só dígitos (a tela formata). */
-export interface AdminUserListItem {
+export interface AdminUserListItem extends AdminUnitSettings {
   id: string;
   displayId: number;
   name: string;
@@ -148,7 +202,9 @@ export interface AdminUserListItem {
   promoter: { id: string; displayId: number; name: string; commissionBps: number } | null;
 }
 
-export interface AdminUserDetail {
+export interface AdminUserDetail extends AdminUnitSettings {
+  /** Apostado hoje (Brasília, Loterias + Fazendinha, sem cancelados): o que conta no limite diário. */
+  todaySpentCents: number;
   id: string;
   displayId: number;
   name: string;
@@ -179,6 +235,38 @@ export interface AdminUserDetail {
 /** Comissão do promotor em centésimos de % (1 = 0,01%; 10000 = 100%). Inteiro: nunca ponto flutuante. */
 export const MIN_COMMISSION_BPS = 1;
 export const MAX_COMMISSION_BPS = 10_000;
+
+/** Siglas das UFs (região da unidade). */
+export const BRAZILIAN_UFS = [
+  'AC',
+  'AL',
+  'AP',
+  'AM',
+  'BA',
+  'CE',
+  'DF',
+  'ES',
+  'GO',
+  'MA',
+  'MT',
+  'MS',
+  'MG',
+  'PA',
+  'PB',
+  'PR',
+  'PE',
+  'PI',
+  'RJ',
+  'RN',
+  'RS',
+  'RO',
+  'RR',
+  'SC',
+  'SP',
+  'SE',
+  'TO',
+] as const;
+export type BrazilianUf = (typeof BRAZILIAN_UFS)[number];
 /** Comissão de cassino do promotor: 0% (sem comissão de cassino) a 100% do GGR. */
 export const MIN_CASINO_COMMISSION_BPS = 0;
 
@@ -256,8 +344,8 @@ export interface AdminTicketListItem {
   /** ISO 8601 do cancelamento pelo jogador (só Loterias); null = válido. */
   canceledAt: string | null;
   /**
-   * Tabela de cotação na venda (ex.: 800/1/8000), como gravada no pule de Loterias. Null na Fazendinha: o pule não
-   * guarda a tabela, só o prêmio de cada número (`possiblePrizeCents` dos itens do detalhe).
+   * Rótulo dos valores da tabela do comprador na venda (ex.: 800/1/8000), como gravado no pule. Null só em pule da Fazendinha
+   * anterior às tabelas nomeadas (o prêmio de cada número está em `possiblePrizeCents` dos itens do detalhe).
    */
   quoteTable: string | null;
   /** Prêmio já pago pela apuração (0 = sem prêmio ou ainda não apurado). */
@@ -293,6 +381,11 @@ export interface AdminTicketDetailItem {
   quoteCents: number | null;
   /** Prêmio possível pela cotação da venda (Fazendinha: o prêmio do número). */
   possiblePrizeCents: number;
+  /**
+   * Milhar Brinde (Loterias): aposta grátis da banca. `stakeCents` é o valor do brinde (base do prêmio), não cobrado e
+   * fora do total do pule. A API sempre envia (false na Fazendinha); opcional só no tipo, para dados antigos de tela.
+   */
+  isGift?: boolean;
   /** WON: prêmio pago; PENDING: o que o resultado já dá e a apuração ainda vai pagar (0 = nada ou sem resultado). */
   prizeCents: number;
   /** Como o do pule, por item: WON/LOST só depois da apuração. */
@@ -392,8 +485,13 @@ export interface AdminPrizeListItem {
   /** Colocação apostada (código, ex.: "p1", "p1_5", "p1_e_1_5") e rótulo do app (ex.: "1 PRÊMIO", "1/5 PRÊMIO"). */
   placement: string | null;
   placementLabel: string | null;
-  /** Valor apostado no item (Loterias: total do item; Fazendinha: o valor do número premiado). */
+  /**
+   * Valor apostado no item (Loterias: total do item; Milhar Brinde: o valor do brinde, não cobrado; Fazendinha: o valor
+   * do número premiado).
+   */
   stakeCents: number;
+  /** Milhar Brinde: aposta grátis da banca (Loterias). A API sempre envia; opcional só no tipo. */
+  isGift?: boolean;
   /** Prêmio do item: o pago (PAID) ou o que a apuração vai pagar pelo resultado atual (PENDING). */
   prizeCents: number;
   /** ISO 8601 da apuração; null enquanto PENDING. */
@@ -558,13 +656,15 @@ export interface AdminGeneralReportRow {
   salesCents: number;
   /** Parte de promotor da comissão creditada no período. */
   commissionCents: number;
+  /** Comissão da unidade (sobre as próprias apostas) creditada no período. Também sai do líquido. */
+  unitCommissionCents: number;
   /** Parte "Indique e ganhe" da comissão creditada no período. */
   referralCommissionCents: number;
   /** Prêmios apurados no período. */
   prizesCents: number;
   /** Créditos e ajustes pelo painel no período (todas as bolsas, inclusive bônus). */
   otherCents: number;
-  /** Vendas − prêmios − comissão − comissão amigo. */
+  /** Vendas − prêmios − comissão − comissão amigo − comissão da unidade. */
   netCents: number;
   /** Líquido − outros. */
   grossNetCents: number;
@@ -852,7 +952,10 @@ export const AUDIT_ACTIONS = [
   'wallet.credit',
   'commission.rate',
   'commission.close',
+  'quote.create',
   'quote.update',
+  'quote.default',
+  'quote.delete',
   'draw.create',
   'draw.update',
   'draw.delete',
@@ -879,6 +982,8 @@ export const AUDIT_ACTIONS = [
   'withdrawal.settings',
   'casino.commission.pay',
   'deposit.bonus.settings',
+  'user.unit',
+  'gift.milhar.settings',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
@@ -925,6 +1030,17 @@ export type AuditDetails = {
   mural?: string;
   /** Gateway de pagamento (ex.: MISTICPAY); nunca as credenciais. */
   gateway?: string;
+  /** Nome da tabela de cotação. */
+  quoteTable?: string;
+  /** Configurações da unidade: cada campo alterado com o valor antes e depois (tabela pelo nome). */
+  changes?: AuditChange[];
+};
+
+/** Um campo alterado (configurações da unidade). Nunca dado pessoal. */
+export type AuditChange = {
+  field: string;
+  from: string | number | boolean | null;
+  to: string | number | boolean | null;
 };
 
 /** GET /v1/admin/audit: mais recentes primeiro; filtros opcionais por ação e por usuário afetado. */

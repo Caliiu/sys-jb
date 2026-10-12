@@ -24,6 +24,8 @@ import {
   SYNTHETIC_PASSWORD,
   tenantId,
   settleAll,
+  defaultQuoteTableId,
+  defaultQuoteTablePath,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -224,6 +226,7 @@ describe('POST /v1/lotteries/tickets', () => {
 
   it('cotação salva no meio da compra: a compra espera o salvamento e recusa com a cotação nova', async () => {
     const { http } = await player(10_000);
+    const tableId = await defaultQuoteTableId(auroraId);
     const manager = await runtimePool.connect();
     try {
       // Gerente salvando a cotação (mesma trava do QuotesService), ainda sem COMMIT.
@@ -231,9 +234,10 @@ describe('POST /v1/lotteries/tickets', () => {
       await manager.query("SELECT set_config('app.tenant_id', $1, true)", [auroraId]);
       await manager.query('SELECT pg_advisory_xact_lock(7201, hashtext($1))', [auroraId]);
       await manager.query(
-        `INSERT INTO traditional_quotes (tenant_id, modality, prize_cents, updated_at) VALUES ($1, 'milhar', 700000, now())
-         ON CONFLICT (tenant_id, modality) DO UPDATE SET prize_cents = EXCLUDED.prize_cents, updated_at = now()`,
-        [auroraId],
+        `INSERT INTO traditional_quotes (tenant_id, quote_table_id, modality, prize_cents, updated_at)
+         VALUES ($1, $2, 'milhar', 700000, now())
+         ON CONFLICT (tenant_id, quote_table_id, modality) DO UPDATE SET prize_cents = EXCLUDED.prize_cents, updated_at = now()`,
+        [auroraId, tableId],
       );
       // O jogador viu 8000 e confirma agora: a compra espera o salvamento terminar.
       // .then() dispara a requisição já (o supertest só envia quando alguém espera por ela).
@@ -259,7 +263,9 @@ describe('POST /v1/lotteries/tickets', () => {
       await buyer.query('SELECT pg_advisory_xact_lock_shared(7201, hashtext($1))', [auroraId]);
       let saved = false;
       const saving = session.http
-        .put('/v1/admin/quotes/tradicional', { quotes: [{ modality: 'milhar', prizeCents: 700_000 }] })
+        .put(`${await defaultQuoteTablePath(auroraId)}/tradicional`, {
+          quotes: [{ modality: 'milhar', prizeCents: 700_000 }],
+        })
         .then((res) => {
           saved = true;
           return res;
@@ -281,7 +287,9 @@ describe('POST /v1/lotteries/tickets', () => {
     const first = await http.post('/v1/lotteries/tickets', payload);
     expect(first.status).toBe(201);
     const session = await loginOperator(app, 'aurora');
-    await session.http.put('/v1/admin/quotes/tradicional', { quotes: [{ modality: 'milhar', prizeCents: 700_000 }] });
+    await session.http.put(`${await defaultQuoteTablePath(auroraId)}/tradicional`, {
+      quotes: [{ modality: 'milhar', prizeCents: 700_000 }],
+    });
 
     // Ex.: a resposta se perdeu na rede e a tela reenviou: a compra já foi feita e debitada.
     const retry = await http.post('/v1/lotteries/tickets', payload);
@@ -339,7 +347,7 @@ describe('POST /v1/lotteries/tickets', () => {
 
   it('cotação alterada ou modalidade desligada: não vende', async () => {
     const session = await loginOperator(app, 'aurora');
-    await session.http.put('/v1/admin/quotes/tradicional', {
+    await session.http.put(`${await defaultQuoteTablePath(auroraId)}/tradicional`, {
       quotes: [
         { modality: 'milhar', prizeCents: 900_000 },
         { modality: 'unidade', prizeCents: 0 },

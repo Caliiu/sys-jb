@@ -79,6 +79,9 @@ function translate(error: unknown): never {
   if (hasSqlState(error, 'SJ001')) {
     throw new AppError(409, 'INSUFFICIENT_FUNDS', 'Saldo de prêmios insuficiente para este saque.');
   }
+  if (hasSqlState(error, 'SJ023')) {
+    throw new AppError(409, 'PRIZES_RETAINED', 'Seus prêmios das loterias estão retidos pela banca.');
+  }
   if (hasSqlState(error, 'SJ013')) {
     throw new AppError(409, 'CONFLICT', 'Este pedido já foi enviado com outros dados. Atualize a página.');
   }
@@ -235,7 +238,7 @@ export class WithdrawalsService implements OnApplicationBootstrap, OnModuleDestr
         }),
         tx.wallet.findFirst({
           where: { tenantId: tenant.id, userId: session.userId },
-          select: { prizesJb: true, prizesGames: true },
+          select: { prizesJb: true, prizesGames: true, user: { select: { retainPrizes: true } } },
         }),
         this.readSettings(tx, tenant.id),
         tx.pixWithdrawal.count({
@@ -250,7 +253,9 @@ export class WithdrawalsService implements OnApplicationBootstrap, OnModuleDestr
       if (!wallet) throw Errors.sessionInvalid();
       return {
         items: rows.map(toPublicWithdrawal),
-        withdrawableCents: Number(wallet.prizesJb + wallet.prizesGames),
+        // Prêmios retidos (unidade): os das loterias ficam fora do sacável (o banco confere de novo no pedido).
+        withdrawableCents: Number(wallet.user.retainPrizes ? wallet.prizesGames : wallet.prizesJb + wallet.prizesGames),
+        retainedPrizesCents: wallet.user.retainPrizes ? Number(wallet.prizesJb) : 0,
         limits: { ...settings, usedToday },
       };
     });
@@ -270,6 +275,7 @@ export class WithdrawalsService implements OnApplicationBootstrap, OnModuleDestr
         };
       });
     } catch (error) {
+      if (hasSqlState(error, 'SJ023')) throw await this.prizesRetained(tenant.id, session.userId);
       translate(error);
     }
     const { withdrawal } = created.result;
@@ -296,6 +302,21 @@ export class WithdrawalsService implements OnApplicationBootstrap, OnModuleDestr
     }
   }
 
+  /** Saque que só caberia com os prêmios das loterias (retidos): diz quanto ainda dá para sacar. */
+  private async prizesRetained(tenantId: string, userId: string): Promise<AppError> {
+    const wallet = await this.db.withTenant(tenantId, (tx) =>
+      tx.wallet.findFirst({ where: { tenantId, userId }, select: { prizesGames: true } }),
+    );
+    const free = Number(wallet?.prizesGames ?? 0n);
+    return new AppError(
+      409,
+      'PRIZES_RETAINED',
+      free > 0
+        ? `Seus prêmios das loterias estão retidos pela banca e não podem ser sacados. Disponível para saque: ${brl.format(free / 100)}.`
+        : 'Seus prêmios das loterias estão retidos pela banca e não podem ser sacados. Fale com o suporte.',
+    );
+  }
+
   private async result(
     tx: TenantTx,
     tenantId: string,
@@ -304,12 +325,12 @@ export class WithdrawalsService implements OnApplicationBootstrap, OnModuleDestr
   ): Promise<{ result: WithdrawalResult; queued: boolean }> {
     const [row, wallet] = await Promise.all([
       tx.pixWithdrawal.findFirst({ where: { tenantId, userId, id: withdrawalId }, select: PUBLIC_SELECT }),
-      tx.wallet.findFirst({ where: { tenantId, userId } }),
+      tx.wallet.findFirst({ where: { tenantId, userId }, include: { user: { select: { retainPrizes: true } } } }),
     ]);
     if (!row) throw withdrawalNotFound();
     if (!wallet) throw Errors.sessionInvalid();
     return {
-      result: { withdrawal: toPublicWithdrawal(row), wallet: toPublicWallet(wallet) },
+      result: { withdrawal: toPublicWithdrawal(row), wallet: toPublicWallet(wallet, wallet.user.retainPrizes) },
       queued: row.status === 'QUEUED',
     };
   }

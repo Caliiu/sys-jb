@@ -61,6 +61,7 @@ model Tenant {
   settings             TenantSettings?
   lotteryTickets       LotteryTicket[]
   lotteryTicketItems   LotteryTicketItem[]
+  quoteTables          QuoteTable[]
   traditionalQuotes    TraditionalQuote[]
   fazendinhaQuotes     FazendinhaQuote[]
   commissionClosings   CommissionClosing[]
@@ -107,6 +108,20 @@ model User {
   casinoCommissionBps   Int        @default(dbgenerated("0")) @map("casino_commission_bps")
   // Promotor que indicou este usuário (pelo link de convite, só no cadastro). Nunca muda depois.
   referredByUserId      String?    @map("referred_by_user_id") @db.Uuid
+  // Configurações da unidade (só operadores alteram). Ver migration quote_tables_unit_settings.
+  // UF da unidade (sigla, ex.: SP). Null = não informada.
+  region                String?
+  // Comissão da unidade sobre as próprias apostas (centésimos de %, 0 a 10000). 0 = sem comissão.
+  unitCommissionBps     Int        @default(dbgenerated("0")) @map("unit_commission_bps")
+  // Tabela de cotação da unidade. Null = vale a tabela padrão da banca.
+  quoteTableId          String?    @map("quote_table_id") @db.Uuid
+  // Milhar brinde ligada para a unidade.
+  giftMilharEnabled     Boolean    @default(dbgenerated("false")) @map("gift_milhar_enabled")
+  // Prêmios retidos (não caem direto no saldo sacável).
+  retainPrizes          Boolean    @default(dbgenerated("false")) @map("retain_prizes")
+  // Limite diário de apostas: ligado exige o valor (centavos).
+  dailyLimitEnabled     Boolean    @default(dbgenerated("false")) @map("daily_limit_enabled")
+  dailyLimitCents       Int?       @map("daily_limit_cents")
   createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -115,6 +130,7 @@ model User {
   sessions           Session[]
   referredBy         User?                    @relation("Referrals", fields: [tenantId, referredByUserId], references: [tenantId, id], onDelete: Restrict)
   referrals          User[]                   @relation("Referrals")
+  quoteTable         QuoteTable?              @relation(fields: [tenantId, quoteTableId], references: [tenantId, id], onDelete: Restrict)
   fazendinhaBets     FazendinhaBet[]
   lotteryTickets     LotteryTicket[]
   walletEntries      WalletEntry[]
@@ -138,6 +154,7 @@ model User {
   @@index([tenantId, createdAt(sort: Desc), id])
   @@index([tenantId, referredByUserId, createdAt(sort: Desc), id])
   @@index([tenantId, promoterCommissionBps])
+  @@index([tenantId, quoteTableId])
   @@map("users")
 }
 
@@ -297,16 +314,19 @@ model FazendinhaBet {
   stakeCents     Int            @map("stake_cents")
   // Prêmio de cada número pela cotação vigente na compra (a cotação pode mudar depois).
   prizeCents     Int            @map("prize_cents")
+  // Rótulo dos valores da tabela de cotação do comprador na compra (centena/1/milhar, ex.: 800/1/8000), como no pule de
+  // Loterias. Null = pule anterior às tabelas nomeadas (ou gravado à mão).
+  quoteTable     String?        @map("quote_table")
   multiplier     Int
   totalCents     BigInt         @map("total_cents")
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user          User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  numbers       FazendinhaBetNumber[]
-  walletEntry   WalletEntry?
-  betCommission BetCommission?
-  settlement    PuleSettlement?
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User                  @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  numbers        FazendinhaBetNumber[]
+  walletEntry    WalletEntry?
+  betCommissions BetCommission[]
+  settlement     PuleSettlement?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, idempotencyKey])
@@ -439,6 +459,12 @@ model TenantSettings {
   bonusFirstEnabled        Boolean  @default(dbgenerated("false")) @map("bonus_first_enabled")
   bonusDailyEnabled        Boolean  @default(dbgenerated("false")) @map("bonus_daily_enabled")
   bonusFederalEnabled      Boolean  @default(dbgenerated("false")) @map("bonus_federal_enabled")
+  // Milhar Brinde (Configurações > Cotação): interruptor da banca, total mínimo do pule, valor do brinde (centavos) e
+  // colocação. Vale para as unidades com users.gift_milhar_enabled. Padrões no banco (dbgenerated), como os de cima.
+  giftMilharEnabled        Boolean  @default(dbgenerated("false")) @map("gift_milhar_enabled")
+  giftMilharMinPuleCents   Int      @default(dbgenerated("1000")) @map("gift_milhar_min_pule_cents")
+  giftMilharStakeCents     Int      @default(dbgenerated("10")) @map("gift_milhar_stake_cents")
+  giftMilharPlacement      String   @default(dbgenerated("'p1'::text")) @map("gift_milhar_placement")
   updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -505,7 +531,7 @@ model CommissionPayout {
 model BetCommission {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId        String    @map("tenant_id") @db.Uuid
-  // Quem recebe (quem indicou o apostador).
+  // Quem recebe: quem indicou o apostador (REFERRER) ou o próprio apostador (UNIT, comissão da unidade).
   userId          String    @map("user_id") @db.Uuid
   bettorId        String    @map("bettor_id") @db.Uuid
   // Exatamente uma das duas apostas.
@@ -514,9 +540,13 @@ model BetCommission {
   wageredCents    BigInt    @map("wagered_cents")
   referralRateBps Int       @map("referral_rate_bps")
   promoterRateBps Int       @map("promoter_rate_bps")
-  // Parte "Indique e ganhe" e parte de promotor; o crédito é a soma.
+  // Parte "Indique e ganhe" e parte de promotor (REFERRER) ou parte de unidade (UNIT); o crédito é a soma.
   referralCents   BigInt    @map("referral_cents")
   promoterCents   BigInt    @map("promoter_cents")
+  // REFERRER (quem indicou) ou UNIT (a própria unidade). No máximo uma de cada por aposta. Ver migration unit_rules.
+  beneficiary     String    @default("REFERRER")
+  unitRateBps     Int       @default(0) @map("unit_rate_bps")
+  unitCents       BigInt    @default(0) @map("unit_cents")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   // Pule cancelado: quando e quanto voltou (pode ser menos que o crédito se quem recebeu já gastou o saldo).
   reversedAt      DateTime? @map("reversed_at") @db.Timestamptz(3)
@@ -534,38 +564,62 @@ model BetCommission {
   walletEntries WalletEntry[]
 
   @@unique([tenantId, id])
-  @@unique([tenantId, lotteryTicketId])
-  @@unique([tenantId, fazendinhaBetId])
+  @@unique([tenantId, lotteryTicketId, beneficiary])
+  @@unique([tenantId, fazendinhaBetId, beneficiary])
   @@index([tenantId, userId, createdAt])
   @@map("bet_commissions")
 }
 
-// Cotação do Tradicional por banca: prêmio para cada R$ 1,00 apostado. Sem linha = vale o padrão
+// Tabela de cotação nomeada da banca. Exatamente uma é a padrão (vale para quem não tem tabela própria); o nome
+// é o que sai no pule (ex.: 800/1/8000). Índices únicos (padrão por banca, nome sem diferenciar maiúsculas) e a
+// trava "sempre uma padrão" ficam na migration quote_tables_unit_settings.
+model QuoteTable {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  traditionalQuotes TraditionalQuote[]
+  fazendinhaQuotes  FazendinhaQuote[]
+  users             User[]
+
+  @@unique([tenantId, id])
+  @@map("quote_tables")
+}
+
+// Cotação do Tradicional por tabela: prêmio para cada R$ 1,00 apostado. Sem linha = vale o padrão
 // (@sysjb/contracts, TRADITIONAL_QUOTE_MODALITIES). 0 = modalidade desligada.
 model TraditionalQuote {
-  tenantId   String   @map("tenant_id") @db.Uuid
-  modality   String
-  prizeCents Int      @map("prize_cents")
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenantId     String   @map("tenant_id") @db.Uuid
+  quoteTableId String   @map("quote_table_id") @db.Uuid
+  modality     String
+  prizeCents   Int      @map("prize_cents")
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  quoteTable QuoteTable @relation(fields: [tenantId, quoteTableId], references: [tenantId, id], onDelete: Cascade)
 
-  @@id([tenantId, modality])
+  @@id([tenantId, quoteTableId, modality])
   @@map("traditional_quotes")
 }
 
-// Cotação da Fazendinha por banca: prêmio de cada número por modalidade e valor de aposta. Sem linha =
+// Cotação da Fazendinha por tabela: prêmio de cada número por modalidade e valor de aposta. Sem linha =
 // padrão (valor × 22/88/880). 0 = valor não oferecido.
 model FazendinhaQuote {
-  tenantId   String         @map("tenant_id") @db.Uuid
-  mode       FazendinhaMode
-  stakeCents Int            @map("stake_cents")
-  prizeCents Int            @map("prize_cents")
-  updatedAt  DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenantId     String         @map("tenant_id") @db.Uuid
+  quoteTableId String         @map("quote_table_id") @db.Uuid
+  mode         FazendinhaMode
+  stakeCents   Int            @map("stake_cents")
+  prizeCents   Int            @map("prize_cents")
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  quoteTable QuoteTable @relation(fields: [tenantId, quoteTableId], references: [tenantId, id], onDelete: Cascade)
 
-  @@id([tenantId, mode, stakeCents])
+  @@id([tenantId, quoteTableId, mode, stakeCents])
   @@map("fazendinha_quotes")
 }
 
@@ -587,7 +641,7 @@ model LotteryTicket {
   // Horário limite da extração (do cadastro de sorteios; o trigger grava o valor do cadastro).
   closesAt    DateTime  @map("closes_at") @db.Timestamptz(3)
   totalCents  BigInt    @map("total_cents")
-  // Nome da tabela de cotação na compra (ex.: 800/1/8000).
+  // Rótulo dos valores da tabela de cotação do comprador na compra (centena/1/milhar, ex.: 800/1/8000), não o nome.
   quoteTable  String    @map("quote_table")
   // Jogo: tradicional (1/7) ou tradicional_10 (1/10). Define colocações e sorteios aceitos; nunca muda.
   game        String    @default("tradicional")
@@ -595,12 +649,12 @@ model LotteryTicket {
   // Cancelado pelo jogador antes do horário limite (função lottery_cancel): aposta devolvida e comissão estornada.
   canceledAt  DateTime? @map("canceled_at") @db.Timestamptz(3)
 
-  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user          User                @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
-  items         LotteryTicketItem[]
-  walletEntries WalletEntry[]
-  betCommission BetCommission?
-  settlement    PuleSettlement?
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User                @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict)
+  items          LotteryTicketItem[]
+  walletEntries  WalletEntry[]
+  betCommissions BetCommission[]
+  settlement     PuleSettlement?
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, purchaseKey, lottery, drawHour])
@@ -626,6 +680,9 @@ model LotteryTicketItem {
   // Só na MILHAR E CENTENA (cuja cotação é a soma das duas): a cotação da centena na venda, que paga quem acerta só ela.
   centenaQuoteCents  Int?     @map("centena_quote_cents")
   possiblePrizeCents BigInt   @map("possible_prize_cents")
+  // Milhar Brinde: aposta grátis da banca (milhar sorteada pelo sistema). total_cents = 0 (não cobrada, fora do total
+  // do pule); amount_cents = valor do brinde, base do prêmio. No máximo um por pule, sempre o último item.
+  isGift             Boolean  @default(false) @map("is_gift")
 
   tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ticket LotteryTicket @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Restrict)

@@ -214,7 +214,10 @@ export class DepositsService implements OnApplicationBootstrap, OnModuleDestroy 
       const paid = current.status === 'PAID';
       const [wallet, bonus] = paid
         ? await Promise.all([
-            tx.wallet.findFirst({ where: { tenantId: tenant.id, userId: session.userId } }),
+            tx.wallet.findFirst({
+              where: { tenantId: tenant.id, userId: session.userId },
+              include: { user: { select: { retainPrizes: true } } },
+            }),
             tx.depositBonus.findFirst({
               where: { tenantId: tenant.id, pixDepositId: depositId },
               select: { amountCents: true },
@@ -223,7 +226,7 @@ export class DepositsService implements OnApplicationBootstrap, OnModuleDestroy 
         : [null, null];
       return {
         deposit: toPublicDeposit(current),
-        wallet: wallet ? toPublicWallet(wallet) : null,
+        wallet: wallet ? toPublicWallet(wallet, wallet.user.retainPrizes) : null,
         bonusCents: bonus ? Number(bonus.amountCents) : 0,
       };
     });

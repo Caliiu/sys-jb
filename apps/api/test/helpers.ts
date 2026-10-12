@@ -67,7 +67,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
 }
 
 export async function startApp(overrides: Partial<AppConfig> = {}): Promise<INestApplication> {
-  const app = await createApp(testConfig(overrides), false);
+  const app = await createApp(testConfig(overrides), ['error']);
   // Porta efêmera: o supertest reutiliza o servidor em vez de abrir um por requisição.
   await app.listen(0, '127.0.0.1');
   return app;
@@ -157,9 +157,30 @@ export async function tenantId(slug: TenantSlug): Promise<string> {
  */
 export async function resetUsers(): Promise<void> {
   await migratorPool.query(
-    'TRUNCATE deposit_bonuses, casino_commission_payouts, pix_withdrawals, pix_deposits, payment_gateways, casino_transactions, casino_games, pule_settlements, pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
+    'TRUNCATE deposit_bonuses, casino_commission_payouts, pix_withdrawals, pix_deposits, payment_gateways, casino_transactions, casino_games, pule_settlements, pule_prizes, push_subscriptions,overdue_snapshots,horoscope_readings,result_consultations, lottery_result_revisions, lottery_results, rate_limit_counters, mural_views, murals, draw_exceptions, draws, lottery_ticket_items, lottery_tickets, traditional_quotes, fazendinha_quotes, quote_tables, wallet_entries, bet_commissions, commission_payouts, commission_closings, tenant_settings, fazendinha_bet_numbers, fazendinha_bets, audit_logs, operator_sessions, operators, operator_login_failures, sessions, login_failures, wallets, users',
   );
   await migratorPool.query('SELECT draws_seed_defaults(id) FROM tenants');
+}
+
+/**
+ * Id da tabela de cotação padrão da banca. Banca sem tabela gravada (o reset apaga todas) ganha a padrão, como o
+ * painel faz ao abrir as tabelas.
+ */
+export async function defaultQuoteTableId(id: string): Promise<string> {
+  return asTenant(migratorPool, id, async (c) => {
+    await c.query(
+      `INSERT INTO quote_tables (tenant_id, name, is_default)
+       SELECT $1, '800/1/8000', true WHERE NOT EXISTS (SELECT 1 FROM quote_tables WHERE tenant_id = $1)`,
+      [id],
+    );
+    const row = await c.query('SELECT id FROM quote_tables WHERE tenant_id = $1 AND is_default', [id]);
+    return row.rows[0].id as string;
+  });
+}
+
+/** Rota do painel da tabela de cotação padrão da banca (ex.: `${path}/tradicional`). */
+export async function defaultQuoteTablePath(id: string): Promise<string> {
+  return `/v1/admin/quote-tables/${await defaultQuoteTableId(id)}`;
 }
 
 /** Consulta como dona das tabelas, mas com contexto de banca (FORCE RLS também se aplica a ela). */

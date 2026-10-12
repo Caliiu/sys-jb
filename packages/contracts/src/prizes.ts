@@ -6,7 +6,7 @@
 
 import { FAZENDINHA_MODE_CODES } from './quotes.js';
 import type { FazendinhaModeId } from './fazendinha.js';
-import { findLotteryModality, findLotteryPlacement } from './lotteries.js';
+import { findLotteryModality, findLotteryPlacement, GIFT_MILHAR_LABEL } from './lotteries.js';
 import { isReportDate, reportDates } from './reports.js';
 
 /** Dias para trás (além de hoje) que a consulta aceita: a tela lista hoje e os 7 anteriores. */
@@ -40,9 +40,9 @@ export interface PrizesReport {
   totalPrizeCents: number;
 }
 
-/** Item premiado de Loterias como no comprovante: "MILHAR 1 PRÊMIO". */
-export function lotteryPrizeLabel(modality: string, placement: string): string {
-  const m = findLotteryModality(modality)?.label ?? modality.toUpperCase();
+/** Item premiado de Loterias como no comprovante: "MILHAR 1 PRÊMIO" (Milhar Brinde: "MILHAR BRINDE 1 PRÊMIO"). */
+export function lotteryPrizeLabel(modality: string, placement: string, isGift = false): string {
+  const m = isGift ? GIFT_MILHAR_LABEL : (findLotteryModality(modality)?.label ?? modality.toUpperCase());
   const p = findLotteryPlacement(placement)?.label ?? placement;
   return `${m} ${p}`;
 }

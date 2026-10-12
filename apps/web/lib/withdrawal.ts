@@ -41,6 +41,8 @@ export interface WithdrawalSummary {
   available: number;
   /** Saldo de recarga (depósitos), só para apostar: nunca entra no disponível para resgate. Informativo. */
   recharge: number;
+  /** Prêmios retidos pela banca (unidade): continuam valendo para apostar, mas não saem em saque. 0 = nada retido. */
+  retained: number;
 }
 
 /** Resumo do saldo da tela de saque: só prêmios podem ser resgatados (das loterias e do cassino). */
@@ -50,6 +52,8 @@ export function withdrawalSummary(wallet: PublicWallet): WithdrawalSummary {
     casino: wallet.prizesGames,
     available: wallet.withdrawable,
     recharge: wallet.balanceJb + wallet.balanceGames,
+    // O servidor já manda o sacável sem os prêmios retidos: a diferença é o que está retido.
+    retained: Math.max(0, wallet.prizesJb + wallet.prizesGames - wallet.withdrawable),
   };
 }
 

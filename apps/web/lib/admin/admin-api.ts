@@ -1,6 +1,7 @@
 import 'server-only';
 import type {
   AdminAuditEntry,
+  AdminGiftMilharSettings,
   AdminOperator,
   OperatorPasswordResponse,
   SaveOperatorRequest,
@@ -42,13 +43,17 @@ import type {
   AdminWalletCreditRequest,
   CreateDrawExceptionRequest,
   Page,
-  PublicQuotes,
+  AdminQuoteTable,
+  AdminQuoteTableSummary,
+  CreateQuoteTableRequest,
+  RenameQuoteTableRequest,
   SaveDrawRequest,
   SaveBrandingRequest,
   SaveMuralRequest,
   SetPromoterRequest,
   SetFazendinhaQuotesRequest,
   SetTraditionalQuotesRequest,
+  UpdateUnitSettingsRequest,
 } from '@sysjb/contracts';
 import { apiRequest, apiRequestImage } from '../api-client';
 import type { AdminSession } from './admin-context';
@@ -198,6 +203,10 @@ export const adminApi = {
   updateUser: (session: Caller, id: string, patch: Record<string, unknown>) =>
     call<AdminUserDetail>(session, 'PATCH', `/v1/admin/users/${encodeURIComponent(id)}`, patch),
 
+  /** Configurações da unidade (`units.manage`): só os campos enviados mudam. */
+  updateUnitSettings: (session: Caller, id: string, body: UpdateUnitSettingsRequest) =>
+    call<AdminUserDetail>(session, 'PATCH', `/v1/admin/users/${encodeURIComponent(id)}/settings`, body),
+
   listOperators: (session: Caller) => call<AdminOperator[]>(session, 'GET', '/v1/admin/operators'),
 
   createOperator: (session: Caller, body: SaveOperatorRequest) =>
@@ -230,13 +239,35 @@ export const adminApi = {
   setCommissionSettings: (session: Caller, referralCommissionBps: number) =>
     call<AdminCommissionSettings>(session, 'PUT', '/v1/admin/commissions/settings', { referralCommissionBps }),
 
-  getQuotes: (session: Caller) => call<PublicQuotes>(session, 'GET', '/v1/admin/quotes'),
+  listQuoteTables: (session: Caller) => call<AdminQuoteTableSummary[]>(session, 'GET', '/v1/admin/quote-tables'),
 
-  setTraditionalQuotes: (session: Caller, body: SetTraditionalQuotesRequest) =>
-    call<PublicQuotes>(session, 'PUT', '/v1/admin/quotes/tradicional', body),
+  getQuoteTable: (session: Caller, id: string) =>
+    call<AdminQuoteTable>(session, 'GET', `/v1/admin/quote-tables/${encodeURIComponent(id)}`),
 
-  setFazendinhaQuotes: (session: Caller, body: SetFazendinhaQuotesRequest) =>
-    call<PublicQuotes>(session, 'PUT', '/v1/admin/quotes/fazendinha', body),
+  createQuoteTable: (session: Caller, body: CreateQuoteTableRequest) =>
+    call<AdminQuoteTable>(session, 'POST', '/v1/admin/quote-tables', body),
+
+  renameQuoteTable: (session: Caller, id: string, body: RenameQuoteTableRequest) =>
+    call<AdminQuoteTable>(session, 'PATCH', `/v1/admin/quote-tables/${encodeURIComponent(id)}`, body),
+
+  setDefaultQuoteTable: (session: Caller, id: string) =>
+    call<AdminQuoteTable>(session, 'POST', `/v1/admin/quote-tables/${encodeURIComponent(id)}/default`),
+
+  deleteQuoteTable: (session: Caller, id: string) =>
+    call<null>(session, 'DELETE', `/v1/admin/quote-tables/${encodeURIComponent(id)}`),
+
+  setTraditionalQuotes: (session: Caller, id: string, body: SetTraditionalQuotesRequest) =>
+    call<AdminQuoteTable>(session, 'PUT', `/v1/admin/quote-tables/${encodeURIComponent(id)}/tradicional`, body),
+
+  setFazendinhaQuotes: (session: Caller, id: string, body: SetFazendinhaQuotesRequest) =>
+    call<AdminQuoteTable>(session, 'PUT', `/v1/admin/quote-tables/${encodeURIComponent(id)}/fazendinha`, body),
+
+  /** Milhar Brinde da banca (quotes.read para ler; quotes.manage para gravar). */
+  getGiftMilharSettings: (session: Caller) =>
+    call<AdminGiftMilharSettings>(session, 'GET', '/v1/admin/quote-tables/gift-milhar'),
+
+  saveGiftMilharSettings: (session: Caller, body: AdminGiftMilharSettings) =>
+    call<AdminGiftMilharSettings>(session, 'PUT', '/v1/admin/quote-tables/gift-milhar', body),
 
   listDraws: (session: Caller) => call<AdminDrawsResponse>(session, 'GET', '/v1/admin/draws'),
 

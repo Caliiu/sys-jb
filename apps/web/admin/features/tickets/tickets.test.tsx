@@ -1,7 +1,7 @@
 import type { AdminTicketDetail, AdminTicketList, AdminTicketListItem } from '@sysjb/contracts';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseTicketsQuery } from '@/lib/admin/tickets-query';
 import type { TicketDetailState } from './components/ticket-detail-sheet';
 import type { TicketsResult } from './index';
@@ -496,6 +496,15 @@ describe('Pules Registradas: detalhe', () => {
 });
 
 describe('Pules Registradas: página do servidor', () => {
+  // A página lê o relógio do servidor; congela Date (só ele) para "hoje" não depender do dia em que roda.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const searchParams = (raw: Record<string, string>) => Promise.resolve(raw);
   const options = () => {
     api.listPromoterOptions.mockResolvedValue({ ok: true, data: [PROMOTER] });

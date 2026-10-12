@@ -136,7 +136,12 @@ describe('GET /v1/admin/tickets', () => {
       prizeCents: 0,
       status: 'PENDING',
     });
-    expect(page.items[0]).toMatchObject({ game: 'fazendinha', quoteTable: null, prizeCents: 0, status: 'PENDING' });
+    expect(page.items[0]).toMatchObject({
+      game: 'fazendinha',
+      quoteTable: defaultQuotes().tableLabel,
+      prizeCents: 0,
+      status: 'PENDING',
+    });
     expect(page.totalCents).toBe(page.items.reduce((sum, i) => sum + i.totalCents, 0));
     expect(JSON.stringify(page)).not.toMatch(/document|phone|guesses|tenantId/);
   });
@@ -354,6 +359,7 @@ describe('situação, prêmio e detalhe (GET /v1/admin/tickets/:game/:number)', 
         stakeCents: 100,
         quoteCents: lotteryQuoteCents(findLotteryModality('milhar')!, defaultQuotes()),
         possiblePrizeCents: 800_000,
+        isGift: false,
         prizeCents: 0,
         status: 'PENDING',
       },
@@ -381,7 +387,11 @@ describe('situação, prêmio e detalhe (GET /v1/admin/tickets/:game/:number)', 
     expect(byNumber[`lotteries:${loser}`]).toMatchObject({ status: 'LOST', prizeCents: 0 });
     expect(byNumber[`lotteries:${canceled}`]).toMatchObject({ status: 'CANCELED', prizeCents: 0 });
     const groupPrize = fazendinhaPrizeFrom(defaultQuotes(), 'grupo', 100);
-    expect(byNumber[`fazendinha:${bet}`]).toMatchObject({ status: 'WON', prizeCents: groupPrize, quoteTable: null });
+    expect(byNumber[`fazendinha:${bet}`]).toMatchObject({
+      status: 'WON',
+      prizeCents: groupPrize,
+      quoteTable: defaultQuotes().tableLabel,
+    });
     expect((await session.http.get(`/v1/admin/tickets/${winner}`)).body[0]).toMatchObject({ status: 'WON' });
 
     const paid = await detail(session, 'lotteries', winner);
@@ -406,7 +416,12 @@ describe('situação, prêmio e detalhe (GET /v1/admin/tickets/:game/:number)', 
     });
 
     const farm = await detail(session, 'fazendinha', bet);
-    expect(farm).toMatchObject({ game: 'fazendinha', status: 'WON', quoteTable: null, lotteryGame: null });
+    expect(farm).toMatchObject({
+      game: 'fazendinha',
+      status: 'WON',
+      quoteTable: defaultQuotes().tableLabel,
+      lotteryGame: null,
+    });
     expect(farm.items).toEqual([
       {
         position: 1,
@@ -418,6 +433,7 @@ describe('situação, prêmio e detalhe (GET /v1/admin/tickets/:game/:number)', 
         stakeCents: 100,
         quoteCents: null,
         possiblePrizeCents: groupPrize,
+        isGift: false,
         prizeCents: 0,
         status: 'LOST',
       },

@@ -1,7 +1,7 @@
 import type { AdminPrizeList, AdminPrizeListItem } from '@sysjb/contracts';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parsePrizesQuery } from '@/lib/admin/prizes-query';
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() };
@@ -317,6 +317,15 @@ describe('Pules Premiadas: paginação', () => {
 });
 
 describe('Pules Premiadas: página do servidor', () => {
+  // A página lê o relógio do servidor; congela Date (só ele) para "hoje" não depender do dia em que roda.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const searchParams = (raw: Record<string, string>) => Promise.resolve(raw);
 
   it('sem tickets.read: 403 do template, sem consultar a API', async () => {

@@ -11,6 +11,7 @@ import {
   findLotteryModality,
   findLotteryPlacement,
   formatGuess,
+  GIFT_MILHAR_LABEL,
   resultFullPrizes,
   SettlementRuleError,
   settleFazendinhaBet,
@@ -41,6 +42,7 @@ interface PrizeRow {
   user_id: string;
   display_id: number;
   name: string;
+  is_gift: boolean;
 }
 
 /** Aposta premiada ainda não apurada, calculada aqui; vai para a consulta como JSON (jsonb_to_recordset). */
@@ -58,6 +60,7 @@ interface PendingBet {
   prize_cents: number;
   user_id: string;
   position: number;
+  is_gift: boolean;
 }
 
 /** Pule não apurado cujo sorteio já tem resultado, com o resultado (como na apuração). */
@@ -119,11 +122,12 @@ const toItem = (row: PrizeRow): AdminPrizeListItem => ({
   lottery: row.lottery,
   drawCode: row.draw_code,
   modality: row.modality,
-  modalityLabel: row.modality === null ? null : modalityLabel(row.game, row.modality),
+  modalityLabel: row.modality === null ? null : row.is_gift ? GIFT_MILHAR_LABEL : modalityLabel(row.game, row.modality),
   guess: row.guesses === null ? null : guessText(row.game, row.modality, row.guesses),
   placement: row.placement,
   placementLabel: row.placement === null ? null : (findLotteryPlacement(row.placement)?.label ?? row.placement),
   stakeCents: Number(row.stake_cents),
+  isGift: row.is_gift,
   prizeCents: Number(row.prize_cents),
   settledAt: row.settled_at?.toISOString() ?? null,
   player: player(row),
@@ -293,9 +297,11 @@ export class PrizesAdminService {
                COALESCE(i."modality", lower(b."mode"::text)) AS modality,
                COALESCE(i."placement", CASE WHEN b."id" IS NOT NULL THEN 'p1' END) AS placement,
                e.value -> 'guesses' AS guesses,
-               COALESCE(i."total_cents", b."stake_cents"::bigint, p."stake_cents") AS stake_cents,
+               COALESCE(CASE WHEN i."is_gift" THEN i."amount_cents" ELSE i."total_cents" END, b."stake_cents"::bigint,
+                        p."stake_cents") AS stake_cents,
                COALESCE((e.value ->> 'prizeCents')::bigint, p."prize_cents") AS prize_cents,
-               p."settled_at", p."user_id", COALESCE((e.value ->> 'position')::integer, 0) AS position
+               p."settled_at", p."user_id", COALESCE((e.value ->> 'position')::integer, 0) AS position,
+               COALESCE(i."is_gift", false) AS is_gift
         FROM "pule_prizes" p
         LEFT JOIN "pule_settlements" s
           ON s."tenant_id" = p."tenant_id" AND s."game" = p."game" AND s."pule_number" = p."pule_number"
@@ -311,11 +317,11 @@ export class PrizesAdminService {
       const waiting = Prisma.sql`
         SELECT x."id", 'PENDING' AS status, x."game", x."pule_number", x."draw_date", x."lottery", x."draw_code",
                x."modality", x."placement", x."guesses", x."stake_cents", x."prize_cents", NULL::timestamptz AS settled_at,
-               x."user_id", x."position"
+               x."user_id", x."position", x."is_gift"
         FROM jsonb_to_recordset(${JSON.stringify(pendingBets)}::jsonb) AS x(
           "id" text, "game" text, "pule_number" integer, "draw_date" date, "lottery" text, "draw_code" text,
           "modality" text, "placement" text, "guesses" jsonb, "stake_cents" bigint, "prize_cents" bigint,
-          "user_id" uuid, "position" integer)`;
+          "user_id" uuid, "position" integer, "is_gift" boolean)`;
       const rows = Prisma.sql`
         SELECT * FROM (${paid} UNION ALL ${waiting}) bets
         WHERE true
@@ -330,7 +336,7 @@ export class PrizesAdminService {
       const page = await tx.$queryRaw<PrizeRow[]>`
         SELECT r."id", r."status", r."game", r."pule_number", r."draw_date", r."lottery", r."draw_code", r."modality",
                r."placement", r."guesses", r."stake_cents", r."prize_cents", r."settled_at", r."user_id",
-               u."display_id", u."name"
+               r."is_gift", u."display_id", u."name"
         FROM (${rows}) r
         JOIN "users" u ON u."tenant_id" = ${tenant.id}::uuid AND u."id" = r."user_id"
         ORDER BY r."prize_cents" DESC, r."draw_date" DESC, r."game", r."pule_number" DESC, r."position", r."id"
@@ -440,9 +446,10 @@ async function pendingBetsOf(
         modality: item.modality,
         placement: item.placement,
         guesses: prize.guesses,
-        stake_cents: Number(item.totalCents),
+        stake_cents: Number(item.isGift ? item.amountCents : item.totalCents),
         prize_cents: prize.prizeCents,
         position: prize.position,
+        is_gift: item.isGift,
       });
     }
   }
@@ -468,6 +475,7 @@ async function pendingBetsOf(
       stake_cents: bet.stakeCents,
       prize_cents: prize.prizeCents,
       position: 1,
+      is_gift: false,
     });
   }
   return won;

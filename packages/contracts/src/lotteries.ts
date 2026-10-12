@@ -451,6 +451,11 @@ export interface PublicLotteryItem {
   totalCents: Cents;
   quoteCents: number;
   possiblePrizeCents: Cents;
+  /**
+   * Milhar Brinde: aposta grátis da banca (milhar sorteada pelo sistema). `amountCents` é o valor do brinde (base do
+   * prêmio) e `totalCents` é 0: não entra no total do pule nem foi cobrada.
+   */
+  isGift: boolean;
 }
 
 /** Pule de uma extração. */
@@ -462,7 +467,7 @@ export interface PublicLotteryTicket {
   hour: number;
   items: PublicLotteryItem[];
   totalCents: Cents;
-  /** Nome da tabela de cotação na compra (ex.: 800/1/8000). */
+  /** Rótulo dos valores da tabela de cotação do comprador na compra (centena/1/milhar, ex.: 800/1/8000). */
   quoteTable: string;
   /** ISO 8601. */
   createdAt: string;
@@ -476,3 +481,53 @@ export interface PlaceLotteryTicketsResponse {
   totalCents: Cents;
   wallet: PublicWallet;
 }
+
+// ---------------------------------------------------------------------------
+// Milhar Brinde
+// ---------------------------------------------------------------------------
+
+/**
+ * Milhar Brinde: com a regra ligada na banca e na unidade (users.gift_milhar_enabled), cada pule de Loterias cujo total
+ * chega ao mínimo da banca ganha UMA aposta grátis de MILHAR: número de 4 dígitos sorteado pelo sistema, na extração do
+ * pule, na colocação da banca, com o valor do brinde como base do prêmio (cotação da milhar da tabela do comprador). Não
+ * é cobrada, não gera comissão, não conta no limite diário nem nas vendas; é paga na apuração como uma milhar comum e
+ * cancelada junto com o pule. Fazendinha não tem brinde.
+ */
+export interface GiftMilharSettings {
+  /** Interruptor da banca (desligado: ninguém ganha, nem a unidade com o brinde ligado). */
+  enabled: boolean;
+  /** Total mínimo do pule (centavos) para ganhar o brinde. */
+  minPuleCents: Cents;
+  /** Valor do brinde (centavos): o prêmio é este valor × a cotação da milhar. */
+  stakeCents: Cents;
+  /** Colocação do brinde (id; padrão p1 = 1º prêmio). Só as que valem nos dois jogos. */
+  placement: string;
+}
+
+/** Padrões (banca sem configuração gravada): desligado, R$ 10,00 de mínimo, R$ 0,10 de brinde, 1º prêmio. */
+export const GIFT_MILHAR_DEFAULTS: GiftMilharSettings = {
+  enabled: false,
+  minPuleCents: 1000,
+  stakeCents: 10,
+  placement: 'p1',
+};
+
+/** Limites da configuração (o banco confere os mesmos). */
+export const GIFT_MILHAR_LIMITS = {
+  /** Mínimo do pule: de R$ 0,01 a R$ 100.000,00. */
+  maxMinPuleCents: 10_000_000,
+  /** Valor do brinde: de R$ 0,01 a R$ 100,00. */
+  maxStakeCents: 10_000,
+} as const;
+
+/** Colocações aceitas no brinde: as da Tradicional 1/7, que também valem na 1/10 (o brinde sai nos dois jogos). */
+export const GIFT_MILHAR_PLACEMENTS: readonly string[] = LOTTERY_GAME_PLACEMENTS.tradicional;
+
+/** Modalidade do brinde (sempre a milhar comum). */
+export const GIFT_MILHAR_MODALITY = 'milhar';
+
+/** Rótulo no comprovante: "MILHAR BRINDE". */
+export const GIFT_MILHAR_LABEL = 'MILHAR BRINDE';
+
+/** GET/PUT /v1/admin/quote-tables/gift-milhar */
+export type AdminGiftMilharSettings = GiftMilharSettings;

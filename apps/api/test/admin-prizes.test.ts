@@ -147,6 +147,7 @@ describe('GET /v1/admin/prizes', () => {
       placement: null,
       placementLabel: null,
       stakeCents: 200,
+      isGift: false,
       prizeCents: 50_000,
       settledAt: expect.any(String),
       player: { id: player.id, displayId: player.displayId, name: player.name },

@@ -4,6 +4,7 @@ import {
   ADMIN_PRIZES_MAX_DAYS,
   AUDIT_ACTIONS,
   AUDIT_PERIODS,
+  BRAZILIAN_UFS,
   casinoClosingMonths,
   dayOffsetOf,
   DRAW_MAX_DAY_OFFSET,
@@ -12,10 +13,14 @@ import {
   OPERATION_SUMMARY_MAX_DAYS,
   FAZENDINHA_MODE_IDS,
   FAZENDINHA_STAKES_CENTS,
+  GIFT_MILHAR_LIMITS,
+  GIFT_MILHAR_PLACEMENTS,
   MAX_QUOTE_PRIZE_CENTS,
+  QUOTE_TABLE_NAME_MAX,
   TRADITIONAL_QUOTE_MODALITIES,
   type TraditionalQuoteModality,
   MAX_COMMISSION_BPS,
+  MAX_DAILY_LIMIT_CENTS,
   MAX_WALLET_CREDIT_CENTS,
   MIN_CASINO_COMMISSION_BPS,
   MIN_COMMISSION_BPS,
@@ -85,6 +90,35 @@ export const setPromoterSchema = z.strictObject({
 
 export const setUserStatusSchema = z.strictObject({ status: z.enum(USER_STATUSES) });
 
+/**
+ * Configurações da unidade: só os campos enviados mudam (pelo menos um). Ligar o limite diário sem limite gravado é
+ * conferido no serviço (depende do que já está gravado).
+ */
+export const updateUnitSettingsSchema = z
+  .strictObject({
+    region: z.enum(BRAZILIAN_UFS, { error: 'UF inválida.' }).nullable().optional(),
+    unitCommissionBps: z
+      .number({ error: 'Informe a comissão da unidade.' })
+      .int('A comissão deve ser um inteiro (centésimos de %).')
+      .min(0, 'A comissão não pode ser negativa.')
+      .max(MAX_COMMISSION_BPS, 'A comissão máxima é 100%.')
+      .optional(),
+    quoteTableId: z.uuid({ error: 'Tabela de cotação inválida.' }).nullable().optional(),
+    giftMilharEnabled: z.boolean({ error: 'Valor inválido.' }).optional(),
+    retainPrizes: z.boolean({ error: 'Valor inválido.' }).optional(),
+    dailyLimitEnabled: z.boolean({ error: 'Valor inválido.' }).optional(),
+    dailyLimitCents: z
+      .number({ error: 'Informe o limite diário.' })
+      .int('O limite deve ser em centavos.')
+      .min(1, 'O limite diário deve ser maior que zero.')
+      .max(MAX_DAILY_LIMIT_CENTS, 'O limite diário máximo é R$ 1.000.000,00.')
+      .nullable()
+      .optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined), {
+    error: 'Informe pelo menos uma configuração.',
+  });
+
 /** Crédito de carteira pelo painel: bolsa, valor em centavos (até R$ 100.000,00), motivo e chave anti-repetição. */
 export const walletCreditSchema = z.strictObject({
   idempotencyKey: z.uuid({ error: 'Chave inválida.' }),
@@ -116,6 +150,25 @@ const prizeCents = z
   .min(0, 'O prêmio não pode ser negativo.')
   .max(MAX_QUOTE_PRIZE_CENTS, 'O prêmio máximo é R$ 1.000.000,00.');
 
+/** Id da tabela de cotação na URL. */
+export const quoteTableIdSchema = z.uuid('Id inválido.');
+
+/** Nome da tabela de cotação: espaços das pontas removidos, 1 a 40 caracteres. A unicidade o serviço confere. */
+const quoteTableName = z
+  .string({ error: 'Informe o nome da tabela.' })
+  .trim()
+  .min(1, 'Informe o nome da tabela.')
+  .max(QUOTE_TABLE_NAME_MAX, `O nome tem no máximo ${QUOTE_TABLE_NAME_MAX} caracteres.`);
+
+/** Nova tabela de cotação: nome e, opcional, a tabela da banca de onde copiar os prêmios. */
+export const createQuoteTableSchema = z.strictObject({
+  name: quoteTableName,
+  copyFromId: z.uuid('Tabela de origem inválida.').nullish(),
+});
+
+/** Renomear tabela de cotação. */
+export const renameQuoteTableSchema = z.strictObject({ name: quoteTableName });
+
 /** Itens alterados do Tradicional: ao menos um; o serviço recusa modalidade repetida. */
 export const setTraditionalQuotesSchema = z.strictObject({
   quotes: z
@@ -130,6 +183,28 @@ export const setTraditionalQuotesSchema = z.strictObject({
     .min(1, 'Nenhuma alteração.')
     .max(TRADITIONAL_QUOTE_MODALITIES.length),
 });
+
+/**
+ * Milhar Brinde da banca: a configuração inteira. Mínimo do pule de R$ 0,01 a R$ 100.000,00, brinde de R$ 0,01 a
+ * R$ 100,00 (centavos) e uma colocação que vale nos dois jogos.
+ */
+export const setGiftMilharSchema = z.strictObject({
+  enabled: z.boolean({ error: 'Informe se o brinde está ligado.' }),
+  minPuleCents: z
+    .number({ error: 'Informe o valor mínimo do pule.' })
+    .int('O valor deve ser em centavos.')
+    .min(1, 'O valor mínimo é R$ 0,01.')
+    .max(GIFT_MILHAR_LIMITS.maxMinPuleCents, 'O valor máximo é R$ 100.000,00.'),
+  stakeCents: z
+    .number({ error: 'Informe o valor do brinde.' })
+    .int('O valor deve ser em centavos.')
+    .min(1, 'O valor mínimo é R$ 0,01.')
+    .max(GIFT_MILHAR_LIMITS.maxStakeCents, 'O valor máximo é R$ 100,00.'),
+  placement: z
+    .string({ error: 'Informe a colocação.' })
+    .refine((v) => GIFT_MILHAR_PLACEMENTS.includes(v), 'Colocação inválida.'),
+});
+export type SetGiftMilharInput = z.output<typeof setGiftMilharSchema>;
 
 /** Itens alterados da Fazendinha: ao menos um; o serviço recusa item repetido. */
 export const setFazendinhaQuotesSchema = z.strictObject({
@@ -348,9 +423,12 @@ export type ListPromotersQuery = z.output<typeof listPromotersQuerySchema>;
 export type ReferralsQuery = z.output<typeof referralsQuerySchema>;
 export type SetPromoterInput = z.output<typeof setPromoterSchema>;
 export type SetUserStatusInput = z.output<typeof setUserStatusSchema>;
+export type UpdateUnitSettingsInput = z.output<typeof updateUnitSettingsSchema>;
 export type ListAuditQuery = z.output<typeof listAuditQuerySchema>;
 export type ListTicketsQuery = z.output<typeof listTicketsQuerySchema>;
 export type WalletCreditInput = z.output<typeof walletCreditSchema>;
 export type SetCommissionSettingsInput = z.output<typeof setCommissionSettingsSchema>;
 export type SetTraditionalQuotesInput = z.output<typeof setTraditionalQuotesSchema>;
 export type SetFazendinhaQuotesInput = z.output<typeof setFazendinhaQuotesSchema>;
+export type CreateQuoteTableInput = z.output<typeof createQuoteTableSchema>;
+export type RenameQuoteTableInput = z.output<typeof renameQuoteTableSchema>;

@@ -1,0 +1,62 @@
+O pixel (código de rastreamento) para o nicho black funciona tecnicamente da mesma forma que em qualquer outro nicho: ele coleta dados, rastreia o comportamento do usuário e otimiza campanhas. No entanto, a sua estratégia de implementação muda drasticamente para evitar bloqueios de contas e a perda de dados valiosos.
+Abaixo, entenda como funciona a dinâmica e a estrutura do pixel nesse mercado:
+
+1. Rastreamento por API de Conversão (Server-Side)
+
+Como as páginas do nicho black sofrem quedas constantes de contas de anúncios (os chamados "bloqueios"), depender apenas do pixel instalado no navegador (via cookies) é arriscado.
+• Como funciona: Utiliza-se a API de Conversão para enviar os dados de compra, início de checkout e leads direto do servidor da sua página (ou da plataforma de pagamento, como Kiwify, Perfect Pay, etc.) para a plataforma de anúncios.
+• Vantagem: Se a sua conta de anúncios cair, os dados de conversão continuam salvos e integrados de forma mais segura.
+
+2. O Pixel na Estrutura de "Contingência"
+
+No nicho black, quem anuncia sabe que as contas de anúncios vão cair mais cedo ou mais tarde. Por isso, usa-se uma estrutura de Pixel Centralizador (ou Pixel Matriz).
+• Pixel Matriz: Fica guardado em um Perfil de Business Manager (BM) totalmente isolado, que não roda anúncios (BM de segurança).
+• Compartilhamento: Esse pixel matriz é compartilhado com as contas de anúncios que vão efetivamente rodar as campanhas ("contas de anúncio descartáveis").
+• O que acontece no bloqueio: Se a conta que está anunciando for bloqueada pela plataforma, a inteligência do pixel não é perdida. Você apenas cria uma nova conta de anúncios e compartilha o mesmo pixel matriz com ela.
+
+3. Integração com Cloakers
+
+Para conseguir anunciar produtos restritos, muitos anunciantes usam ferramentas chamadas cloakers (camufladores de página).
+• Como funciona: O cloaker identifica quem está acessando a página. Se for o robô de análise do Facebook/Google, ele mostra uma "página branca" (uma página limpa, de acordo com as regras). Se for um comprador real, ele direciona para a página de vendas real (página black).
+• Onde entra o pixel: O pixel de rastreamento precisa ser configurado de forma inteligente dentro do cloaker para disparar o evento de visualização de página (PageVerify ou PageView) apenas para os usuários reais, evitando que os robôs da plataforma identifiquem a atividade suspeita.
+
+4. Coleta de Dados para Públicos Semelhantes (Lookalike)
+
+O maior valor do pixel no nicho black é acumular dados de compradores rapidamente.
+• Assim que o pixel acumula uma quantidade relevante de eventos de compra (geralmente acima de 100 a 500 conversões), o anunciante cria um Público Semelhante (Lookalike).
+• Mesmo mudando de conta de anúncio constantemente devido aos bloqueios, o anunciante usa a inteligência desse pixel matriz para direcionar as novas campanhas diretamente para pessoas com o mesmo perfil dos compradores anteriores, acelerando as vendas antes de um novo bloqueio.
+
+
+
+
+
+
+
+============================================================================================================================================================================================================================================================
+
+
+
+
+
+
+Você é um Engenheiro de Tráfego Sênior, Arquiteto de Dados e especialista em Operações de iGaming (Nicho Black/Apostas). Seu objetivo é desenhar a arquitetura técnica completa de rastreamento para uma operação de apostas que rodará tráfego simultâneo no Facebook Ads, Instagram Ads, Google Ads e TikTok Ads.
+
+Preciso que você crie o escopo técnico passo a passo e os scripts necessários para implementar uma estrutura de pixel resiliente a bloqueios (Contingência de Dados) e camuflada (Cloaking).
+
+Considere as seguintes premissas técnicas:
+1. Pixel Matriz/Master isolado em BMs/BCs/MCCs de segurança.
+2. Rastreamento Server-Side (API de Conversão) prioritário para evitar varredura de código pelos robôs das Big Techs.
+3. Funil baseado em 3 eventos-chave: Cadastro (Lead), PIX Gerado (InitiateCheckout) e Primeiro Depósito (Purchase).
+4. Integração com Cloaker (separando tráfego de revisores/bots do tráfego real).
+
+Forneça sua resposta estruturada estritamente nos seguintes tópicos, de forma profunda e sem simplificações:
+
+ARQUITETURA DE CONTINGÊNCIA DOS PIXELS: Explique como deve ser o fluxo de compartilhamento do Pixel/Dataset do Facebook, TikTok e tags de conversão do Google Ads a partir das contas controladoras até as contas de anúncios descartáveis (sourcing e compartilhamento de ativos).
+
+MAPEAMENTO DO FUNIL SEGURO (SERVER-SIDE): Detalhe como deve ser feita a captura dos webhooks da plataforma de apostas (ou gateway de pagamento) e o envio desses payloads via API de Conversão para as quatro redes (Facebook, Google, TikTok). Quais parâmetros de desduplicação (como External ID, Event ID, fbp, fbc) devem ser passados para garantir o match rate mais alto possível sem expor a página black?
+
+ESTRUTURAÇÃO DO CLOAKER E DISPARO DE PIXEL: Como configurar o disparo dos códigos javascript (caso necessários) ou o redirecionamento para que os robôs do Google/TikTok/Facebook caiam na página White (sem disparar eventos black) e o usuário real seja computado corretamente no Pixel de conversão?
+
+SCRIPT DE BACKUP/ROTEAMENTO DE EVENTOS (EXEMPLO DE CÓDIGO): Forneça um exemplo de código funcional (pode ser em Node.js ou Python) que receba o Webhook de "Depósito Confirmado" da plataforma de apostas e repasse esse evento via API de Conversão para o Facebook Ads e TikTok Ads de forma Server-Side.
+
+Aja como um consultor sênior de infraestrutura de marketing digital e seja extremamente técnico e direto ao ponto.

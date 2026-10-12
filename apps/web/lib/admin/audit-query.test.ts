@@ -1,6 +1,12 @@
 import type { AdminAuditEntry } from '@sysjb/contracts';
 import { describe, expect, it } from 'vitest';
-import { auditHref, describeAuditDetails, parseAuditQuery } from './audit-query';
+import {
+  AUDIT_ACTION_LABELS,
+  AUDIT_ACTION_TONES,
+  auditHref,
+  describeAuditDetails,
+  parseAuditQuery,
+} from './audit-query';
 
 const ID = '5b0f3c3e-4d1c-4b63-9a3a-0c1f2e3d4a5b';
 
@@ -69,5 +75,29 @@ describe('auditoria: detalhes legíveis', () => {
     expect(describeAuditDetails(entry({ fields: ['month'], month: '2026-08', amount: 31500 }))).toBe(
       'Mês 08/2026: R$ 315,00 pagos',
     );
+  });
+
+  it('configurações da unidade: cada campo com antes → depois', () => {
+    const changes = [
+      { field: 'region', from: null, to: 'SP' },
+      { field: 'unitCommissionBps', from: 0, to: 250 },
+      { field: 'quoteTableId', from: null, to: 'VIP' },
+      { field: 'giftMilharEnabled', from: false, to: true },
+      { field: 'retainPrizes', from: true, to: false },
+      { field: 'dailyLimitEnabled', from: false, to: true },
+      { field: 'dailyLimitCents', from: null, to: 15050 },
+    ];
+    expect(describeAuditDetails(entry({ fields: changes.map((c) => c.field), changes }))).toBe(
+      'Região: — → SP; Comissão da unidade: 0% → 2,5%; Tabela de cotação: Padrão da banca → VIP; ' +
+        'Milhar brinde: Não → Sim; Reter prêmios: Sim → Não; Limite diário: Desligado → Ligado; ' +
+        'Valor do limite diário: — → R$ 150,50',
+    );
+    expect(describeAuditDetails(entry({ fields: ['quoteTableId'], changes: [] }))).toBe('—');
+    expect(describeAuditDetails(entry({ fields: ['x'], changes: [{ field: 'x', from: 1, to: 2 }] }))).toBe('x');
+  });
+
+  it('ação de configurações da unidade tem rótulo e cor', () => {
+    expect(AUDIT_ACTION_LABELS['user.unit']).toBe('Configurações da unidade alteradas');
+    expect(AUDIT_ACTION_TONES['user.unit']).toBe('neutral');
   });
 });

@@ -1,5 +1,6 @@
 import type { AdminUserListItem } from '@sysjb/contracts';
 import { describe, expect, it } from 'vitest';
+import { formatBrl } from '../currency';
 import { csvCell, usersCsv } from './users-csv';
 
 const item = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => ({
@@ -12,6 +13,13 @@ const item = (over: Partial<AdminUserListItem> = {}): AdminUserListItem => ({
   referredBy: null,
   promoter: null,
   createdAt: '2026-09-25T17:30:00.000Z',
+  region: null,
+  unitCommissionBps: 0,
+  quoteTable: { id: 't', name: '800/1/8000', label: '800/1/8000', isDefault: true, own: false },
+  giftMilharEnabled: false,
+  retainPrizes: false,
+  dailyLimitEnabled: false,
+  dailyLimitCents: null,
   ...over,
 });
 
@@ -36,11 +44,29 @@ describe('usersCsv', () => {
       item({ displayId: 100003, name: 'Bruno', status: 'BLOCKED' }),
     ]);
     expect(csv.startsWith('﻿')).toBe(true);
+    const unitHeader = 'Região;Comissão;Tabela;M.Brinde;Reter prêmio;Limite diário';
     expect(csv.slice(1).split('\r\n')).toEqual([
-      'ID;Cadastro;Nome;Telefone;CPF;Promotor;Comissão do promotor;Indicado por;Status',
-      '100002;25/09/2026 14:30;Ana Souza Lima;(11) 91234-5678;529.982.247-25;Paula;7,5%;Paula;Ativo',
-      '100003;25/09/2026 14:30;Bruno;(11) 91234-5678;529.982.247-25;;;;Bloqueado',
+      `ID;Cadastro;Nome;Telefone;CPF;Promotor;Comissão do promotor;Indicado por;Status;${unitHeader}`,
+      '100002;25/09/2026 14:30;Ana Souza Lima;(11) 91234-5678;529.982.247-25;Paula;7,5%;Paula;Ativo;;0%;800/1/8000;Não;Não;',
+      '100003;25/09/2026 14:30;Bruno;(11) 91234-5678;529.982.247-25;;;;Bloqueado;;0%;800/1/8000;Não;Não;',
       '',
     ]);
+  });
+
+  it('configurações da unidade: região, comissão, tabela própria, milhar brinde, reter prêmio e limite ligado', () => {
+    const unit = item({
+      region: 'SP',
+      unitCommissionBps: 250,
+      quoteTable: { id: 'v', name: 'VIP', label: '900/1/9000', isDefault: false, own: true },
+      giftMilharEnabled: true,
+      retainPrizes: true,
+      dailyLimitEnabled: true,
+      dailyLimitCents: 15_050,
+    });
+    // Limite gravado mas desligado: coluna vazia.
+    const off = item({ dailyLimitEnabled: false, dailyLimitCents: 10_000 });
+    const [, first, second] = usersCsv([unit, off]).slice(1).split('\r\n');
+    expect(first!.split(';').slice(9)).toEqual(['SP', '2,5%', 'VIP', 'Sim', 'Sim', formatBrl(15_050)]);
+    expect(second!.split(';').slice(9)).toEqual(['', '0%', '800/1/8000', 'Não', 'Não', '']);
   });
 });

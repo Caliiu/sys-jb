@@ -32,7 +32,17 @@ const limits = (over: Partial<WithdrawalLimits> = {}): WithdrawalLimits => ({ ..
 
 describe('withdrawalSummary', () => {
   it('prêmios das loterias + ganhos do cassino; o disponível é o sacável da carteira', () => {
-    expect(withdrawalSummary(wallet())).toEqual({ lotteries: 30000, casino: 4000, available: 34000, recharge: 5700 });
+    expect(withdrawalSummary(wallet())).toEqual({
+      lotteries: 30000,
+      casino: 4000,
+      available: 34000,
+      recharge: 5700,
+      retained: 0,
+    });
+  });
+
+  it('prêmios retidos pela banca: o sacável vem sem os prêmios das loterias e a diferença aparece como retida', () => {
+    expect(withdrawalSummary(wallet({ withdrawable: 4000 }))).toMatchObject({ available: 4000, retained: 30000 });
   });
 
   it('recarga e bônus nunca entram (o servidor já manda o sacável sem eles)', () => {

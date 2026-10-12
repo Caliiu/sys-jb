@@ -1,5 +1,9 @@
+import { randomInt } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  GIFT_MILHAR_LABEL,
+  GIFT_MILHAR_MODALITY,
+  type GiftMilharSettings,
   LOTTERY_GAME_DRAWS,
   LOTTERY_GAME_LABELS,
   type LotteryGame,
@@ -27,6 +31,7 @@ import { DatabaseService, type TenantTx } from '../database/database.service.js'
 import { DrawsService } from '../draws/draws.service.js';
 import { QuotesService } from '../quotes/quotes.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
+import { DAILY_LIMIT_SQLSTATE, dailyLimitExceeded } from '../units/unit-limits.js';
 import { toPublicWallet } from '../users/user.mapper.js';
 import type { PlaceLotteryTicketsInput, RepeatLotteryTicketInput } from './lotteries.schemas.js';
 
@@ -62,9 +67,14 @@ export interface ItemRow {
   /** Só na MILHAR E CENTENA: a cotação da centena (a apuração paga por ela quem acerta só a centena). */
   centenaQuoteCents: number | null;
   possiblePrizeCents: bigint;
+  /** Milhar Brinde: total 0 (não cobrado); amountCents = valor do brinde. */
+  isGift: boolean;
 }
 
 export type TicketWithItems = LotteryTicket & { items: ItemRow[] };
+
+/** Apostas pagas do pule (sem o Milhar Brinde, que a venda sorteia de novo a cada compra). */
+const paidItems = <T extends { isGift: boolean }>(items: readonly T[]) => items.filter((item) => !item.isGift);
 
 /** Mesmo item? (palpites na ordem enviada; valores em centavos) */
 const sameItem = (a: ItemRow, b: PlaceLotteryTicketsInput['items'][number]) =>
@@ -121,12 +131,18 @@ export class LotteriesService {
         });
         if (draws.some((d) => !isDrawOpenAt(now, dayOffset, d.closesAt))) throw drawClosed();
 
-        const quotes = await this.quotes.loadForSale(tx, tenant.id);
+        // Tabela do comprador (a dele ou a padrão da banca): cotações dos itens e rótulo dos valores gravado no pule.
+        const quotes = await this.quotes.loadForSale(tx, tenant.id, session.userId);
         const items = input.items.map((item, i) => toItemRow(item, i, quotes, input.game));
         const ticketTotal = items.reduce((sum, item) => sum + item.totalCents, 0n);
         if (ticketTotal * BigInt(draws.length) > BigInt(Number.MAX_SAFE_INTEGER)) {
           throw invalid('items', 'Valor muito alto.');
         }
+        // Milhar Brinde: banca e unidade com a regra ligada e o pule (total de UMA extração) no mínimo da banca. Um por
+        // pule, cada um com a sua milhar sorteada; nada é cobrado (o total do pule e o débito são só das apostas).
+        const gift = await this.quotes.giftForSale(tx, tenant.id, session.userId);
+        const giftQuoteCents = lotteryQuoteCents(findLotteryModality(GIFT_MILHAR_MODALITY)!, quotes);
+        const withGift = gift !== null && giftQuoteCents > 0 && ticketTotal >= BigInt(gift.minPuleCents);
 
         // Pules na ordem do id do sorteio: a venda trava cada sorteio (FOR SHARE) e o feriado do painel trava
         // todos nessa mesma ordem, então os dois nunca se esperam em ciclo (deadlock).
@@ -146,11 +162,12 @@ export class LotteriesService {
               game: input.game,
             },
           });
+          const ticketItems = withGift ? [...items, giftItemRow(items.length + 1, gift, giftQuoteCents)] : items;
           await tx.lotteryTicketItem.createMany({
-            data: items.map((item) => ({ ...item, tenantId: tenant.id, ticketId: ticket.id })),
+            data: ticketItems.map((item) => ({ ...item, tenantId: tenant.id, ticketId: ticket.id })),
           });
           await tx.$executeRaw`SELECT lottery_debit(${ticket.id}::uuid)`;
-          created.set(draw.id, { ...ticket, items });
+          created.set(draw.id, { ...ticket, items: ticketItems });
         }
         // Resposta na ordem escolhida pelo jogador.
         return this.response(
@@ -162,6 +179,8 @@ export class LotteriesService {
       });
     } catch (error) {
       if (hasSqlState(error, 'SJ001')) throw new AppError(409, 'INSUFFICIENT_FUNDS', 'Saldo insuficiente.');
+      // Limite diário da unidade (o banco confere com a carteira travada, somando todos os pules desta compra).
+      if (hasSqlState(error, DAILY_LIMIT_SQLSTATE)) throw await dailyLimitExceeded(this.db, tenant.id, session.userId);
       // O banco confere o fechamento de novo (a extração pode fechar entre a validação e o INSERT).
       if (hasSqlState(error, 'SJ002')) throw drawClosed();
       if (isUniqueViolation(error) && JSON.stringify(error.meta ?? {}).includes('purchase_key')) {
@@ -187,7 +206,9 @@ export class LotteriesService {
         where: { tenantId: tenant.id, userId: session.userId, puleNumber: input.puleNumber },
         select: {
           game: true,
+          // Só as apostas pagas: o brinde não se repete (a compra nova ganha o dela, se tiver direito).
           items: {
+            where: { isGift: false },
             orderBy: { position: 'asc' },
             select: { modality: true, placement: true, guesses: true, amountCents: true, split: true },
           },
@@ -197,7 +218,7 @@ export class LotteriesService {
       // A pule só se repete no jogo dela (as colocações da 1/10 não existem na 1/7).
       const originalGame = gameOf(original);
       if (originalGame !== input.game) throw otherGame(originalGame);
-      const quotes = await this.quotes.loadForSale(tx, tenant.id);
+      const quotes = await this.quotes.loadForSale(tx, tenant.id, session.userId);
       return original.items.map((item) => {
         const modality = findLotteryModality(item.modality);
         const quoteCents = modality ? lotteryQuoteCents(modality, quotes) : 0;
@@ -250,8 +271,8 @@ export class LotteriesService {
           t !== undefined &&
           t.game === input.game &&
           t.drawDate.getTime() === toDate(input.drawDate).getTime() &&
-          t.items.length === input.items.length &&
-          t.items.every((item, i) => sameItem(item, input.items[i]!)),
+          paidItems(t.items).length === input.items.length &&
+          paidItems(t.items).every((item, i) => sameItem(item, input.items[i]!)),
       );
     if (!same) throw new AppError(409, 'CONFLICT', 'Chave de compra já usada em outra aposta.');
     return this.db.withTenant(tenantId, (tx) =>
@@ -267,14 +288,14 @@ export class LotteriesService {
   ): Promise<PlaceLotteryTicketsResponse> {
     const user = await tx.user.findFirst({
       where: { tenantId, id: userId },
-      select: { displayId: true, wallet: true },
+      select: { displayId: true, retainPrizes: true, wallet: true },
     });
     if (!user?.wallet) throw Errors.internal();
     const publicTickets = tickets.map((t) => toPublicTicket(t, user.displayId));
     return {
       tickets: publicTickets,
       totalCents: publicTickets.reduce((sum, t) => sum + t.totalCents, 0),
-      wallet: toPublicWallet(user.wallet),
+      wallet: toPublicWallet(user.wallet, user.retainPrizes),
     };
   }
 }
@@ -318,6 +339,34 @@ function toItemRow(
     possiblePrizeCents: BigInt(
       lotteryPossiblePrizeCents(modality, placement, item.guesses, item.amountCents, item.split, quoteCents),
     ),
+    isGift: false,
+  };
+}
+
+/**
+ * Milhar Brinde do pule: milhar de 4 dígitos sorteada com gerador criptográfico (ninguém prevê nem escolhe), um palpite
+ * "TODOS" com o valor do brinde, na colocação da banca, pela cotação da milhar da tabela do comprador. Total 0: não é
+ * cobrado. Vai depois das apostas.
+ */
+function giftItemRow(position: number, gift: GiftMilharSettings, quoteCents: number): ItemRow {
+  const modality = findLotteryModality(GIFT_MILHAR_MODALITY)!;
+  const placement = findLotteryPlacement(gift.placement);
+  if (!placement) throw Errors.internal();
+  const guesses = [String(randomInt(0, 10_000)).padStart(4, '0')];
+  return {
+    position,
+    modality: modality.id,
+    placement: placement.id,
+    guesses,
+    amountCents: BigInt(gift.stakeCents),
+    split: 'total',
+    totalCents: 0n,
+    quoteCents,
+    centenaQuoteCents: null,
+    possiblePrizeCents: BigInt(
+      lotteryPossiblePrizeCents(modality, placement, guesses, gift.stakeCents, 'total', quoteCents),
+    ),
+    isGift: true,
   };
 }
 
@@ -331,7 +380,9 @@ export function toPublicTicket(ticket: TicketWithItems, sellerId: number): Publi
     hour: ticket.drawHour,
     items: ticket.items.map((item) => ({
       modality: item.modality,
-      modalityLabel: findLotteryModality(item.modality)?.label ?? item.modality.toUpperCase(),
+      modalityLabel: item.isGift
+        ? GIFT_MILHAR_LABEL
+        : (findLotteryModality(item.modality)?.label ?? item.modality.toUpperCase()),
       placement: item.placement,
       placementLabel: findLotteryPlacement(item.placement)?.label ?? item.placement,
       guesses: item.guesses,
@@ -340,6 +391,7 @@ export function toPublicTicket(ticket: TicketWithItems, sellerId: number): Publi
       totalCents: Number(item.totalCents),
       quoteCents: item.quoteCents,
       possiblePrizeCents: Number(item.possiblePrizeCents),
+      isGift: item.isGift,
     })),
     totalCents: Number(ticket.totalCents),
     quoteTable: ticket.quoteTable,

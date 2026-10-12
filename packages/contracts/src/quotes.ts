@@ -1,7 +1,7 @@
 /**
- * Cotações da banca: quanto cada aposta paga. O Gerente edita no painel; enquanto não edita, valem os
- * padrões abaixo (os da tabela de referência 800/1/8000). Prêmio R$ 0,00 = opção desligada.
- * Valores em centavos.
+ * Cotações da banca: quanto cada aposta paga. A banca tem várias tabelas de cotação com nome; uma é a padrão
+ * (vale para a unidade sem tabela própria). Em cada tabela, o que o Gerente não editou vale o padrão abaixo (o da
+ * tabela de referência 800/1/8000). Prêmio R$ 0,00 = opção desligada. Valores em centavos.
  */
 
 import { FAZENDINHA_MODES, FAZENDINHA_STAKES_CENTS, type FazendinhaModeId } from './fazendinha.js';
@@ -60,23 +60,55 @@ export interface FazendinhaQuote {
   prizeCents: number;
 }
 
-/** GET /v1/quotes (jogador) e GET /v1/admin/quotes (painel). */
+/** GET /v1/quotes: a tabela que vale para o jogador logado (a dele ou a padrão da banca). */
 export interface PublicQuotes {
-  /** Nome da tabela: "centena/1/milhar" (ex.: 800/1/8000). */
+  /**
+   * Rótulo dos valores da tabela, "centena/1/milhar" (ex.: 800/1/8000): o que sai no pule e no recibo. Não é o nome
+   * da tabela no painel (esse fica só no admin).
+   */
   tableLabel: string;
   traditional: TraditionalQuote[];
   fazendinha: FazendinhaQuote[];
 }
 
+/** Nome de tabela de cotação: 1 a 40 caracteres, sem espaços nas pontas, único na banca (sem diferenciar maiúsculas). */
+export const QUOTE_TABLE_NAME_MAX = 40;
+
+/** GET /v1/admin/quote-tables: tabelas da banca (a padrão primeiro, depois por nome). */
+export interface AdminQuoteTableSummary {
+  id: string;
+  name: string;
+  /** A padrão vale para toda unidade sem tabela própria. Sempre exatamente uma. */
+  isDefault: boolean;
+  /** Unidades (jogadores) apontando para esta tabela. Tabela em uso não pode ser excluída. */
+  usersCount: number;
+  /** ISO 8601. */
+  updatedAt: string;
+}
+
+/** GET /v1/admin/quote-tables/:id e respostas das alterações: a tabela completa (name = nome no painel; tableLabel = rótulo dos valores). */
+export interface AdminQuoteTable extends AdminQuoteTableSummary, PublicQuotes {}
+
+/** POST /v1/admin/quote-tables: nova tabela; com copyFromId, copia os prêmios daquela tabela (senão, os padrões). */
+export interface CreateQuoteTableRequest {
+  name: string;
+  copyFromId?: string | null;
+}
+
+/** PATCH /v1/admin/quote-tables/:id: renomeia. */
+export interface RenameQuoteTableRequest {
+  name: string;
+}
+
 /**
- * PUT /v1/admin/quotes/tradicional: só os itens alterados (cada modalidade no máximo uma vez). Parcial de
+ * PUT /v1/admin/quote-tables/:id/tradicional: só os itens alterados (cada modalidade no máximo uma vez). Parcial de
  * propósito: dois gerentes editando ao mesmo tempo não desfazem a alteração um do outro.
  */
 export interface SetTraditionalQuotesRequest {
   quotes: Array<{ modality: TraditionalQuoteModality; prizeCents: number }>;
 }
 
-/** PUT /v1/admin/quotes/fazendinha: só os itens alterados (cada modalidade × valor no máximo uma vez). */
+/** PUT /v1/admin/quote-tables/:id/fazendinha: só os itens alterados (cada modalidade × valor no máximo uma vez). */
 export interface SetFazendinhaQuotesRequest {
   quotes: Array<{ mode: FazendinhaModeId; stakeCents: number; prizeCents: number }>;
 }
@@ -90,7 +122,7 @@ export function quoteTableLabel(traditional: Array<Pick<TraditionalQuote, 'modal
   return `${value('centena')}/1/${value('milhar')}`;
 }
 
-/** Tabela padrão (sem nada salvo pela banca). */
+/** Tabela com os prêmios padrão (nada salvo pela banca); o nome é o rótulo dos valores (800/1/8000). */
 export function defaultQuotes(): PublicQuotes {
   const traditional = TRADITIONAL_QUOTE_MODALITIES.map((m) => ({
     modality: m.id,

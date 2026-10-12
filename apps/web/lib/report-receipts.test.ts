@@ -1,6 +1,13 @@
 import { type BalanceReport, isReportDate, type PuleDetail, REPORT_DAYS_BACK, reportDates } from '@sysjb/contracts';
 import { describe, expect, it } from 'vitest';
-import { balanceSections, movementSections, puleCard, puleReceipt, signedCents } from './report-receipts';
+import {
+  balanceSections,
+  lotteryShareLine,
+  movementSections,
+  puleCard,
+  puleReceipt,
+  signedCents,
+} from './report-receipts';
 
 const balance = (extra: Partial<BalanceReport> = {}): BalanceReport => ({
   date: '2026-09-28',
@@ -115,6 +122,7 @@ const lotteryDetail: PuleDetail = {
         totalCents: 100,
         quoteCents: 800_000,
         possiblePrizeCents: 800_000,
+        isGift: false,
       },
     ],
     totalCents: 100,
@@ -194,6 +202,42 @@ describe('recibo da pule', () => {
     ]);
     const bet = puleReceipt(puleCard(fazendinhaDetail), 'x').sections[3]!;
     expect(bet.map((line) => line.left)).not.toContainEqual(expect.stringContaining('Possível'));
+  });
+
+  it('Milhar Brinde: linha própria, valor do brinde "/ BRINDE", fora do total', () => {
+    if (lotteryDetail.game !== 'lotteries') throw new Error('fixture');
+    const gift = {
+      ...lotteryDetail.ticket.items[0]!,
+      modalityLabel: 'MILHAR BRINDE',
+      guesses: ['0427'],
+      amountCents: 10,
+      totalCents: 0,
+      possiblePrizeCents: 80_000,
+      isGift: true,
+    };
+    const detail: PuleDetail = {
+      ...lotteryDetail,
+      ticket: { ...lotteryDetail.ticket, items: [...lotteryDetail.ticket.items, gift] },
+    };
+    const card = puleCard(detail);
+    expect(card.items[1]).toEqual({
+      title: 'MILHAR BRINDE 1 PRÊMIO',
+      guesses: ['0427'],
+      amountCents: 10,
+      splitLabel: 'BRINDE',
+      possiblePrizeCents: 80_000,
+    });
+    expect(card.totalCents).toBe(100);
+    const sections = puleReceipt(card, 'x').sections;
+    expect(sections[4]).toEqual([
+      { left: [{ text: 'MILHAR BRINDE 1 PRÊMIO', bold: true }] },
+      { left: '0427' },
+      { left: '> R$ 0,10 / BRINDE' },
+      { left: '> Possível prêmio: R$ 800,00' },
+    ]);
+    expect(sections[5]).toEqual([{ left: 'Total jogo:', right: 'R$ 1,00' }]);
+    expect(lotteryShareLine(gift)).toBe('MILHAR BRINDE 1 PRÊMIO: 0427 (BRINDE)');
+    expect(lotteryShareLine(lotteryDetail.ticket.items[0]!)).toBe('MILHAR 1 PRÊMIO: 3232 (R$ 1,00)');
   });
 });
 

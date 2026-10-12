@@ -90,8 +90,9 @@ async function send(
     message:
       extra[code] ??
       MESSAGES[code] ??
-      // Conflitos têm mensagem própria da API, pronta para a tela e sem dados pessoais.
-      (code === 'CONFLICT' ? res.error.message : undefined) ??
+      // Conflitos e limite diário têm mensagem própria da API (com o quanto ainda dá para apostar hoje), pronta para a
+      // tela e sem dados pessoais.
+      (code === 'CONFLICT' || code === 'DAILY_LIMIT_EXCEEDED' ? res.error.message : undefined) ??
       (res.status >= 500 ? 'Serviço indisponível. Tente novamente.' : 'Não foi possível concluir a aposta.'),
   };
 }

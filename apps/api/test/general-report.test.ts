@@ -177,6 +177,7 @@ describe('GET /v1/admin/reports/general', () => {
       salesCents: 400,
       commissionCents: 0,
       referralCommissionCents: 0,
+      unitCommissionCents: 0,
       prizesCents: 1_000,
       otherCents: 10_500,
       netCents: -600,
@@ -227,6 +228,32 @@ describe('GET /v1/admin/reports/general', () => {
     expect((await session.http.get(`/v1/admin/reports/general?${today}&promoterId=${loose.person.id}`)).status).toBe(
       404,
     );
+  });
+
+  it('comissão da unidade em coluna própria (sai do líquido dela); a de quem indicou não muda', async () => {
+    const session = await loginOperator(app, 'aurora');
+    await session.http.put('/v1/admin/commissions/settings', { referralCommissionBps: 300 });
+    const promoter = await createUser(app, 'aurora', { name: 'Paula Promotora' });
+    await session.http.put(`/v1/admin/promoters/${promoter.id}`, { commissionBps: 700 });
+    const referred = await player('Rita Indicada', { inviteCode: promoter.inviteCode });
+    await credit(session, referred.person.id, 'balance', 5_000);
+    const res = await session.http.patch(`/v1/admin/users/${referred.person.id}/settings`, { unitCommissionBps: 500 });
+    expect(res.status).toBe(200);
+    for (let group = 1; group <= 10; group += 1) await buyFazendinha(referred, group);
+    await settleAll(app, 'aurora');
+
+    const all = await report(session, today);
+    const rita = all.items.find((row) => row.player.id === referred.person.id)!;
+    // Prêmio dela na apuração depende do resultado: o líquido confere com a fórmula.
+    expect(rita).toMatchObject({ salesCents: 1_000, commissionCents: 0, referralCommissionCents: 0 });
+    expect(rita.unitCommissionCents).toBe(50);
+    expect(rita.netCents).toBe(1_000 - rita.prizesCents - 50);
+    expect(all.items.find((row) => row.player.id === promoter.id)).toMatchObject({
+      commissionCents: 70,
+      referralCommissionCents: 30,
+      unitCommissionCents: 0,
+      netCents: -100,
+    });
   });
 
   it('outra banca não aparece', async () => {

@@ -28,6 +28,7 @@ interface ReportRow {
   sales: bigint;
   commission: bigint;
   referral_commission: bigint;
+  unit_commission: bigint;
   prizes: bigint;
   other: bigint;
   net: bigint;
@@ -40,6 +41,7 @@ const toRow = (row: ReportRow): AdminGeneralReportRow => ({
   salesCents: Number(row.sales),
   commissionCents: Number(row.commission),
   referralCommissionCents: Number(row.referral_commission),
+  unitCommissionCents: Number(row.unit_commission),
   prizesCents: Number(row.prizes),
   otherCents: Number(row.other),
   netCents: Number(row.net),
@@ -52,11 +54,12 @@ const toRow = (row: ReportRow): AdminGeneralReportRow => ({
  * SQL é sempre parametrizado.
  *
  * - vendas: pules de Loterias e Fazendinha vendidos no período (data da venda), sem os cancelados;
- * - comissão / comissão amigo: comissões creditadas no período (na hora de cada aposta), menos os estornos de pules
- *   cancelados; amigo = a parte "indique e ganhe", o resto é a parte de promotor (somam o creditado);
+ * - comissão / comissão amigo / comissão da unidade: comissões creditadas no período (na apuração de cada pule), menos
+ *   os estornos de pules cancelados; amigo = a parte "indique e ganhe", unidade = a da própria unidade sobre as
+ *   apostas dela, o resto é a parte de promotor (as três somam o creditado);
  * - prêmios: pules premiadas apuradas no período (vazio até a apuração existir);
  * - outros: créditos pelo painel e ajustes manuais no período (todas as bolsas);
- * - líquido = vendas − prêmios − comissão − comissão amigo; líquido geral = líquido − outros.
+ * - líquido = vendas − prêmios − comissão − comissão amigo − comissão da unidade; líquido geral = líquido − outros.
  */
 @Injectable()
 export class GeneralReportService {
@@ -105,15 +108,18 @@ export class GeneralReportService {
         ),
         -- Comissão creditada no período, já sem os estornos (pule cancelado). A parte "amigo" (indique e ganhe):
         -- na aposta, a gravada em bet_commissions (no estorno, a mesma proporção do que voltou); no antigo fechamento
-        -- mensal, apostado × % de indicação. O resto é a parte de promotor.
+        -- mensal, apostado × % de indicação. A da unidade (sobre as próprias apostas) à parte. O resto é a parte de
+        -- promotor.
         commissions AS (
           SELECT e."user_id", sum(e."balance_jb_delta" + e."prizes_jb_delta") AS total,
                  sum(CASE
                        WHEN b."id" IS NOT NULL THEN trunc(
                          (e."balance_jb_delta" + e."prizes_jb_delta")::numeric * b."referral_cents"
-                         / (b."referral_cents" + b."promoter_cents"))::bigint
+                         / (b."referral_cents" + b."promoter_cents" + b."unit_cents"))::bigint
                        ELSE trunc(c."wagered_cents"::numeric * c."referral_rate_bps" / 10000)::bigint
-                     END) AS referral
+                     END) AS referral,
+                 sum(CASE WHEN b."beneficiary" = 'UNIT' THEN e."balance_jb_delta" + e."prizes_jb_delta" ELSE 0 END)
+                   AS unit
           FROM "wallet_entries" e
           LEFT JOIN "bet_commissions" b ON b."tenant_id" = e."tenant_id" AND b."id" = e."bet_commission_id"
           LEFT JOIN "commission_payouts" c ON c."tenant_id" = e."tenant_id" AND c."id" = e."commission_payout_id"
@@ -136,8 +142,9 @@ export class GeneralReportService {
         base AS (
           SELECT u."id", u."display_id", u."name", u."promoter_commission_bps" IS NOT NULL AS is_promoter,
                  COALESCE(s.v, 0) AS sales,
-                 COALESCE(c.total, 0) - COALESCE(c.referral, 0) AS commission,
+                 COALESCE(c.total, 0) - COALESCE(c.referral, 0) - COALESCE(c.unit, 0) AS commission,
                  COALESCE(c.referral, 0) AS referral_commission,
+                 COALESCE(c.unit, 0) AS unit_commission,
                  COALESCE(p.v, 0) AS prizes,
                  COALESCE(o.v, 0) AS other
           FROM ids
@@ -150,8 +157,9 @@ export class GeneralReportService {
         ),
         r AS (
           SELECT base.*,
-                 base.sales - base.prizes - base.commission - base.referral_commission AS net,
-                 base.sales - base.prizes - base.commission - base.referral_commission - base.other AS gross_net
+                 base.sales - base.prizes - base.commission - base.referral_commission - base.unit_commission AS net,
+                 base.sales - base.prizes - base.commission - base.referral_commission - base.unit_commission
+                   - base.other AS gross_net
           FROM base
         )`;
 

@@ -10,6 +10,8 @@ import {
   listUsersQuerySchema,
   type SetUserStatusInput,
   setUserStatusSchema,
+  type UpdateUnitSettingsInput,
+  updateUnitSettingsSchema,
   type WalletCreditInput,
   walletCreditSchema,
 } from './admin.schemas.js';
@@ -65,6 +67,19 @@ export class AdminUsersController {
     @Body(new ZodValidationPipe(setUserStatusSchema)) body: SetUserStatusInput,
   ): Promise<AdminUserDetail> {
     return this.users.setStatus(tenant, operator, id, body.status);
+  }
+
+  /** Configurações da unidade (só o Gerente): região, comissão, tabela de cotação, milhar brinde, reter prêmios, limite. */
+  @Patch(':id/settings')
+  @RequirePermission('units.manage')
+  @Header('Cache-Control', 'no-store')
+  updateSettings(
+    @CurrentTenant() tenant: ResolvedTenant,
+    @CurrentOperator() operator: AuthenticatedOperator,
+    @Param('id', new ZodValidationPipe(userIdSchema)) id: string,
+    @Body(new ZodValidationPipe(updateUnitSettingsSchema)) body: UpdateUnitSettingsInput,
+  ): Promise<AdminUserDetail> {
+    return this.users.updateSettings(tenant, operator, id, body);
   }
 
   /** Adiciona saldo, bônus ou disponível em games. Repetir a mesma chave não credita de novo (200 igual). */

@@ -263,8 +263,13 @@ export interface PublicWithdrawal {
 /** GET /v1/me/withdrawals: os saques recentes, quanto pode sacar e os limites de hoje. */
 export interface MyWithdrawals {
   items: PublicWithdrawal[];
-  /** Prêmios das loterias + prêmios do cassino (centavos). */
+  /** Prêmios das loterias + prêmios do cassino (centavos), sem os prêmios retidos. */
   withdrawableCents: number;
+  /**
+   * Prêmios das loterias retidos pela banca (centavos; 0 = nada retido): não saem em saque enquanto a retenção estiver
+   * ligada, mas continuam valendo para apostar.
+   */
+  retainedPrizesCents: number;
   limits: WithdrawalSettings & {
     /** Saques que já contam no limite de hoje. */
     usedToday: number;

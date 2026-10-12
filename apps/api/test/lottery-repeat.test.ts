@@ -20,6 +20,7 @@ import {
   startApp,
   SYNTHETIC_PASSWORD,
   tenantId,
+  defaultQuoteTableId,
 } from './helpers.js';
 
 let app: INestApplication;
@@ -209,8 +210,12 @@ describe('POST /v1/lotteries/tickets/repeat', () => {
     expect(missing.status).toBe(400);
 
     // Milhar desligada na cotação da banca depois da compra original.
+    const tableId = await defaultQuoteTableId(auroraId);
     await asTenant(migratorPool, auroraId, (c) =>
-      c.query("INSERT INTO traditional_quotes (tenant_id, modality, prize_cents) VALUES ($1, 'milhar', 0)", [auroraId]),
+      c.query(
+        "INSERT INTO traditional_quotes (tenant_id, quote_table_id, modality, prize_cents) VALUES ($1, $2, 'milhar', 0)",
+        [auroraId, tableId],
+      ),
     );
     const disabled = await http.post('/v1/lotteries/tickets/repeat', repeat(original.puleNumber));
     expect(disabled.status).toBe(409);

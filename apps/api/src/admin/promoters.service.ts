@@ -3,6 +3,7 @@ import type { AdminPromoterListItem, AdminPromoterOption, AdminUserListItem, Pag
 import { Errors } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ResolvedTenant } from '../tenancy/tenant.types.js';
+import { quoteTableRefs } from '../quotes/quotes.service.js';
 import { toAdminListItem } from './admin-user.mapper.js';
 import type { ListPromotersQuery, ReferralsQuery, SetPromoterInput } from './admin.schemas.js';
 import { recordAudit } from './audit.js';
@@ -55,11 +56,19 @@ export class PromotersService {
 
   /** Jogadores cadastrados pelo link deste promotor. */
   async referrals(tenant: ResolvedTenant, id: string, query: ReferralsQuery): Promise<Page<AdminUserListItem>> {
-    const { rows, total } = await this.db.withTenant(tenant.id, async (tx) => {
+    const { rows, total, tables } = await this.db.withTenant(tenant.id, async (tx) => {
       if (!(await this.repo.findPromoter(tx, tenant.id, id))) throw Errors.promoterNotFound();
-      return this.repo.listReferrals(tx, tenant.id, id, query);
+      return {
+        ...(await this.repo.listReferrals(tx, tenant.id, id, query)),
+        tables: await quoteTableRefs(tx, tenant.id),
+      };
     });
-    return pageOf(rows.map(toAdminListItem), query.page, query.pageSize, total);
+    return pageOf(
+      rows.map((row) => toAdminListItem(row, tables)),
+      query.page,
+      query.pageSize,
+      total,
+    );
   }
 
   /**

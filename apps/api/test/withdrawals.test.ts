@@ -396,6 +396,45 @@ describe('solicitação do jogador', () => {
     expect(await prizes(other)).toEqual({ jb: 5000, games: 0 });
   });
 
+  it('reter prêmios (unidade): os prêmios das loterias não saem; os do cassino sim; desligar libera', async () => {
+    const manager = await configured();
+    const me = await player();
+    await grantPrizes(me, 5000, 2000);
+    const retain = (on: boolean) => manager.http.patch(`/v1/admin/users/${me.id}/settings`, { retainPrizes: on });
+    expect((await retain(true)).status).toBe(200);
+
+    const mine = (await me.http.get('/v1/payments/withdrawals')).body as MyWithdrawals;
+    expect([mine.withdrawableCents, mine.retainedPrizesCents]).toEqual([2000, 5000]);
+    expect((await me.http.get('/v1/me')).body.wallet).toMatchObject({ prizesJb: 5000, withdrawable: 2000 });
+
+    // Caberia só com os prêmios retidos: aviso claro, com o que ainda dá para sacar.
+    const retained = await request(me, 3000);
+    expect(retained.status).toBe(409);
+    expect(retained.body.code).toBe('PRIZES_RETAINED');
+    expect(retained.body.message).toMatch(/retidos pela banca.*Disponível para saque: R\$\s20,00\./);
+    // Nem com os retidos: saldo insuficiente, como antes.
+    expect((await request(me, 8000)).body.code).toBe('INSUFFICIENT_FUNDS');
+    expect(await prizes(me)).toEqual({ jb: 5000, games: 2000 });
+
+    // O do cassino sai normalmente, sem tocar nos retidos.
+    const games = await requested(me, 2000);
+    expect(games.wallet).toMatchObject({ prizesJb: 5000, prizesGames: 0, withdrawable: 0 });
+    expect(await rowOf('aurora', games.withdrawal.id)).toMatchObject({
+      from_prizes_jb_cents: '0',
+      from_prizes_games_cents: '2000',
+    });
+    const nothing = await request(me, 1000);
+    expect(nothing.body).toMatchObject({ code: 'PRIZES_RETAINED' });
+    expect(nothing.body.message).toContain('Fale com o suporte');
+
+    // Desligar libera tudo na hora.
+    expect((await retain(false)).status).toBe(200);
+    const released = (await me.http.get('/v1/payments/withdrawals')).body as MyWithdrawals;
+    expect([released.withdrawableCents, released.retainedPrizesCents]).toEqual([5000, 0]);
+    const after = await requested(me, 5000);
+    expect(after.wallet).toMatchObject({ prizesJb: 0, withdrawable: 0 });
+  });
+
   it('isolamento: outro jogador não vê nem cancela o saque', async () => {
     await configured();
     const me = await player();
