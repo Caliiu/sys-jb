@@ -7,6 +7,8 @@ export const ADMIN_ROUTES = {
   home: '/',
   // Operação
   users: '/usuarios',
+  /** Unidades: configurações de cada apostador (região, comissão, cotação, brinde, limite) e o Milhar Brinde da banca. */
+  units: '/unidades',
   user: (id: string) => `/usuarios/${id}`,
   /** CSV da lista de apostadores (rota, não página). */
   usersExport: '/usuarios/exportar',

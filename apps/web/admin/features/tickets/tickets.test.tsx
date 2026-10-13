@@ -411,6 +411,40 @@ describe('Pules Registradas: detalhe', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('Milhar Brinde: o item grátis aparece marcado e o valor indica que não foi cobrado', () => {
+    const base = detailTicket().items[0]!;
+    renderTickets(
+      {},
+      { kind: 'list', page: list() },
+      opened(
+        detailTicket({
+          items: [
+            base,
+            {
+              ...base,
+              position: 2,
+              modalityLabel: 'MILHAR BRINDE',
+              guesses: ['0042'],
+              stakeCents: 10,
+              quoteCents: 800000,
+              possiblePrizeCents: 8000,
+              prizeCents: 0,
+              status: 'LOST',
+              isGift: true,
+            },
+          ],
+        }),
+      ),
+    );
+    const rows = within(
+      within(screen.getByRole('dialog')).getByRole('table', { name: 'Apostas da pule' }),
+    ).getAllByRole('row');
+    expect(within(rows[1]!).queryByText('MILHAR BRINDE')).not.toBeInTheDocument();
+    const gift = within(rows[2]!).getByText('MILHAR BRINDE');
+    expect(gift).toHaveAttribute('data-slot', 'badge');
+    expect(cells(rows[2]!)[4]).toBe('R$ 0,10brinde, não cobrado');
+  });
+
   it('aguardando apuração: prêmio esperado, sem resultado; cancelada e resultado corrigido avisam', () => {
     const { unmount } = renderTickets(
       {},

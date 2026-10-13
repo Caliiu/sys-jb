@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminTicketDetail } from '@sysjb/contracts';
+import { type AdminTicketDetail, GIFT_MILHAR_LABEL } from '@sysjb/contracts';
 import { TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { type ReactNode } from 'react';
@@ -131,10 +131,24 @@ function TicketDetailBody({ ticket }: { ticket: AdminTicketDetail }) {
                 {ticket.items.map((item) => (
                   <TableRow key={item.position}>
                     <TableCell className="tabular-nums">{item.position}</TableCell>
-                    <TableCell>{item.modalityLabel}</TableCell>
+                    <TableCell>
+                      {item.isGift ? (
+                        <Badge
+                          className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+                          title="Aposta grátis da banca: o valor é o do brinde, não cobrado nem somado ao total."
+                        >
+                          {GIFT_MILHAR_LABEL}
+                        </Badge>
+                      ) : (
+                        item.modalityLabel
+                      )}
+                    </TableCell>
                     <TableCell className="tabular-nums whitespace-normal">{item.guesses.join(', ')}</TableCell>
                     <TableCell>{item.placementLabel}</TableCell>
-                    <TableCell className="text-end tabular-nums">{formatBrl(item.stakeCents)}</TableCell>
+                    <TableCell className="text-end tabular-nums">
+                      {formatBrl(item.stakeCents)}
+                      {item.isGift && <span className="block text-xs text-muted-foreground">brinde, não cobrado</span>}
+                    </TableCell>
                     <TableCell className="text-end tabular-nums">
                       {item.quoteCents !== null && <span className="block">{formatBrl(item.quoteCents)}</span>}
                       <span className="block text-xs text-muted-foreground">{formatBrl(item.possiblePrizeCents)}</span>

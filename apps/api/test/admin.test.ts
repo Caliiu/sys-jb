@@ -370,7 +370,7 @@ const UNIT_DEFAULTS = {
   region: null,
   unitCommissionBps: 0,
   quoteTable: { id: null, name: '800/1/8000', label: '800/1/8000', isDefault: true, own: false },
-  giftMilharEnabled: false,
+  giftMilharEnabled: true,
   retainPrizes: false,
   dailyLimitEnabled: false,
   dailyLimitCents: null,

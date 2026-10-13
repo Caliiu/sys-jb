@@ -401,7 +401,7 @@ describe('tabelas de cotação', () => {
     // Os padrões e o que é aceito.
     await asTenant(runtimePool, auroraId, (c) =>
       c.query(
-        `UPDATE users SET region = 'SP', unit_commission_bps = 500, gift_milhar_enabled = true, retain_prizes = true,
+        `UPDATE users SET region = 'SP', unit_commission_bps = 500, gift_milhar_enabled = false, retain_prizes = true,
                 daily_limit_enabled = true, daily_limit_cents = 50000 WHERE id = $1`,
         [person.id],
       ),
@@ -418,7 +418,7 @@ describe('tabelas de cotação', () => {
       region: null,
       unit_commission_bps: 0,
       quote_table_id: null,
-      gift_milhar_enabled: false,
+      gift_milhar_enabled: true,
       retain_prizes: false,
       daily_limit_enabled: false,
       daily_limit_cents: null,

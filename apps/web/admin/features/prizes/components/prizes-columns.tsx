@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminPrizeListItem, AdminPrizeStatus } from '@sysjb/contracts';
+import { type AdminPrizeListItem, type AdminPrizeStatus, GIFT_MILHAR_LABEL } from '@sysjb/contracts';
 import Link from 'next/link';
 import { type ReportColumn } from '@/admin/components/report-table';
 import { Badge } from '@/admin/components/ui/badge';
@@ -22,6 +22,8 @@ export function PrizeStatusBadge({ status }: { status: AdminPrizeStatus }) {
     </Badge>
   );
 }
+
+const GIFT_BADGE_CLASS = 'border-transparent bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300';
 
 const right = (text: string) => <div className="text-end tabular-nums">{text}</div>;
 
@@ -57,7 +59,18 @@ export const prizesColumns: ReportColumn<AdminPrizeListItem>[] = [
       </div>
     ),
   },
-  { id: 'modality', header: 'Modalidade', cell: (item) => orDash(item.modalityLabel) },
+  {
+    id: 'modality',
+    header: 'Modalidade',
+    cell: (item) =>
+      item.isGift ? (
+        <Badge className={GIFT_BADGE_CLASS} title="Aposta grátis da banca: o valor é o do brinde, não cobrado.">
+          {GIFT_MILHAR_LABEL}
+        </Badge>
+      ) : (
+        orDash(item.modalityLabel)
+      ),
+  },
   {
     id: 'guess',
     header: 'Número',

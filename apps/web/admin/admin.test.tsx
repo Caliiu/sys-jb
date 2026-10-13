@@ -56,14 +56,17 @@ beforeEach(() => {
 });
 
 describe('menu do painel (dados)', () => {
-  it('Geral (Início), Pules (Pules Registradas) e Prêmios (Pules Premiadas), com tickets.read; sem permissão, nada', () => {
-    expect(groupTitles(ROLE_PERMISSIONS.MANAGER)).toEqual(['Geral', 'Pules', 'Prêmios']);
-    expect(groupTitles(ROLE_PERMISSIONS.SUPPORT)).toEqual(['Geral', 'Pules', 'Prêmios']);
-    expect(groupTitles(['users.read'])).toEqual(['Geral']);
+  it('Geral (Início), Operação (Unidades com users.read, Cotações com quotes.read), Pules e Prêmios (com tickets.read); sem permissão, nada', () => {
+    expect(groupTitles(ROLE_PERMISSIONS.MANAGER)).toEqual(['Geral', 'Operação', 'Pules', 'Prêmios']);
+    expect(groupTitles(ROLE_PERMISSIONS.SUPPORT)).toEqual(['Geral', 'Operação', 'Pules', 'Prêmios']);
+    expect(groupTitles(['users.read'])).toEqual(['Geral', 'Operação']);
+    expect(groupTitles(['quotes.read'])).toEqual(['Operação']);
     expect(navGroupsFor([])).toEqual([]);
     expect(findNavLink('/')?.title).toBe('Início');
     expect(findNavLink('/premios')?.title).toBe('Pules Premiadas');
     expect(findNavLink('/bilhetes')?.title).toBe('Pules Registradas');
+    expect(findNavLink('/unidades')?.title).toBe('Unidades');
+    expect(findNavLink('/cotacoes')).toMatchObject({ title: 'Cotações', permission: 'quotes.read' });
     expect(findNavLink('/usuarios')).toBeUndefined();
   });
 
@@ -85,7 +88,7 @@ describe('layout do painel', () => {
       within(nav())
         .getAllByRole('group')
         .map((g) => g.getAttribute('aria-label')),
-    ).toEqual(['Geral', 'Pules', 'Prêmios']);
+    ).toEqual(['Geral', 'Operação', 'Pules', 'Prêmios']);
     expect(within(nav()).getByRole('link', { name: 'Pules Registradas' })).toHaveAttribute('href', '/bilhetes');
     expect(within(nav()).getByRole('link', { name: 'Início' })).toHaveAttribute('aria-current', 'page');
     expect(within(nav()).getByRole('link', { name: 'Pules Premiadas' })).toHaveAttribute('href', '/premios');

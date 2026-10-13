@@ -115,8 +115,8 @@ model User {
   unitCommissionBps     Int        @default(dbgenerated("0")) @map("unit_commission_bps")
   // Tabela de cotação da unidade. Null = vale a tabela padrão da banca.
   quoteTableId          String?    @map("quote_table_id") @db.Uuid
-  // Milhar brinde ligada para a unidade.
-  giftMilharEnabled     Boolean    @default(dbgenerated("false")) @map("gift_milhar_enabled")
+  // Milhar brinde ligada para a unidade (padrão: ligada; só vale com a da banca ligada).
+  giftMilharEnabled     Boolean    @default(dbgenerated("true")) @map("gift_milhar_enabled")
   // Prêmios retidos (não caem direto no saldo sacável).
   retainPrizes          Boolean    @default(dbgenerated("false")) @map("retain_prizes")
   // Limite diário de apostas: ligado exige o valor (centavos).

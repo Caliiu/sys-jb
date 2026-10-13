@@ -1,5 +1,5 @@
 import { type Permission } from '@sysjb/contracts';
-import { FileText, House, Trophy } from 'lucide-react';
+import { BadgeDollarSign, FileText, House, Store, Trophy } from 'lucide-react';
 import { ADMIN_ROUTES } from '@/lib/admin/admin-routes';
 import { type NavGroup, type NavItem, type NavPermission, type NavSubItem, type SidebarData } from '../types';
 
@@ -18,6 +18,23 @@ export const sidebarData: SidebarData = {
           url: ADMIN_ROUTES.home,
           icon: House,
           permission: 'users.read',
+        },
+      ],
+    },
+    {
+      title: 'Operação',
+      items: [
+        {
+          title: 'Unidades',
+          url: ADMIN_ROUTES.units,
+          icon: Store,
+          permission: 'users.read',
+        },
+        {
+          title: 'Cotações',
+          url: ADMIN_ROUTES.quotes,
+          icon: BadgeDollarSign,
+          permission: 'quotes.read',
         },
       ],
     },

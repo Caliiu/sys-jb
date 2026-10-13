@@ -195,6 +195,13 @@ describe('Pules Premiadas: tabela e resumo', () => {
     expect(within(paid!).getByText('Pago')).toHaveClass('bg-emerald-100');
   });
 
+  it('Milhar Brinde: a modalidade aparece como selo', () => {
+    renderPrizes({}, { items: [item({ modalityLabel: 'MILHAR BRINDE', isGift: true, stakeCents: 10 })], total: 1 });
+    const [row] = bodyRows();
+    const gift = within(row!).getByText('MILHAR BRINDE');
+    expect(gift).toHaveAttribute('data-slot', 'badge');
+  });
+
   it('resumo do filtro inteiro; sem pendentes nem corrigidos, sem avisos', () => {
     renderPrizes({ de: '2026-10-01', ate: '2026-10-08' }, { total: 40 });
     const summary = screen.getByRole('region', { name: 'Resumo' });
